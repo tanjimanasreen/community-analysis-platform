@@ -6,23 +6,30 @@ pipeline stages.
 
 ## Setup
 
+From the project root:
+
 ```bash
-npm ci
+make frontend-install
 ```
 
-If `package-lock.json` is not available, use `npm install`.
+This uses `npm ci` against the checked-in `package-lock.json`.
 
 ## Development
 
 Generate sample artifacts and start the backend API from the project root:
 
 ```bash
-make run-pipeline-sample
-make run-longitudinal-sample
-make run-api
+make demo
+make demo-api
 ```
 
 Then start the dashboard:
+
+```bash
+make demo-frontend
+```
+
+The direct frontend command is still available from this directory:
 
 ```bash
 npm run dev
@@ -38,6 +45,13 @@ VITE_API_BASE_URL=/api/v1
 Override it in a local `.env` file only when needed.
 
 ## Checks
+
+```bash
+make frontend-lint
+make frontend-build
+```
+
+Or run the frontend scripts directly:
 
 ```bash
 npm run lint

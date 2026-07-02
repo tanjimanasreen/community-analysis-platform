@@ -4,6 +4,8 @@ __pycache__/
 *.pyo
 *.pyd
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 .coverage
 htmlcov/
 
@@ -33,6 +35,9 @@ data/generated/
 community-analysis-sample*/
 community-analysis-longitudinal-sample*/
 community-analysis-theme-sample*/
+community-analysis-artifact-index.md
+community-analysis-longitudinal-artifact-index.md
+community-analysis-sample-interactions.csv
 
 # Frontend dependencies and builds
 frontend/node_modules/

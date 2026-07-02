@@ -1,16 +1,23 @@
-.PHONY: help test format lint db-up db-down db-check validate-config ingest-sample run-network-sample run-topic-sample run-theme-sample run-pipeline-sample run-longitudinal-sample verify-output-contract verify-longitudinal-output-contract api-smoke-test run-api frontend-install frontend-build frontend-lint run-frontend build-report
+.PHONY: help install install-dev test format lint db-up db-down db-check validate-config ingest-sample run-network-sample run-topic-sample run-theme-sample run-pipeline-sample run-longitudinal-sample verify-output-contract verify-longitudinal-output-contract api-smoke-test run-api demo demo-api demo-frontend frontend-install frontend-build frontend-lint run-frontend clean-generated clean-cache build-report
 
 PYTHON ?= .venv/bin/python
+PYTHON_BOOTSTRAP ?= python3
+PIP ?= $(PYTHON) -m pip
 SAMPLE_CONFIG ?= configs/sample_twitter_reply.yml
+SAMPLE_OUTPUT ?= /tmp/community-analysis-sample
+SAMPLE_THEME_OUTPUT ?= /tmp/community-analysis-theme-sample
 SAMPLE_INTERACTIONS ?= /tmp/community-analysis-sample-interactions.csv
 SAMPLE_REPORT ?= /tmp/community-analysis-artifact-index.md
 LONGITUDINAL_CONFIG_03 ?= configs/longitudinal/sample_twitter_reply_03.yml
 LONGITUDINAL_CONFIG_04 ?= configs/longitudinal/sample_twitter_reply_04.yml
 LONGITUDINAL_OUTPUT ?= /tmp/community-analysis-longitudinal-sample
+LONGITUDINAL_THEME_OUTPUT ?= /tmp/community-analysis-longitudinal-theme-sample
 LONGITUDINAL_REPORT ?= /tmp/community-analysis-longitudinal-artifact-index.md
 
 help:
 	@echo "Available targets:"
+	@echo "  install              - Create .venv and install runtime dependencies"
+	@echo "  install-dev          - Create .venv and install runtime + dev dependencies"
 	@echo "  test                 - Run unit tests"
 	@echo "  format               - Format code with black"
 	@echo "  lint                 - Lint code with flake8"
@@ -27,11 +34,26 @@ help:
 	@echo "  verify-longitudinal-output-contract - Validate generated longitudinal artifact schemas"
 	@echo "  api-smoke-test       - Run read-only backend API smoke tests"
 	@echo "  run-api              - Start the read-only artifact API"
+	@echo "  demo                 - Run offline sample, verifiers, report, and API smoke tests"
+	@echo "  demo-api             - Start the read-only artifact API for demo outputs"
+	@echo "  demo-frontend        - Start the read-only dashboard dev server"
 	@echo "  frontend-install     - Install frontend dependencies"
 	@echo "  frontend-build       - Build the read-only dashboard"
 	@echo "  frontend-lint        - Lint the read-only dashboard"
 	@echo "  run-frontend         - Start the dashboard dev server"
+	@echo "  clean-generated      - Remove known demo outputs and frontend build output"
+	@echo "  clean-cache          - Remove Python/test/Vite caches and egg-info"
 	@echo "  build-report         - Build a markdown artifact index for sample outputs"
+
+install:
+	$(PYTHON_BOOTSTRAP) -m venv .venv
+	$(PIP) install --upgrade pip
+	$(PIP) install -e .
+
+install-dev:
+	$(PYTHON_BOOTSTRAP) -m venv .venv
+	$(PIP) install --upgrade pip
+	$(PIP) install -e .[dev]
 
 test:
 	$(PYTHON) -m pytest tests/unit
@@ -90,8 +112,14 @@ api-smoke-test:
 run-api:
 	COMMUNITY_ANALYSIS_API_CONFIGS=$(SAMPLE_CONFIG),$(LONGITUDINAL_CONFIG_04) $(PYTHON) -m uvicorn backend.main:app --reload
 
+demo: run-pipeline-sample verify-output-contract run-longitudinal-sample verify-longitudinal-output-contract build-report api-smoke-test
+
+demo-api: run-api
+
+demo-frontend: run-frontend
+
 frontend-install:
-	cd frontend && if [ -f package-lock.json ]; then npm ci; else npm install; fi
+	cd frontend && npm ci
 
 frontend-build:
 	cd frontend && npm run build
@@ -101,6 +129,14 @@ frontend-lint:
 
 run-frontend:
 	cd frontend && npm run dev
+
+clean-generated:
+	rm -rf "$(SAMPLE_OUTPUT)" "$(SAMPLE_THEME_OUTPUT)" "$(SAMPLE_INTERACTIONS)" "$(SAMPLE_REPORT)" "$(LONGITUDINAL_OUTPUT)" "$(LONGITUDINAL_THEME_OUTPUT)" "$(LONGITUDINAL_REPORT)" frontend/dist
+
+clean-cache:
+	find . -path ./.venv -prune -o -path ./frontend/node_modules -prune -o -type d -name "__pycache__" -prune -exec rm -rf {} +
+	rm -rf .pytest_cache .mypy_cache .ruff_cache frontend/.vite
+	find . -path ./.venv -prune -o -path ./frontend/node_modules -prune -o -type d -name "*.egg-info" -prune -exec rm -rf {} +
 
 build-report:
 	$(PYTHON) -m src.cli build-report --config $(SAMPLE_CONFIG) --out $(SAMPLE_REPORT)

@@ -9,13 +9,21 @@ OpenAI, Hugging Face model downloads, or Kaleido.
 From the project root:
 
 ```bash
-python -m venv .venv
-.venv/bin/python -m pip install --upgrade pip
-.venv/bin/python -m pip install -e ".[dev]"
+make install-dev
 ```
 
 The Makefile uses `.venv/bin/python` by default, so keep the virtual
 environment at `.venv` unless you also override `PYTHON`.
+
+`pyproject.toml` is the authoritative Python dependency file. The
+`requirements.txt` file is a small compatibility wrapper for environments that
+expect one.
+
+Install frontend dependencies from the checked-in lockfile:
+
+```bash
+make frontend-install
+```
 
 ## 2. Validate The Local Install
 
@@ -72,6 +80,16 @@ Longitudinal sample outputs are written to:
 /tmp/community-analysis-longitudinal-artifact-index.md
 ```
 
+For a complete release/demo proof, use:
+
+```bash
+make demo
+```
+
+This runs the one-month sample, verifies its output contract, runs the
+longitudinal sample, verifies its output contract, builds artifact indexes, and
+runs the read-only API smoke tests.
+
 ## 4. Run Individual Offline Stages
 
 ```bash
@@ -83,9 +101,14 @@ make run-longitudinal-sample
 make verify-output-contract
 make verify-longitudinal-output-contract
 make api-smoke-test
+make demo
+make demo-api
+make demo-frontend
 make frontend-install
 make frontend-lint
 make frontend-build
+make clean-generated
+make clean-cache
 make build-report
 ```
 
@@ -119,6 +142,17 @@ make frontend-install
 make frontend-lint
 make frontend-build
 ```
+
+Remove generated demo outputs and caches with:
+
+```bash
+make clean-generated
+make clean-cache
+```
+
+`clean-generated` removes only documented demo output paths and the frontend
+build output. `clean-cache` removes Python/test/Vite caches and egg-info. These
+targets do not remove `.venv` or `frontend/node_modules`.
 
 The default sample stages use tiny checked-in fixtures:
 
@@ -176,7 +210,7 @@ COMMUNITY_ANALYSIS_API_CONFIGS=configs/sample_twitter_reply.yml,configs/longitud
 In a second terminal, start the Vite dashboard:
 
 ```bash
-make run-frontend
+make demo-frontend
 ```
 
 The dashboard uses `VITE_API_BASE_URL=/api/v1` by default and Vite proxies

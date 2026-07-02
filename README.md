@@ -53,9 +53,7 @@ virtual environment named `.venv`.
 Create and install the local environment:
 
 ```bash
-python -m venv .venv
-.venv/bin/python -m pip install --upgrade pip
-.venv/bin/python -m pip install -e ".[dev]"
+make install-dev
 ```
 
 If you already activated another virtual environment, the equivalent install
@@ -64,6 +62,16 @@ command is:
 ```bash
 python -m pip install -e ".[dev]"
 ```
+
+Install the read-only dashboard dependencies with:
+
+```bash
+make frontend-install
+```
+
+`pyproject.toml` is the canonical Python dependency declaration. The
+`requirements.txt` file is only a compatibility wrapper for hosts that expect
+one.
 
 ## Running The Offline Sample
 
@@ -97,9 +105,21 @@ The longitudinal two-month sample writes to:
 
 ## Offline Sample Commands
 
+For a full release/demo proof from generated fixtures, run:
+
+```bash
+make demo
+```
+
+This runs the one-month sample, output-contract verification, the longitudinal
+sample, longitudinal verification, artifact indexing, and the read-only API
+smoke tests.
+
 Run individual stages with:
 
 ```bash
+make install-dev
+make frontend-install
 make test
 make validate-config
 make ingest-sample
@@ -111,9 +131,14 @@ make run-longitudinal-sample
 make verify-output-contract
 make verify-longitudinal-output-contract
 make api-smoke-test
+make demo
+make demo-api
+make demo-frontend
 make frontend-install
 make frontend-lint
 make frontend-build
+make clean-generated
+make clean-cache
 make build-report
 ```
 
@@ -130,9 +155,14 @@ What each command does:
 - `make verify-output-contract`: validates generated one-month sample artifact paths and schemas without rerunning the pipeline.
 - `make verify-longitudinal-output-contract`: validates generated two-month longitudinal artifact paths, manifests, hashes, and transitions.
 - `make api-smoke-test`: runs offline tests for the read-only artifact API.
+- `make demo`: runs the full offline demo proof and read-only API smoke tests.
+- `make demo-api`: starts the read-only artifact API for generated demo outputs.
+- `make demo-frontend`: starts the Vite dashboard.
 - `make frontend-install`: installs dashboard dependencies with `npm ci` when a lockfile is present.
 - `make frontend-lint`: lints the read-only dashboard.
 - `make frontend-build`: builds the dashboard without requiring the API to be running.
+- `make clean-generated`: removes only known generated demo outputs and the frontend build output.
+- `make clean-cache`: removes Python/test/Vite caches and egg-info without deleting `.venv` or `frontend/node_modules`.
 - `make build-report`: writes `/tmp/community-analysis-artifact-index.md`.
 
 ## Direct CLI Usage
@@ -209,10 +239,9 @@ COMMUNITY_ANALYSIS_API_CONFIGS=configs/sample_twitter_reply.yml,configs/longitud
 After generating outputs and starting the API, start the Vite dashboard:
 
 ```bash
-make run-pipeline-sample
-make run-longitudinal-sample
-make run-api
-make run-frontend
+make demo
+make demo-api
+make demo-frontend
 ```
 
 The dashboard consumes only `/api/v1` read-only endpoints. It has no controls
