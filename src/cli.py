@@ -71,6 +71,10 @@ def main():
     parser_report.add_argument('--config', required=True, help='Path to config file')
     parser_report.add_argument('--out', required=False, default='/tmp/community-analysis-artifact-index.md', help='Report output path')
 
+    parser_verify = subparsers.add_parser('verify-output-contract', help='Validate generated output artifact schemas')
+    parser_verify.add_argument('--config', required=True, help='Path to config file')
+    parser_verify.add_argument('--longitudinal', action='store_true', help='Validate all months listed in the theme-input manifest')
+
     # import-csv command
     parser_import = subparsers.add_parser('import-csv', help='Backward-compatible alias for import-graph')
     parser_import.add_argument('--file', nargs='+', required=True, help='Path to one or more CSV files')
@@ -181,6 +185,19 @@ def main():
         config = validate_config(args.config)
         report_path = build_artifact_index(config, args.out)
         print(f"Artifact index written to {report_path}")
+
+    elif args.command == 'verify-output-contract':
+        from src.reporting.output_contract import OutputContractError, verify_output_contract
+
+        config = validate_config(args.config)
+        try:
+            result = verify_output_contract(config, longitudinal=args.longitudinal)
+        except OutputContractError as exc:
+            print(f"Output contract verification failed: {exc}", file=sys.stderr)
+            sys.exit(1)
+        print(f"Output contract verified. Checked {result.checked_count} artifacts.")
+        if result.skipped_optional:
+            print(f"Skipped {len(result.skipped_optional)} optional artifacts that were not present.")
 
 
 def _import_raw_graph(file_paths, platform, config_path):

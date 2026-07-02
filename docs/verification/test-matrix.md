@@ -32,6 +32,7 @@
 | Sankey path detection | `find_all_sankey_paths` | Finds all start-to-end paths. |
 | Membership changes | `calculate_membership_changes` | New/lost/existing/reappearing behavior. |
 | Theme similarity | `calculate_sentence_similarity` | Matrix shape and similarity bounds. |
+| Output artifact contract | `verify_output_contract` | Public CSV schemas, internal manifests, SHA256 hashes, copied LDA schema, optional outputs. |
 
 ## Fixture Strategy
 
@@ -58,3 +59,16 @@ Unit tests must not:
 
 Use mocks or cached fixtures for those cases.
 
+## Output Contract Verification
+
+Generated sample outputs should be checked with:
+
+```bash
+make run-pipeline-sample
+make verify-output-contract
+make run-longitudinal-sample
+make verify-longitudinal-output-contract
+```
+
+The verifier is read-only and must not call database, LLM, model-download, or
+visualization services.

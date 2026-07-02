@@ -108,6 +108,8 @@ make run-topic-sample
 make run-theme-sample
 make run-pipeline-sample
 make run-longitudinal-sample
+make verify-output-contract
+make verify-longitudinal-output-contract
 make build-report
 ```
 
@@ -121,6 +123,8 @@ What each command does:
 - `make run-theme-sample`: runs only theme intelligence from saved theme-input prerequisites. Run `make run-topic-sample` first, or use `make run-pipeline-sample`.
 - `make run-pipeline-sample`: runs the offline sample workflow and writes the artifact index.
 - `make run-longitudinal-sample`: runs a two-month offline workflow and verifies longitudinal theme transitions.
+- `make verify-output-contract`: validates generated one-month sample artifact paths and schemas without rerunning the pipeline.
+- `make verify-longitudinal-output-contract`: validates generated two-month longitudinal artifact paths, manifests, hashes, and transitions.
 - `make build-report`: writes `/tmp/community-analysis-artifact-index.md`.
 
 ## Direct CLI Usage
@@ -139,6 +143,7 @@ The same checks can be run directly through the CLI:
 .venv/bin/python -m src.cli run-social-network --config configs/sample_twitter_reply.yml
 .venv/bin/python -m src.cli run-topics --config configs/sample_twitter_reply.yml
 .venv/bin/python -m src.cli run-theme-analysis --config configs/sample_twitter_reply.yml
+.venv/bin/python -m src.cli verify-output-contract --config configs/sample_twitter_reply.yml
 .venv/bin/python -m src.cli build-report \
   --config configs/sample_twitter_reply.yml \
   --out /tmp/community-analysis-artifact-index.md
@@ -152,6 +157,12 @@ Run `run-social-network` first when using direct CLI commands.
 `<output_base_path>/<data_type>/_intermediate/theme_inputs/<content_type>/<year>/`.
 Run `run-topics` first when using direct CLI commands, or set `theme.input_dir`
 explicitly for manual fixture runs.
+
+`verify-output-contract` is read-only. It checks generated public thesis CSVs,
+internal topic/theme-input manifests, theme-input SHA256 hashes, and schema
+compatibility between public matched LDA outputs and copied theme inputs. Use
+`--longitudinal` with the April longitudinal config after
+`make run-longitudinal-sample`.
 
 ## Optional Database Commands
 

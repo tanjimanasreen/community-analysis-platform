@@ -43,6 +43,7 @@ python -m src.cli export-graph --config configs/<run>.yml
 python -m src.cli run-social-network --config configs/<run>.yml
 python -m src.cli run-topics --config configs/<run>.yml
 python -m src.cli run-theme-analysis --config configs/<run>.yml
+python -m src.cli verify-output-contract --config configs/<run>.yml
 python -m src.cli run-all --config configs/<run>.yml
 ```
 
@@ -56,6 +57,8 @@ make run-network-sample
 make run-topic-sample
 make run-theme-sample
 make run-pipeline-sample
+make verify-output-contract
+make verify-longitudinal-output-contract
 make build-report
 make test
 ```
@@ -92,6 +95,10 @@ The production pipeline must preserve the output categories listed in `docs/desi
 
 If output paths are modernized, provide compatibility aliases or documented migration mapping.
 
+The frozen public and internal artifact schemas are documented in
+`docs/design-docs/output-artifact-contract.md`. The `verify-output-contract`
+CLI command validates generated artifacts without rerunning any pipeline stage.
+
 ## Offline And Online Modes
 
 Offline mode:
@@ -114,4 +121,3 @@ Online mode:
 - Do not overwrite previous run outputs unless explicitly configured.
 - GPT failures should not destroy LDA outputs.
 - Visualization failures should be reported separately from analysis failures.
-

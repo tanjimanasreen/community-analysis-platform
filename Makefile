@@ -1,4 +1,4 @@
-.PHONY: help test format lint db-up db-down db-check validate-config ingest-sample run-network-sample run-topic-sample run-theme-sample run-pipeline-sample run-longitudinal-sample build-report
+.PHONY: help test format lint db-up db-down db-check validate-config ingest-sample run-network-sample run-topic-sample run-theme-sample run-pipeline-sample run-longitudinal-sample verify-output-contract verify-longitudinal-output-contract build-report
 
 PYTHON ?= .venv/bin/python
 SAMPLE_CONFIG ?= configs/sample_twitter_reply.yml
@@ -23,6 +23,8 @@ help:
 	@echo "  run-theme-sample     - Run theme sample from saved topic outputs"
 	@echo "  run-pipeline-sample  - Run the offline sample pipeline and artifact index"
 	@echo "  run-longitudinal-sample - Run two-month offline pipeline and transitions"
+	@echo "  verify-output-contract - Validate generated one-month sample artifact schemas"
+	@echo "  verify-longitudinal-output-contract - Validate generated longitudinal artifact schemas"
 	@echo "  build-report         - Build a markdown artifact index for sample outputs"
 
 test:
@@ -69,6 +71,12 @@ run-longitudinal-sample:
 	MPLBACKEND=Agg MPLCONFIGDIR=/tmp $(PYTHON) -m src.cli run-topics --config $(LONGITUDINAL_CONFIG_04)
 	MPLBACKEND=Agg MPLCONFIGDIR=/tmp $(PYTHON) -m src.cli run-theme-analysis --config $(LONGITUDINAL_CONFIG_04)
 	$(PYTHON) -m src.cli build-report --config $(LONGITUDINAL_CONFIG_04) --out $(LONGITUDINAL_REPORT)
+
+verify-output-contract:
+	$(PYTHON) -m src.cli verify-output-contract --config $(SAMPLE_CONFIG)
+
+verify-longitudinal-output-contract:
+	$(PYTHON) -m src.cli verify-output-contract --config $(LONGITUDINAL_CONFIG_04) --longitudinal
 
 build-report:
 	$(PYTHON) -m src.cli build-report --config $(SAMPLE_CONFIG) --out $(SAMPLE_REPORT)

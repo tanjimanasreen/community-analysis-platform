@@ -80,6 +80,8 @@ make run-network-sample
 make run-topic-sample
 make run-theme-sample
 make run-longitudinal-sample
+make verify-output-contract
+make verify-longitudinal-output-contract
 make build-report
 ```
 
@@ -88,6 +90,17 @@ topic-input prerequisites. `run-topic-sample` loads those saved prerequisites
 and runs only LDA/topic modeling. `run-theme-sample` loads saved theme-input
 prerequisites created by `run-topic-sample` and runs only theme intelligence.
 Run the stages in order, or use `run-pipeline-sample`.
+
+After generating outputs, freeze-check the artifact contracts with:
+
+```bash
+make verify-output-contract
+make verify-longitudinal-output-contract
+```
+
+These commands are read-only. They validate public CSV schemas, internal
+topic/theme-input manifests, theme-input SHA256 hashes, and longitudinal
+transition output without rerunning pipeline stages.
 
 The default sample stages use tiny checked-in fixtures:
 
@@ -108,6 +121,7 @@ The default sample stages use tiny checked-in fixtures:
 .venv/bin/python -m src.cli run-social-network --config configs/sample_twitter_reply.yml
 .venv/bin/python -m src.cli run-topics --config configs/sample_twitter_reply.yml
 .venv/bin/python -m src.cli run-theme-analysis --config configs/sample_twitter_reply.yml
+.venv/bin/python -m src.cli verify-output-contract --config configs/sample_twitter_reply.yml
 .venv/bin/python -m src.cli build-report \
   --config configs/sample_twitter_reply.yml \
   --out /tmp/community-analysis-artifact-index.md

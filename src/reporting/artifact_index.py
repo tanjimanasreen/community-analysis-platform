@@ -4,6 +4,8 @@ from collections.abc import Iterable, Mapping
 from datetime import datetime, timezone
 from pathlib import Path
 
+from src.reporting.output_contract import VerificationResult, build_contract_summary
+
 
 def collect_artifacts(roots: Iterable[str]) -> list[Path]:
     artifacts: list[Path] = []
@@ -16,7 +18,11 @@ def collect_artifacts(roots: Iterable[str]) -> list[Path]:
     return sorted(artifacts, key=lambda item: str(item))
 
 
-def build_artifact_index(config: Mapping, out_path: str) -> Path:
+def build_artifact_index(
+    config: Mapping,
+    out_path: str,
+    verification_result: VerificationResult | None = None,
+) -> Path:
     roots = _artifact_roots(config)
     artifacts = collect_artifacts(roots)
     output = Path(out_path)
@@ -36,6 +42,8 @@ def build_artifact_index(config: Mapping, out_path: str) -> Path:
         lines.extend(f"- `{artifact}`" for artifact in artifacts)
     else:
         lines.append("- No artifacts found yet.")
+    lines.extend(["", "## Contract Verification", ""])
+    lines.extend(f"- {line}" for line in build_contract_summary(verification_result))
 
     output.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return output
