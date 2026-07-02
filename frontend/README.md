@@ -1,16 +1,47 @@
-# React + Vite
+# Community Analysis Dashboard
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+This Vite/React app is a read-only dashboard for generated community-analysis
+artifacts. It consumes the backend `/api/v1` artifact API and does not run any
+pipeline stages.
 
-Currently, two official plugins are available:
+## Setup
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+```bash
+npm ci
+```
 
-## React Compiler
+If `package-lock.json` is not available, use `npm install`.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Development
 
-## Expanding the Oxlint configuration
+Generate sample artifacts and start the backend API from the project root:
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+```bash
+make run-pipeline-sample
+make run-longitudinal-sample
+make run-api
+```
+
+Then start the dashboard:
+
+```bash
+npm run dev
+```
+
+Vite proxies `/api` to `http://127.0.0.1:8000` during local development, so
+the default dashboard API base is:
+
+```text
+VITE_API_BASE_URL=/api/v1
+```
+
+Override it in a local `.env` file only when needed.
+
+## Checks
+
+```bash
+npm run lint
+npm run build
+```
+
+The build is static and does not require the backend API to be running.

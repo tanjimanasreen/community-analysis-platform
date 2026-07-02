@@ -96,9 +96,9 @@ class VerificationResult:
 
 def verify_output_contract(config: Mapping, *, longitudinal: bool = False) -> VerificationResult:
     """Validate generated artifacts without running any pipeline stage."""
-    params = _params(config)
-    months = _months(config, params["month"], longitudinal)
-    checks = _public_artifact_checks(params, months)
+    params = get_output_contract_params(config)
+    months = get_output_contract_months(config, longitudinal=longitudinal)
+    checks = get_public_artifact_checks(config, longitudinal=longitudinal)
     checked: list[Path] = []
     skipped_optional: list[Path] = []
 
@@ -156,7 +156,8 @@ def build_contract_summary(result: VerificationResult | None) -> list[str]:
     return lines
 
 
-def _params(config: Mapping) -> dict[str, str]:
+def get_output_contract_params(config: Mapping) -> dict[str, str]:
+    """Return normalized string parameters used by artifact path builders."""
     return {
         "output_base_path": str(config.get("output_base_path", "results/")),
         "data_type": str(config.get("data_type", "twitter")),
@@ -170,6 +171,38 @@ def _params(config: Mapping) -> dict[str, str]:
             / "theme_analysis"
             / str(config.get("content_type", "reply"))
         ),
+    }
+
+
+def get_output_contract_months(config: Mapping, *, longitudinal: bool = False) -> list[str]:
+    """Return the configured month or manifest months for a longitudinal run."""
+    params = get_output_contract_params(config)
+    return _months(config, params["month"], longitudinal)
+
+
+def get_public_artifact_checks(config: Mapping, *, longitudinal: bool = False) -> list[ArtifactCheck]:
+    """Return public artifact checks for a run without reading any artifacts."""
+    params = get_output_contract_params(config)
+    months = get_output_contract_months(config, longitudinal=longitudinal)
+    return _public_artifact_checks(params, months)
+
+
+def get_required_columns_by_artifact() -> dict[str, list[str]]:
+    """Expose frozen public CSV schemas for readers and API metadata."""
+    return {
+        "network_data": NETWORK_DATA_COLUMNS,
+        "absolute_community_graph": COMMUNITY_GRAPH_COLUMNS,
+        "weighted_community_graph": COMMUNITY_GRAPH_COLUMNS,
+        "matched_communities": MATCHED_COMMUNITY_SUMMARY_COLUMNS,
+        "partial_matched_communities": PARTIAL_MATCHED_COMMUNITY_COLUMNS,
+        "user_centrality": USER_CENTRALITY_COLUMNS,
+        "count_user_messages": COUNT_USER_MESSAGES_COLUMNS,
+        "daily_messages_stat": DAILY_MESSAGES_STAT_COLUMNS,
+        "lda_scores": LDA_SCORES_COLUMNS,
+        "matched_lda": MATCHED_LDA_COLUMNS,
+        "partial_matched_lda": PARTIAL_MATCHED_LDA_COLUMNS,
+        "themed_output": THEMED_OUTPUT_COLUMNS,
+        "community_transition": COMMUNITY_TRANSITION_COLUMNS,
     }
 
 

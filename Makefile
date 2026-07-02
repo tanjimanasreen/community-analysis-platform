@@ -1,4 +1,4 @@
-.PHONY: help test format lint db-up db-down db-check validate-config ingest-sample run-network-sample run-topic-sample run-theme-sample run-pipeline-sample run-longitudinal-sample verify-output-contract verify-longitudinal-output-contract build-report
+.PHONY: help test format lint db-up db-down db-check validate-config ingest-sample run-network-sample run-topic-sample run-theme-sample run-pipeline-sample run-longitudinal-sample verify-output-contract verify-longitudinal-output-contract api-smoke-test run-api frontend-install frontend-build frontend-lint run-frontend build-report
 
 PYTHON ?= .venv/bin/python
 SAMPLE_CONFIG ?= configs/sample_twitter_reply.yml
@@ -25,6 +25,12 @@ help:
 	@echo "  run-longitudinal-sample - Run two-month offline pipeline and transitions"
 	@echo "  verify-output-contract - Validate generated one-month sample artifact schemas"
 	@echo "  verify-longitudinal-output-contract - Validate generated longitudinal artifact schemas"
+	@echo "  api-smoke-test       - Run read-only backend API smoke tests"
+	@echo "  run-api              - Start the read-only artifact API"
+	@echo "  frontend-install     - Install frontend dependencies"
+	@echo "  frontend-build       - Build the read-only dashboard"
+	@echo "  frontend-lint        - Lint the read-only dashboard"
+	@echo "  run-frontend         - Start the dashboard dev server"
 	@echo "  build-report         - Build a markdown artifact index for sample outputs"
 
 test:
@@ -77,6 +83,24 @@ verify-output-contract:
 
 verify-longitudinal-output-contract:
 	$(PYTHON) -m src.cli verify-output-contract --config $(LONGITUDINAL_CONFIG_04) --longitudinal
+
+api-smoke-test:
+	$(PYTHON) -m pytest tests/unit/test_backend_api.py
+
+run-api:
+	COMMUNITY_ANALYSIS_API_CONFIGS=$(SAMPLE_CONFIG),$(LONGITUDINAL_CONFIG_04) $(PYTHON) -m uvicorn backend.main:app --reload
+
+frontend-install:
+	cd frontend && if [ -f package-lock.json ]; then npm ci; else npm install; fi
+
+frontend-build:
+	cd frontend && npm run build
+
+frontend-lint:
+	cd frontend && npm run lint
+
+run-frontend:
+	cd frontend && npm run dev
 
 build-report:
 	$(PYTHON) -m src.cli build-report --config $(SAMPLE_CONFIG) --out $(SAMPLE_REPORT)

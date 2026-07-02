@@ -82,6 +82,10 @@ make run-theme-sample
 make run-longitudinal-sample
 make verify-output-contract
 make verify-longitudinal-output-contract
+make api-smoke-test
+make frontend-install
+make frontend-lint
+make frontend-build
 make build-report
 ```
 
@@ -101,6 +105,20 @@ make verify-longitudinal-output-contract
 These commands are read-only. They validate public CSV schemas, internal
 topic/theme-input manifests, theme-input SHA256 hashes, and longitudinal
 transition output without rerunning pipeline stages.
+
+Run the read-only backend API smoke tests with:
+
+```bash
+make api-smoke-test
+```
+
+Install and check the read-only dashboard with:
+
+```bash
+make frontend-install
+make frontend-lint
+make frontend-build
+```
 
 The default sample stages use tiny checked-in fixtures:
 
@@ -127,6 +145,45 @@ The default sample stages use tiny checked-in fixtures:
   --out /tmp/community-analysis-artifact-index.md
 ```
 
+## 6. Read-Only Artifact API
+
+After outputs have been generated, start the API with:
+
+```bash
+make run-api
+```
+
+The API is read-only and serves generated artifacts under `/api/v1`. It does
+not run pipeline stages, call external services, render visualizations, or
+mutate output files.
+
+Default API configs:
+
+```text
+configs/sample_twitter_reply.yml
+configs/longitudinal/sample_twitter_reply_04.yml
+```
+
+Override them with:
+
+```bash
+COMMUNITY_ANALYSIS_API_CONFIGS=configs/sample_twitter_reply.yml,configs/longitudinal/sample_twitter_reply_04.yml \
+.venv/bin/python -m uvicorn backend.main:app --reload
+```
+
+## 7. Read-Only Dashboard
+
+In a second terminal, start the Vite dashboard:
+
+```bash
+make run-frontend
+```
+
+The dashboard uses `VITE_API_BASE_URL=/api/v1` by default and Vite proxies
+`/api` to `http://127.0.0.1:8000` during local development. It is read-only:
+there are no buttons or API calls that run pipeline stages, external services,
+or visualization rendering.
+
 `run-topics` expects topic-input artifacts under:
 
 ```text
@@ -144,7 +201,7 @@ Those artifacts are produced by `run-social-network`.
 Those artifacts are produced by `run-topics`. You can still set
 `theme.input_dir` in a config for manual fixture runs.
 
-## 6. Optional Memgraph Commands
+## 8. Optional Memgraph Commands
 
 Use these only when Docker is available and you intentionally want the local
 graph database path:
@@ -154,7 +211,7 @@ graph database path:
 .venv/bin/python -m src.cli db-check --config configs/sample_twitter_reply.yml
 ```
 
-## 7. Optional Legacy Neo4j Export
+## 9. Optional Legacy Neo4j Export
 
 The thesis code originally exported relationships from Neo4j. That workflow is
 now treated as a migration path rather than the default local sample path.

@@ -59,6 +59,10 @@ make run-theme-sample
 make run-pipeline-sample
 make verify-output-contract
 make verify-longitudinal-output-contract
+make api-smoke-test
+make frontend-install
+make frontend-lint
+make frontend-build
 make build-report
 make test
 ```
@@ -98,6 +102,28 @@ If output paths are modernized, provide compatibility aliases or documented migr
 The frozen public and internal artifact schemas are documented in
 `docs/design-docs/output-artifact-contract.md`. The `verify-output-contract`
 CLI command validates generated artifacts without rerunning any pipeline stage.
+
+## Read-Only Artifact API
+
+Plan 011 adds a FastAPI read-only API under `/api/v1` for generated artifact
+browsing. The API must only read configured output roots and known
+output-contract paths. It must not run ingestion, network/community, LDA,
+theme generation, visualization rendering, database clients, or model code.
+
+Local commands:
+
+```bash
+make api-smoke-test
+make run-api
+make run-frontend
+```
+
+## Read-Only Dashboard
+
+The Vite dashboard consumes only `/api/v1` artifact API endpoints. It must not
+call old demo endpoints, mutate output files, run pipeline stages, or call
+external services. It may show operational tables, status cards, and optional
+file availability for generated artifacts.
 
 ## Offline And Online Modes
 

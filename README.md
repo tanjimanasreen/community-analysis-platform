@@ -110,6 +110,10 @@ make run-pipeline-sample
 make run-longitudinal-sample
 make verify-output-contract
 make verify-longitudinal-output-contract
+make api-smoke-test
+make frontend-install
+make frontend-lint
+make frontend-build
 make build-report
 ```
 
@@ -125,6 +129,10 @@ What each command does:
 - `make run-longitudinal-sample`: runs a two-month offline workflow and verifies longitudinal theme transitions.
 - `make verify-output-contract`: validates generated one-month sample artifact paths and schemas without rerunning the pipeline.
 - `make verify-longitudinal-output-contract`: validates generated two-month longitudinal artifact paths, manifests, hashes, and transitions.
+- `make api-smoke-test`: runs offline tests for the read-only artifact API.
+- `make frontend-install`: installs dashboard dependencies with `npm ci` when a lockfile is present.
+- `make frontend-lint`: lints the read-only dashboard.
+- `make frontend-build`: builds the dashboard without requiring the API to be running.
 - `make build-report`: writes `/tmp/community-analysis-artifact-index.md`.
 
 ## Direct CLI Usage
@@ -163,6 +171,61 @@ internal topic/theme-input manifests, theme-input SHA256 hashes, and schema
 compatibility between public matched LDA outputs and copied theme inputs. Use
 `--longitudinal` with the April longitudinal config after
 `make run-longitudinal-sample`.
+
+## Read-Only Artifact API
+
+After generating sample outputs, start the read-only backend API with:
+
+```bash
+make run-api
+```
+
+The API serves generated artifacts only. It does not run ingestion, network,
+community, topic, theme, visualization, database, or model code.
+
+Useful endpoints:
+
+```text
+GET /api/v1/health
+GET /api/v1/runs
+GET /api/v1/runs/{run_id}/facets
+GET /api/v1/runs/{run_id}/verification
+GET /api/v1/runs/{run_id}/artifacts
+GET /api/v1/runs/{run_id}/community-summary?month=03
+GET /api/v1/runs/{run_id}/topics?month=03&type=matched
+GET /api/v1/runs/{run_id}/themes?month=03
+GET /api/v1/runs/{run_id}/transitions
+```
+
+Override configured API runs with:
+
+```bash
+COMMUNITY_ANALYSIS_API_CONFIGS=configs/sample_twitter_reply.yml,configs/longitudinal/sample_twitter_reply_04.yml \
+.venv/bin/python -m uvicorn backend.main:app --reload
+```
+
+## Read-Only Dashboard
+
+After generating outputs and starting the API, start the Vite dashboard:
+
+```bash
+make run-pipeline-sample
+make run-longitudinal-sample
+make run-api
+make run-frontend
+```
+
+The dashboard consumes only `/api/v1` read-only endpoints. It has no controls
+for ingestion, network/community analysis, LDA, theme generation,
+visualization rendering, database access, or external services.
+
+Frontend checks:
+
+```bash
+make frontend-install
+make frontend-lint
+make frontend-build
+```
 
 ## Optional Database Commands
 

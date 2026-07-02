@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual environments and package metadata
+.venv/
+venv/
+env/
+*.egg-info/
+src/*.egg-info/
+build/
+dist/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Generated pipeline outputs
+results/
+outputs/
+reports/
+artifacts/
+data/generated/
+
+# Local sample artifacts are written outside the repo by default, but keep
+# accidental in-repo copies ignored.
+community-analysis-sample*/
+community-analysis-longitudinal-sample*/
+community-analysis-theme-sample*/
+
+# Frontend dependencies and builds
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
