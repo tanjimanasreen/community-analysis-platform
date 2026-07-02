@@ -1,0 +1,2 @@
+month,absolute,weighted
+april,"{'min_msg_count': 1, 'day_of_min_msg': 4, 'max_msg_count': 9, 'day_of_max_msg': 20, 'std_msg_count': 2.596701204000403, 'avg_msg_count': 3.8}","{'min_msg_count': 1, 'day_of_min_msg': 4, 'max_msg_count': 9, 'day_of_max_msg': 20, 'std_msg_count': 2.596701204000403, 'avg_msg_count': 3.8}"

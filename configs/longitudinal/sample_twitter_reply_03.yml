@@ -1,0 +1,37 @@
+data_type: twitter
+content_type: reply
+month: "03"
+year: "2017"
+input_path: tests/fixtures/longitudinal/twitter_reply_03_2017.csv
+output_base_path: /tmp/community-analysis-longitudinal-sample/
+creator_relation: REPLIED_TO
+spreader_relation: REPLIED_BY
+creator_node_column: target
+spreader_node_column: target
+text_node_column: source
+date_column: created_at
+
+database:
+  engine: memgraph
+  uri: ${GRAPH_DB_URI}
+  user: ${GRAPH_DB_USER}
+  password: ${GRAPH_DB_PASSWORD}
+
+graph_thresholds:
+  min_total_post: 1
+  min_shared_post: 1
+  min_members: 2
+
+lda:
+  num_topics: 15
+  top_n_keywords: 50
+
+theme:
+  enable_gpt: false
+  model: gpt-4o
+  sleep_seconds: 2
+  transition_threshold: 0.0
+  output_dir: /tmp/community-analysis-longitudinal-theme-sample
+  year: "2017"
+  render_visuals: false
+  similarity_model: paraphrase-MiniLM-L6-v2

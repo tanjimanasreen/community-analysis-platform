@@ -1,0 +1,2 @@
+members,absolute_community,weighted_community,absolute_unigram_keywords,absolute_bigram_keywords,weighted_unigram_keywords,weighted_bigram_keywords
+"[1, 2, 3]",0,0,"['apple']","['big apple']","['orange']","['big orange']"

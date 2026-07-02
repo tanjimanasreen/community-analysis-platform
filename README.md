@@ -1,0 +1,168 @@
+# Community Analysis Thesis Project
+
+This repository contains the thesis codebase for social network/community analysis and theme analysis.
+
+The harness docs have been updated to reflect the actual implemented code features:
+
+- Neo4j relationship export.
+- Telegram and Twitter relationship workflows.
+- Follower-followee network construction.
+- `shared_post` and `weighted_post` edge metrics.
+- Absolute and weighted NetworkX graphs.
+- Louvain community detection.
+- Prominent community filtering.
+- Centrality, user/message count, and daily message statistics.
+- Exact and partial community comparison.
+- Unigram and bigram LDA topic modeling.
+- Matched and partially matched community topic comparison.
+- GPT theme generation from LDA keywords.
+- Month-to-month community transition analysis.
+- Sankey transition diagrams.
+- Membership-change diagrams.
+- SentenceTransformer theme similarity heatmaps.
+
+## Harness Start Point
+
+Ask your local agent to read:
+
+1. `AGENTS.md`
+2. `HARNESS.md`
+3. `ARCHITECTURE.md`
+4. `docs/design-docs/current-code-feature-inventory.md`
+5. `docs/product-specs/project-spec.md`
+6. `docs/design-docs/metric-contract.md`
+7. `docs/design-docs/pipeline-contract.md`
+8. `docs/design-docs/theme-intelligence-contract.md`
+
+Then implement plans in this order:
+
+1. `docs/exec-plans/active/001-baseline-and-foundation.md`
+2. `docs/exec-plans/active/002-database-and-ingestion.md`
+3. `docs/exec-plans/active/003-network-community-topic-pipeline.md`
+4. `docs/exec-plans/active/004-theme-intelligence.md`
+
+## Important Rule
+
+Before refactoring, preserve the current behavior with tests or fixture outputs. Do not change metric definitions, graph thresholds, Louvain defaults, LDA defaults, or GPT theme defaults unless the change is documented as a separate experiment.
+
+## Setup
+
+Use Python 3.9 or newer. The sample Make targets assume a project-local
+virtual environment named `.venv`.
+
+Create and install the local environment:
+
+```bash
+python -m venv .venv
+.venv/bin/python -m pip install --upgrade pip
+.venv/bin/python -m pip install -e ".[dev]"
+```
+
+If you already activated another virtual environment, the equivalent install
+command is:
+
+```bash
+python -m pip install -e ".[dev]"
+```
+
+## Running The Offline Sample
+
+Start with the full offline sample pipeline:
+
+```bash
+make run-pipeline-sample
+```
+
+This runs CSV ingestion, social network/community analysis, topic modeling,
+theme intelligence, and artifact indexing from tiny checked-in fixtures. It
+does not require Neo4j, Memgraph, Docker, OpenAI, Hugging Face downloads, or
+Kaleido.
+
+Sample outputs are written to:
+
+```text
+/tmp/community-analysis-sample/
+/tmp/community-analysis-theme-sample/
+/tmp/community-analysis-sample-interactions.csv
+/tmp/community-analysis-artifact-index.md
+```
+
+The longitudinal two-month sample writes to:
+
+```text
+/tmp/community-analysis-longitudinal-sample/
+/tmp/community-analysis-longitudinal-theme-sample/
+/tmp/community-analysis-longitudinal-artifact-index.md
+```
+
+## Offline Sample Commands
+
+Run individual stages with:
+
+```bash
+make test
+make validate-config
+make ingest-sample
+make run-network-sample
+make run-topic-sample
+make run-theme-sample
+make run-pipeline-sample
+make run-longitudinal-sample
+make build-report
+```
+
+What each command does:
+
+- `make test`: runs unit tests.
+- `make validate-config`: validates `configs/sample_twitter_reply.yml`.
+- `make ingest-sample`: converts the legacy `source,target,relation` fixture into derived interaction metrics without importing to a database.
+- `make run-network-sample`: runs network/community sample stages and writes internal topic-input prerequisites.
+- `make run-topic-sample`: runs only topic modeling from saved topic-input prerequisites. Run `make run-network-sample` first, or use `make run-pipeline-sample`.
+- `make run-theme-sample`: runs only theme intelligence from saved theme-input prerequisites. Run `make run-topic-sample` first, or use `make run-pipeline-sample`.
+- `make run-pipeline-sample`: runs the offline sample workflow and writes the artifact index.
+- `make run-longitudinal-sample`: runs a two-month offline workflow and verifies longitudinal theme transitions.
+- `make build-report`: writes `/tmp/community-analysis-artifact-index.md`.
+
+## Direct CLI Usage
+
+The same checks can be run directly through the CLI:
+
+```bash
+.venv/bin/python -m src.cli validate-config --config configs/sample_telegram.yml
+.venv/bin/python -m src.cli validate-config --config configs/sample_twitter_reply.yml
+.venv/bin/python -m pytest tests/unit
+.venv/bin/python -m src.cli ingest-interactions \
+  --file tests/fixtures/sample_relationships.csv \
+  --config configs/sample_twitter_reply.yml \
+  --out /tmp/community-analysis-sample-interactions.csv \
+  --no-db
+.venv/bin/python -m src.cli run-social-network --config configs/sample_twitter_reply.yml
+.venv/bin/python -m src.cli run-topics --config configs/sample_twitter_reply.yml
+.venv/bin/python -m src.cli run-theme-analysis --config configs/sample_twitter_reply.yml
+.venv/bin/python -m src.cli build-report \
+  --config configs/sample_twitter_reply.yml \
+  --out /tmp/community-analysis-artifact-index.md
+```
+
+`run-topics` reads internal topic-input artifacts from
+`<output_base_path>/<data_type>/_intermediate/topic_inputs/<content_type>/<month>_<year>/`.
+Run `run-social-network` first when using direct CLI commands.
+
+`run-theme-analysis` reads internal theme-input artifacts from
+`<output_base_path>/<data_type>/_intermediate/theme_inputs/<content_type>/<year>/`.
+Run `run-topics` first when using direct CLI commands, or set `theme.input_dir`
+explicitly for manual fixture runs.
+
+## Optional Database Commands
+
+Memgraph checks are optional integration checks. Use these only when Docker is
+available and you intentionally want a local graph database:
+
+```bash
+.venv/bin/python -m src.cli db-up
+.venv/bin/python -m src.cli db-check --config configs/sample_twitter_reply.yml
+```
+
+Neo4j export remains a migration path for existing thesis data. Configure
+Neo4j connection settings before running export commands; the offline sample
+does not need Neo4j.
