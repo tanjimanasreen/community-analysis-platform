@@ -45,6 +45,12 @@ Then implement plans in this order:
 
 Before refactoring, preserve the current behavior with tests or fixture outputs. Do not change metric definitions, graph thresholds, Louvain defaults, LDA defaults, or GPT theme defaults unless the change is documented as a separate experiment.
 
+## Final Handoff Docs
+
+- `docs/DEMO_SCRIPT.md`: presenter script for the offline demo and dashboard walkthrough.
+- `docs/HANDOFF.md`: architecture, operations, validation, cleanup, and commit checklist.
+- `docs/RELEASE_NOTES.md`: summary of completed modernization work, limitations, and future work.
+
 ## Setup
 
 Use Python 3.9 or newer. The sample Make targets assume a project-local
