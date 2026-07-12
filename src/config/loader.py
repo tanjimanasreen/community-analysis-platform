@@ -5,6 +5,7 @@ import re
 from pathlib import Path
 from typing import Any, Union
 
+from src.config.db_settings import get_db_settings  # moved from mid-file (was line 93)
 
 ENV_VAR_RE = re.compile(r"\$\{([^}]+)\}")
 MONTH_NAME_TO_NUMBER = {
@@ -21,6 +22,11 @@ MONTH_NAME_TO_NUMBER = {
     "november": 11,
     "december": 12,
 }
+
+# Resolved at import time so callers can rely on a stable reference.
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+_DEFAULT_PROVIDERS_CONFIG = _PROJECT_ROOT / "configs" / "providers.yml"
+_DEFAULT_ALGORITHMS_CONFIG = _PROJECT_ROOT / "configs" / "algorithms.yml"
 
 
 def interpolate_env(value: Any) -> Any:
@@ -102,7 +108,44 @@ def load_config(config_path: PathLike) -> dict[str, Any]:
 
     if not isinstance(config, dict):
         raise ValueError(f"Config must be a mapping: {config_path}")
-    return interpolate_env(config)
+
+    # Handle includes — resolved relative to the config file's directory
+    includes = config.pop("include", [])
+    if isinstance(includes, str):
+        includes = [includes]
+
+    merged_config: dict[str, Any] = {}
+    for inc in includes:
+        inc_path = path.parent / inc
+        if inc_path.exists():
+            inc_config = load_config(inc_path)
+            _deep_merge(merged_config, inc_config)
+
+    # Current config wins over included defaults
+    _deep_merge(merged_config, config)
+
+    return interpolate_env(merged_config)
+
+
+def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> None:
+    """Recursively merge override into base in-place. Override wins on conflicts."""
+    for key, value in override.items():
+        if key in base and isinstance(base[key], dict) and isinstance(value, dict):
+            _deep_merge(base[key], value)
+        else:
+            base[key] = value
+
+
+def load_providers_config(base_dir: Path | None = None) -> dict[str, Any]:
+    """Load configs/providers.yml as a standalone dict.
+
+    Used to inject provider settings into run configs that don't include
+    providers.yml themselves (e.g. ad-hoc invocations without a dataset config).
+    """
+    providers_path = (base_dir or _PROJECT_ROOT) / "configs" / "providers.yml"
+    if not providers_path.exists():
+        return {}
+    return load_config(providers_path)
 
 
 def validate_run_config(config: dict[str, Any]) -> None:
@@ -130,15 +173,35 @@ def validate_run_config(config: dict[str, Any]) -> None:
             raise ValueError(f"graph_thresholds.{key} must be non-negative")
 
 
+def validate_provider_config(config: dict[str, Any]) -> None:
+    """Validate theme_provider settings in a merged config dict."""
+    known_prefixes = {"gemini", "nvidia", "llm7", "openai", "mock", "keyword_baseline"}
+    theme_provider = config.get("theme_provider", {})
+    primary = theme_provider.get("primary", "mock")
+    prefix = primary.split(":", 1)[0] if ":" in primary else primary
+    if prefix not in known_prefixes:
+        raise ValueError(
+            f"Unknown theme_provider.primary prefix: {prefix!r}. "
+            f"Known prefixes: {sorted(known_prefixes)}"
+        )
+    fallback_chain = theme_provider.get("fallback_chain", [])
+    for entry in fallback_chain:
+        pfx = entry.split(":", 1)[0] if ":" in entry else entry
+        if pfx not in known_prefixes:
+            raise ValueError(
+                f"Unknown provider in fallback_chain: {entry!r}. "
+                f"Known prefixes: {sorted(known_prefixes)}"
+            )
+
+
 def get_database_config(config: dict[str, Any]) -> dict[str, Any]:
-    database = config.get("database", {})
+    # Strictly load from the environment via Pydantic — config dict is ignored.
+    db_settings = get_db_settings()
     return {
-        "engine": database.get("engine", os.environ.get("GRAPH_DB_BACKEND", "memgraph")),
-        "uri": database.get("uri", os.environ.get("GRAPH_DB_URI", "bolt://localhost:7687")),
-        "user": database.get("user", os.environ.get("GRAPH_DB_USER", "")),
-        "password": database.get(
-            "password", os.environ.get("GRAPH_DB_PASSWORD", "")
-        ),
+        "engine": db_settings.engine,
+        "uri": db_settings.uri,
+        "user": db_settings.user,
+        "password": db_settings.password,
     }
 
 

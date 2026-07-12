@@ -1,0 +1,61 @@
+# Provider registry — single source of truth for all LLM routing.
+#
+# BENCHMARK PIPELINE: reads from benchmark.test_models only.
+#   Each model is evaluated independently — NO fallback wiring.
+#
+# THEME PIPELINE: reads from theme_provider.
+#   primary: the champion model chosen after benchmarking.
+#   Set primary to "mock" for offline/CI test runs.
+#   fallback: true/false — configurable per run.
+#   fallback_chain: ordered real providers tried on error/rate-limit.
+#   Never use "mock" in production fallback_chain.
+
+providers:
+  gemini:
+    rate_limit_rpm: 15
+    models:
+      - "gemini-3.5-flash"
+      - "gemini-3.1-flash-lite"
+  nvidia:
+    rate_limit_rpm: 40
+    models:
+      - "meta/llama3-70b-instruct"
+  llm7:
+    # Rate limits: anonymous=10rpm, free_token=40rpm, pro=1500rpm
+    rate_limit_rpm: 10
+    models:
+      - "fast"
+      - "turbo"
+      - "pro"
+  openai:
+    rate_limit_rpm: 60
+    models:
+      - "gpt-4o"
+  mock:
+    rate_limit_rpm: 1000
+    models:
+      - "deterministic-mock-theme-v2"
+
+# Non-benchmark theme generation provider settings.
+# primary: champion model after benchmarking. Use "mock" for offline/CI runs.
+# fallback: set true to enable automatic fallback on rate limit or API error.
+# fallback_chain: ordered list of fallback providers (real APIs only).
+#   When champion is determined, update primary and keep this chain intact.
+theme_provider:
+  primary: "mock"
+  fallback: true
+  fallback_chain:
+    - "llm7:fast"
+    - "nvidia:meta/llama3-70b-instruct"
+
+# Benchmark pipeline — each model evaluated independently.
+# evaluator_judge: the LLM used by DeepEval GEval scoring.
+#   Use "mock" for offline runs; set to a real provider for live evaluation.
+#   The judge respects the rate_limit_rpm of its provider above.
+benchmark:
+  test_models:
+    - "gemini:gemini-3.5-flash"
+    - "gemini:gemini-3.1-flash-lite"
+    - "nvidia:meta/llama3-70b-instruct"
+    - "llm7:fast"
+  evaluator_judge: "mock"
