@@ -1,0 +1,26 @@
+# Algorithm defaults — single source of truth for graph, LDA, and theme parameters.
+# These values are inherited by dataset and longitudinal configs via include:.
+# Do not override these here — use the dataset-specific config file for overrides.
+#
+# THESIS CONSTRAINTS (do not change without documenting the experiment):
+#   graph_thresholds: min_total_post=10, min_shared_post=5
+#   lda: num_topics=15, random_state=100, iterations=100, chunksize=20, passes=80
+#   louvain: resolution=1, seed=123
+
+graph_thresholds:
+  min_total_post: 10
+  min_shared_post: 5
+  min_members: 3
+
+lda:
+  num_topics: 15
+  top_n_keywords: 50
+
+theme:
+  # enable_gpt: false disables LLM theme generation (topic-only mode).
+  # Model selection is controlled exclusively via providers.yml theme_provider.
+  enable_gpt: false
+  sleep_seconds: 2
+  transition_threshold: 0.5
+  render_visuals: false
+  similarity_model: paraphrase-MiniLM-L6-v2
