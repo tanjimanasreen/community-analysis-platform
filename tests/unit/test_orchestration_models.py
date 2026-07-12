@@ -31,3 +31,9 @@ def test_pipeline_run_context_serialization():
     assert d["pipeline_run_id"] == "run1"
     assert d["dataset_identities"][0]["sha256"] == "hash123"
     assert ctx.prefect_flow_run_id is None
+
+def test_models_import_is_side_effect_free():
+    import os
+    original_env = dict(os.environ)
+    import src.orchestration.models
+    assert os.environ == original_env, "Importing models mutated os.environ"

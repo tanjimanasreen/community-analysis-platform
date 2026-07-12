@@ -8,6 +8,7 @@ from prefect.context import get_run_context
 
 from .models import DatasetIdentity, ArtifactReference, PipelineRunContext
 from .hashing import hash_mapping, hash_file
+from .settings import configure_prefect_results_dir
 
 @task(retries=0, persist_result=True)
 def build_config_digest_task(config: Mapping[str, Any]) -> str:
@@ -39,6 +40,8 @@ def run_orchestration_foundation_flow(
     Skeleton offline Prefect flow to validate orchestration foundation.
     It builds run context, generates digests, and manages small artifacts.
     """
+    configure_prefect_results_dir()
+
     # 1. Capture Prefect Flow Run ID
     try:
         ctx = get_run_context()

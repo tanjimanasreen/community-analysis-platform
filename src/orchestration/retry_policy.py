@@ -5,6 +5,7 @@ class ErrorCategory(str, Enum):
     TRANSIENT_INFRASTRUCTURE = "TRANSIENT_INFRASTRUCTURE"
     TRANSIENT_GRAPH_STORE = "TRANSIENT_GRAPH_STORE"
     TRANSIENT_PROVIDER_AGGREGATE = "TRANSIENT_PROVIDER_AGGREGATE"
+    PROVIDER_CHAIN_EXHAUSTED = "PROVIDER_CHAIN_EXHAUSTED"
     INVALID_CONFIGURATION = "INVALID_CONFIGURATION"
     MISSING_CREDENTIALS = "MISSING_CREDENTIALS"
     MISSING_REQUIRED_INPUT = "MISSING_REQUIRED_INPUT"
@@ -16,6 +17,22 @@ class PipelineError(Exception):
     def __init__(self, message: str, category: ErrorCategory):
         super().__init__(message)
         self.category = category
+
+class TransientProviderAggregateError(PipelineError):
+    def __init__(self, message: str):
+        super().__init__(message, ErrorCategory.TRANSIENT_PROVIDER_AGGREGATE)
+
+class ProviderChainExhaustedError(PipelineError):
+    """
+    Raised when all providers in a fallback chain fail.
+    It is only considered retryable if *all* individual failures were transient.
+    """
+    def __init__(self, message: str, all_transient: bool = False):
+        category = (
+            ErrorCategory.TRANSIENT_PROVIDER_AGGREGATE
+            if all_transient else ErrorCategory.PROVIDER_CHAIN_EXHAUSTED
+        )
+        super().__init__(message, category)
 
 def classify_error(exc: Exception) -> ErrorCategory:
     """Classify an exception into an explicit retry category."""

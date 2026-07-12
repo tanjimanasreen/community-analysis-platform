@@ -204,11 +204,19 @@ Use Prefect 3 APIs (`Asset`, `@materialize`, explicit upstream dependencies) for
 ## 27. Deferred Deployment and Scheduling Work
 - Cloud deployments, Docker images for Prefect workers, Prefect Cloud integration, and scheduled runs are explicitly deferred.
 
-## 28. Decision Log
-- Decided to map Prefect tasks to coarse Phase functions.
-- Local provider construction in tasks to prevent serialization issues.
-- Explicit prohibition of blanket retries; retry matrix prioritizes SDK and router fallbacks.
-- Sequentional runner explicitly mandated via `ThreadPoolTaskRunner(max_workers=1)`.
+### Milestone 1: Orchestration Foundation [x]
+
+*   Add Prefect 3 to project optional dependencies (`prefect>=3.7.8,<4`) via `pyproject.toml` (group: `orchestration`).
+*   Migrate `dev` dependencies to `[dependency-groups]` to support `uv sync --frozen --extra orchestration`.
+*   Establish explicit `.prefect_results/` default storage.
+*   Implement deterministic cache-key helpers (via string hashing of configuration subsets, inputs, and semantic versions).
+*   Add typed data contracts (`DatasetIdentity`, `ArtifactReference`, `PipelineRunContext`).
+*   Establish error retry classifications (`TransientProviderAggregateError`, `ProviderChainExhaustedError`, etc.).
+    *   *Retry Semantics*: Fallback chain exhaustion (`ProviderChainExhaustedError`) is explicitly terminal *unless* all failures were classified as transient (`all_transient=True`), in which case it is retryable. Programming errors, schema violations, invalid configurations, and missing credentials are unconditionally terminal and non-retryable.
+*   Ensure environment settings (`PREFECT_RESULTS_LOCAL_STORAGE_PATH`) are not modified on import, strictly via `configure_prefect_results_dir()`.
+*   *Installation*: `uv sync --frozen --extra orchestration`
+*   *Testing*: `make test` executes standard suite + orchestration tests successfully.
+*   *Smoke Test*: Flow successfully executed offline: `PIPELINE_RUN_ID` and `PREFECT_FLOW_RUN_ID` were produced, tiny artifact was materialized in `output_root`, and storage resolved correctly without modifying global `~/.prefect` database.
 
 ## 29. Progress Log
 - [x] Phase 6 Planning completed and revised based on feedback.
