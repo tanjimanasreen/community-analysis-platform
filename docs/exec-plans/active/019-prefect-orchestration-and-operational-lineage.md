@@ -227,7 +227,7 @@ Use Prefect 3 APIs (`Asset`, `@materialize`, explicit upstream dependencies) for
   - Resolve dataset identity supporting both `known_sha256` and `verify_file_hash`.
   - Validate run configuration reusing the existing loader/validator rules.
   - Ensure returned Prefect states contain only lightweight metadata (no DataFrames).
-  - Status: **Complete** (Verified in commit `de9832a5` with explicit artifacts, isolated outputs, config reuse, dataset hashing modes, and clean test suite).
+  - Status: **Complete** (Verified with explicit artifacts, isolated outputs, config reuse, dataset hashing modes, clean test suite, and end-to-end integration via `smoke_test_2a.py`).
 
 ## 30. Official Prefect Documentation References
 - Prefect 3.0 Task Runners (`ThreadPoolTaskRunner`): https://docs.prefect.io/3.0/develop/task-runners
