@@ -12,6 +12,12 @@ def _validate_sha256(val: str) -> str:
     return val
 
 @dataclass(frozen=True)
+class ValidatedRunConfiguration:
+    config_digest: str
+    output_root: str
+    raw_config: Mapping[str, Any]
+
+@dataclass(frozen=True)
 class DatasetIdentity:
     dataset_id: str
     path: str
