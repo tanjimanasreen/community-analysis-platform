@@ -20,20 +20,31 @@ def validate_run_configuration_task(
     """
     Validates configuration and returns a normalized wrapper with a digest.
     """
-    from src.config.loader import load_config
+    from src.config.loader import validate_run_config, normalize_month
 
-    # We call load_config which handles fallback and typing (or just raises errors on missing file)
-    # However load_config takes a file path. If config is a dict, we just use it directly,
-    # or validate required keys.
-    if "output_dir" not in config:
-        raise PipelineError("output_dir is required in configuration", ErrorCategory.INVALID_CONFIGURATION)
+    try:
+        validate_run_config(dict(config))
+    except ValueError as e:
+        raise PipelineError(str(e), ErrorCategory.INVALID_CONFIGURATION) from e
 
-    output_root = config["output_dir"]
+    # Extract output_root (the old validate expected 'output_dir', CLI uses 'output_base_path')
+    # For compatibility we check both, favoring the CLI standard output_base_path.
+    output_root = config.get("output_base_path") or config.get("output_dir")
+    if not output_root:
+        raise PipelineError("output_base_path is required in configuration", ErrorCategory.INVALID_CONFIGURATION)
+
+    # Normalize month to standard string name (or keep as string since it goes to paths)
+    # The config requires month, we can just ensure it parses
+    try:
+        _ = normalize_month(config.get("month", "march"))
+    except ValueError as e:
+        raise PipelineError(str(e), ErrorCategory.INVALID_CONFIGURATION) from e
 
     # Hash the serializable portions of config to create a digest
     # (Avoid hashing secrets, but in our case, we just hash the dict since we don't have secrets yet)
-    # Filter out empty or None values to ensure stability
-    clean_config = {k: v for k, v in config.items() if v is not None}
+    # Filter out empty or None values to ensure stability.
+    # Also remove passwords/secrets if they ever appear.
+    clean_config = {k: v for k, v in config.items() if v is not None and "password" not in k.lower() and "secret" not in k.lower()}
     digest = hash_mapping(clean_config)
 
     return ValidatedRunConfiguration(
@@ -126,10 +137,10 @@ def run_monthly_network_community_phase_task(
         spreader_relation=raw.get('spreader_relation', 'REPLIED_BY'),
         creator_node_column=raw.get('creator_node_column', 'target'),
         spreader_node_column=raw.get('spreader_node_column', 'target'),
-        text_node_column_creator_df=raw.get('text_node_column_creator_df', 'source'),
-        min_total_post=raw.get('min_total_post', 10),
-        min_shared_post=raw.get('min_shared_post', 5),
-        min_members=raw.get('min_members', 3),
+        text_node_column_creator_df=raw.get('text_node_column', 'source'),
+        min_total_post=raw.get('graph_thresholds', {}).get('min_total_post', raw.get('min_total_post', 10)),
+        min_shared_post=raw.get('graph_thresholds', {}).get('min_shared_post', raw.get('min_shared_post', 5)),
+        min_members=raw.get('graph_thresholds', {}).get('min_members', raw.get('min_members', 3)),
         output_dir=isolated_output,
     )
 

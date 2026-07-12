@@ -28,7 +28,7 @@ class DatasetIdentity:
     identity_source: Optional[str] = None
     interaction_type: str | None = None
     period: str | None = None
-    
+
     def __post_init__(self):
         object.__setattr__(self, "sha256", _validate_sha256(self.sha256))
 
@@ -53,12 +53,12 @@ class PipelineRunContext:
     dataset_identities: tuple[DatasetIdentity, ...]
     prefect_flow_run_id: str | None = None
     dvc_revision: str | None = None
-    
+
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
-        
+
     @classmethod
-    def create(cls, 
+    def create(cls,
                pipeline_run_id: str,
                git_commit: str,
                config_digest: str,
@@ -75,3 +75,11 @@ class PipelineRunContext:
             prefect_flow_run_id=prefect_flow_run_id,
             dvc_revision=dvc_revision
         )
+
+@dataclass(frozen=True)
+class PipelineRunResult:
+    context: PipelineRunContext
+    artifacts: Sequence[ArtifactReference]
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)

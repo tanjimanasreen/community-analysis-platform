@@ -5,7 +5,7 @@ from prefect import flow
 from prefect.task_runners import ThreadPoolTaskRunner
 from prefect.context import get_run_context
 
-from src.orchestration.models import PipelineRunContext
+from src.orchestration.models import PipelineRunContext, PipelineRunResult
 from src.orchestration.tasks import (
     validate_run_configuration_task,
     resolve_dataset_identity_task,
@@ -24,7 +24,7 @@ def run_monthly_network_foundation_flow(
     dataset_id: str,
     known_sha256: Optional[str] = None,
     platform: Optional[str] = None
-) -> dict[str, Any]:
+) -> PipelineRunResult:
     """
     Orchestrates the monthly network and community phase.
     """
@@ -62,10 +62,7 @@ def run_monthly_network_foundation_flow(
         context=context
     )
     
-    return {
-        "pipeline_run_id": pipeline_run_id,
-        "prefect_flow_run_id": prefect_flow_run_id,
-        "config_digest": val_config.config_digest,
-        "dataset_identity": dataset_ident,
-        "artifacts": artifacts
-    }
+    return PipelineRunResult(
+        context=context,
+        artifacts=artifacts
+    )
