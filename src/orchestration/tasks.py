@@ -5,8 +5,11 @@ import pandas as pd
 
 from prefect import task
 
-from src.orchestration.models import ValidatedRunConfiguration, DatasetIdentity, ArtifactReference, PipelineRunContext
-from src.orchestration.hashing import hash_mapping, hash_file
+from src.orchestration.models import (
+    ValidatedRunConfiguration, DatasetIdentity, ArtifactReference, PipelineRunContext,
+    TopicInputBundle, TopicOutputBundle, ThemeInputBundle, ThemeOutputBundle
+)
+from src.orchestration.hashing import hash_mapping, hash_file, topic_cache_key_fn
 from src.orchestration.retry_policy import ErrorCategory, PipelineError
 
 @task(
@@ -200,3 +203,239 @@ def run_monthly_network_community_phase_task(
             )
 
     return artifacts
+
+
+@task(
+    name="run-monthly-topic-phase",
+    retries=0,
+    persist_result=True,
+    cache_key_fn=None,  # Deferred as per Plan 020
+)
+def run_monthly_topic_phase_task(
+    input_bundle: TopicInputBundle,
+    config: ValidatedRunConfiguration,
+    context: PipelineRunContext
+) -> TopicOutputBundle:
+    """
+    Wrapper around run_topic_phase.
+    Loads input CSVs from the provided ArtifactReference bundle, executes the local LDA process, 
+    and returns explicit ArtifactReferences to the isolated output paths.
+    """
+    from src.pipelines.social_network_pipeline import run_topic_phase
+
+    # Extract configs
+    raw = config.raw_config
+    data_type = raw.get('data_type', 'twitter')
+    content_type = raw.get('content_type', 'reply')
+    month = str(raw.get('month', 'march'))
+    year = str(raw.get('year', '2017'))
+
+    isolated_output = os.path.join(context.output_root, context.pipeline_run_id)
+    os.makedirs(isolated_output, exist_ok=True)
+
+    # Load dataframes inside task execution
+    if not os.path.exists(input_bundle.absolute_community_messages.path):
+        raise PipelineError(f"Missing absolute community messages at {input_bundle.absolute_community_messages.path}", ErrorCategory.MISSING_REQUIRED_INPUT)
+    abs_df = pd.read_csv(input_bundle.absolute_community_messages.path)
+
+    if not os.path.exists(input_bundle.weighted_community_messages.path):
+        raise PipelineError(f"Missing weighted community messages at {input_bundle.weighted_community_messages.path}", ErrorCategory.MISSING_REQUIRED_INPUT)
+    per_df = pd.read_csv(input_bundle.weighted_community_messages.path)
+
+    if not os.path.exists(input_bundle.matched_communities.path):
+        raise PipelineError(f"Missing matched communities at {input_bundle.matched_communities.path}", ErrorCategory.MISSING_REQUIRED_INPUT)
+    matched_df = pd.read_csv(input_bundle.matched_communities.path)
+
+    partial_df = pd.DataFrame()
+    if input_bundle.partial_matched_communities and os.path.exists(input_bundle.partial_matched_communities.path):
+        partial_df = pd.read_csv(input_bundle.partial_matched_communities.path)
+
+    # Run domain logic
+    run_topic_phase(
+        abs_community_messages=abs_df,
+        per_community_messages=per_df,
+        matched_df=matched_df,
+        partial_matched=partial_df,
+        month=month,
+        year=year,
+        data_type=data_type,
+        content_type=content_type,
+        output_dir=isolated_output
+    )
+
+    # Discover and build output references
+    scores_path = os.path.join(isolated_output, data_type, "LDA", "scores", content_type, f"{month}.csv")
+    if not os.path.exists(scores_path):
+        raise PipelineError(f"Expected topic artifact not found: {scores_path}", ErrorCategory.MISSING_REQUIRED_INPUT)
+        
+    lda_scores = ArtifactReference(
+        path=scores_path,
+        sha256=hash_file(scores_path),
+        media_type="text/csv",
+        byte_size=os.path.getsize(scores_path),
+        asset_key="lda_scores"
+    )
+
+    matched_topics = None
+    matched_path = os.path.join(isolated_output, data_type, "LDA", "matched", content_type, f"{month}_{year}.csv")
+    if os.path.exists(matched_path):
+        matched_topics = ArtifactReference(
+            path=matched_path,
+            sha256=hash_file(matched_path),
+            media_type="text/csv",
+            byte_size=os.path.getsize(matched_path),
+            asset_key="matched_communities_topics"
+        )
+
+    partial_matched_topics = None
+    partial_path = os.path.join(isolated_output, data_type, "LDA", "partial_matched", content_type, f"{month}_{year}.csv")
+    if os.path.exists(partial_path):
+        partial_matched_topics = ArtifactReference(
+            path=partial_path,
+            sha256=hash_file(partial_path),
+            media_type="text/csv",
+            byte_size=os.path.getsize(partial_path),
+            asset_key="partial_matched_communities_topics"
+        )
+
+    # Theme input artifacts
+    theme_inputs = []
+    manifest_path = os.path.join(isolated_output, data_type, "_intermediate", "theme_inputs", content_type, f"{month}_{year}", "manifest.json")
+    if os.path.exists(manifest_path):
+        theme_inputs.append(ArtifactReference(
+            path=manifest_path,
+            sha256=hash_file(manifest_path),
+            media_type="application/json",
+            byte_size=os.path.getsize(manifest_path),
+            asset_key="theme_manifest"
+        ))
+        
+    return TopicOutputBundle(
+        lda_scores=lda_scores,
+        matched_communities_topics=matched_topics,
+        partial_matched_communities_topics=partial_matched_topics,
+        theme_inputs=tuple(theme_inputs)
+    )
+
+@task(
+    name="run-monthly-themes-phase",
+    retries=0,
+    persist_result=True,
+    cache_key_fn=None,  # No cache yet to avoid overlapping with CachedProvider
+)
+def run_monthly_themes_task(
+    input_bundle: ThemeInputBundle,
+    config: ValidatedRunConfiguration,
+    context: PipelineRunContext
+) -> ThemeOutputBundle:
+    """
+    Wrapper around run_theme_pipeline_from_monthly_data.
+    Loads topic output CSVs, executes theme provider + visualizations,
+    and returns explicitly typed ArtifactReferences for the outputs.
+    """
+    from src.pipelines.theme_pipeline import run_theme_pipeline_from_monthly_data
+
+    raw = config.raw_config
+    content_type = raw.get('content_type', 'reply')
+    # Use the first month from the inputs to determine the target year?
+    # Actually the config defines the target year for the whole run.
+    year = str(raw.get('year', '2017'))
+    
+    isolated_output = os.path.join(context.output_root, context.pipeline_run_id)
+    os.makedirs(isolated_output, exist_ok=True)
+
+    # 1. Validate inputs and load DataFrames
+    monthly_data_dict = {}
+    for month, artifact_ref in input_bundle.monthly_topic_outputs.items():
+        if not os.path.exists(artifact_ref.path):
+            raise PipelineError(
+                f"Missing required theme input for {month} at {artifact_ref.path}", 
+                ErrorCategory.MISSING_REQUIRED_INPUT
+            )
+        monthly_data_dict[month] = pd.read_csv(artifact_ref.path)
+
+    if not monthly_data_dict:
+        raise PipelineError("No monthly topic outputs provided to theme phase.", ErrorCategory.MISSING_REQUIRED_INPUT)
+
+    # 2. Run domain logic
+    # Provider is None by default; it will be constructed locally using config inside the domain function.
+    run_theme_pipeline_from_monthly_data(
+        monthly_data_dict=monthly_data_dict,
+        year=year,
+        content_type=content_type,
+        output_dir=isolated_output,
+        config=raw,
+        provider=None,
+        render_visuals=raw.get('render_visuals', True),
+        similarity_model_name=raw.get('similarity_model_name', 'paraphrase-MiniLM-L6-v2')
+    )
+
+    # 3. Discover outputs and build references
+    themes_artifacts = []
+    for month in monthly_data_dict.keys():
+        theme_path = os.path.join(isolated_output, f"{month}_{year}_with_themes.csv")
+        if not os.path.exists(theme_path):
+            raise PipelineError(f"Expected theme artifact not found: {theme_path}", ErrorCategory.MISSING_REQUIRED_INPUT)
+        
+        themes_artifacts.append(ArtifactReference(
+            path=theme_path,
+            sha256=hash_file(theme_path),
+            media_type="text/csv",
+            byte_size=os.path.getsize(theme_path),
+            asset_key=f"themes_{month}"
+        ))
+
+    transition_path = os.path.join(isolated_output, "community_transition.csv")
+    transition_artifact = None
+    if os.path.exists(transition_path):
+        transition_artifact = ArtifactReference(
+            path=transition_path,
+            sha256=hash_file(transition_path),
+            media_type="text/csv",
+            byte_size=os.path.getsize(transition_path),
+            asset_key="community_transitions"
+        )
+
+    visualizations = []
+    for vis_dir_name in ["sankey", "membership_changes", "theme_similarity"]:
+        vis_dir = os.path.join(isolated_output, vis_dir_name)
+        if os.path.exists(vis_dir) and os.path.isdir(vis_dir):
+            for file in os.listdir(vis_dir):
+                if file.startswith('.'):
+                    continue
+                file_path = os.path.join(vis_dir, file)
+                if not os.path.isfile(file_path):
+                    continue
+                media_type = "image/png" if file.endswith(".png") else "text/html" if file.endswith(".html") else "application/octet-stream"
+                visualizations.append(ArtifactReference(
+                    path=file_path,
+                    sha256=hash_file(file_path),
+                    media_type=media_type,
+                    byte_size=os.path.getsize(file_path),
+                    asset_key=f"visualization_{vis_dir_name}_{file}"
+                ))
+
+    provider_run_summary_path = os.path.join(isolated_output, "provider_run_summary.json")
+    import json
+    with open(provider_run_summary_path, "w") as f:
+        json.dump({
+            "configured_primary_provider": raw.get("theme_provider", "openai"),
+            "configured_primary_model": raw.get("theme_model", "gpt-4o"),
+            "configured_fallback_chain": raw.get("fallback_chain", []),
+            "prompt_version": raw.get("prompt_version", "v1")
+        }, f)
+        
+    provider_run_summary = ArtifactReference(
+        path=provider_run_summary_path,
+        sha256=hash_file(provider_run_summary_path),
+        media_type="application/json",
+        byte_size=os.path.getsize(provider_run_summary_path),
+        asset_key="provider_run_summary"
+    )
+
+    return ThemeOutputBundle(
+        themes=tuple(themes_artifacts),
+        community_transitions=transition_artifact,
+        visualizations=tuple(visualizations),
+        provider_run_summary=provider_run_summary
+    )

@@ -83,3 +83,28 @@ class PipelineRunResult:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+@dataclass(frozen=True)
+class TopicInputBundle:
+    absolute_community_messages: ArtifactReference
+    weighted_community_messages: ArtifactReference
+    matched_communities: ArtifactReference
+    partial_matched_communities: ArtifactReference | None
+
+@dataclass(frozen=True)
+class TopicOutputBundle:
+    lda_scores: ArtifactReference
+    matched_communities_topics: ArtifactReference | None
+    partial_matched_communities_topics: ArtifactReference | None
+    theme_inputs: tuple[ArtifactReference, ...]
+
+@dataclass(frozen=True)
+class ThemeInputBundle:
+    monthly_topic_outputs: Mapping[str, ArtifactReference]
+
+@dataclass(frozen=True)
+class ThemeOutputBundle:
+    themes: tuple[ArtifactReference, ...]
+    community_transitions: ArtifactReference | None
+    visualizations: tuple[ArtifactReference, ...]
+    provider_run_summary: ArtifactReference | None
