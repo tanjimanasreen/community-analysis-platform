@@ -1,0 +1,39 @@
+# Twitter retweet/quote dataset — 2017
+# Inherits algorithm defaults and provider registry from top-level configs.
+include:
+  - "../algorithms.yml"
+  - "../providers.yml"
+
+data_type: twitter
+content_type: retweet_quote
+year: "2017"
+output_base_path: outputs/twitter/retweet-2017/
+
+creator_relation: TWEETED
+spreader_relation: RETWEETED_BY
+creator_node_column: source
+spreader_node_column: target
+text_node_column: target
+date_column: created_at
+
+theme:
+  fallback: true
+  fallback_chain:
+    - "llm7:fast"
+    - "nvidia:meta/llama3-70b-instruct"
+
+# Input paths are relative to the project root via DATA_ROOT env var.
+# Set DATA_ROOT in your .env file (see .env.example).
+datasets:
+  - id: "january"
+    month: "01"
+    input_path: ${DATA_ROOT}/twitter/retweet_quote/2017/retweet_january_2017_sampled.csv
+  - id: "february"
+    month: "02"
+    input_path: ${DATA_ROOT}/twitter/retweet_quote/2017/retweet_february_2017.csv
+  - id: "march"
+    month: "03"
+    input_path: ${DATA_ROOT}/twitter/retweet_quote/2017/retweet_march_2017.csv
+  - id: "april"
+    month: "04"
+    input_path: ${DATA_ROOT}/twitter/retweet_quote/2017/retweet_april_2017.csv
