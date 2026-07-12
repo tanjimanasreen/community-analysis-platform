@@ -1,7 +1,7 @@
 import json
 import re
 from dataclasses import dataclass, asdict
-from typing import Any, Mapping, Sequence
+from typing import Any, Mapping, Sequence, Optional
 
 def _validate_sha256(val: str) -> str:
     if not val or not isinstance(val, str):
@@ -25,6 +25,7 @@ class DatasetIdentity:
     dvc_pointer: str | None = None
     dvc_revision: str | None = None
     platform: str | None = None
+    identity_source: Optional[str] = None
     interaction_type: str | None = None
     period: str | None = None
     

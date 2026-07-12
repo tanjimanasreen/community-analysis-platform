@@ -220,13 +220,14 @@ Use Prefect 3 APIs (`Asset`, `@materialize`, explicit upstream dependencies) for
 
 ## 29. Progress Log
 - [x] Phase 6 Planning completed and revised based on feedback.
-- [x] Milestone 2A completed (Offline monthly network and community phase wrapper).
-  - Selected `run_network_community_pipeline` as the bounded offline task, returning `ArtifactReference` outputs instead of graphs or dataframes.
-  - Added `validate_run_configuration_task` and `resolve_dataset_identity_task`.
-  - Created `run_monthly_network_foundation_flow` as the minimal parent wrapper.
-  - Used strictly `ThreadPoolTaskRunner(max_workers=1)`.
-  - Maintained domain logic unchanged; verified via isolated synthetic fixture tests.
-  - *Deferred*: Full thesis orchestration, Themes, Assets, scheduling, deployments, DVC integration, and MLflow logging.
+- [x] **Milestone 2A: Foundation Flow Wrapper**
+  - Wrap the coarse `run_network_community_pipeline` function.
+  - Discover output paths via an explicit expected-output contract (no recursive scans).
+  - Enforce isolated output directories keyed by `pipeline_run_id`.
+  - Resolve dataset identity supporting both `known_sha256` and `verify_file_hash`.
+  - Validate run configuration reusing the existing loader/validator rules.
+  - Ensure returned Prefect states contain only lightweight metadata (no DataFrames).
+  - Status: **Complete** (Verified in commit `de9832a5` with explicit artifacts, isolated outputs, config reuse, dataset hashing modes, and clean test suite).
 
 ## 30. Official Prefect Documentation References
 - Prefect 3.0 Task Runners (`ThreadPoolTaskRunner`): https://docs.prefect.io/3.0/develop/task-runners
