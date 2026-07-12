@@ -1,6 +1,0 @@
-bertopic
-top2vec
-keybert
-ollama
-pandas
-numpy
