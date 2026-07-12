@@ -164,7 +164,7 @@ Use Prefect 3 APIs (`Asset`, `@materialize`, explicit upstream dependencies) for
 - `tests/orchestration/*` (new)
 
 ## 22. Implementation Milestones
-- **Milestone 1**: Orchestration foundation (Dependencies, Context, Cache logic, Test Harness).
+- **Milestone 1**: [x] Orchestration foundation (Dependencies, Context, Cache logic, Test Harness).
 - **Milestone 2**: Core analytical task wrappers (Network, Community, Topics).
 - **Milestone 3**: Theme and provider orchestration (Local instantiation, SDK integration).
 - **Milestone 4**: Prefect Asset implementations (`@materialize` usage, graph creation).

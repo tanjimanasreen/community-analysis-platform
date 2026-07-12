@@ -41,6 +41,9 @@ dev = [
     "flake8>=6.0",
     "httpx>=0.25.0",
 ]
+orchestration = [
+    "prefect>=3.0.0",
+]
 
 [tool.pytest.ini_options]
 minversion = "7.0"
