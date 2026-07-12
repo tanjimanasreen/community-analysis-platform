@@ -213,10 +213,16 @@ class ArtifactService:
                         )
                     )
         else:
+            is_default = config_paths is None and not os.environ.get("COMMUNITY_ANALYSIS_API_CONFIGS")
             paths = list(config_paths or _config_paths_from_env())
             for path in paths:
                 config_path = Path(path)
-                config = load_config(config_path)
+                try:
+                    config = load_config(config_path)
+                except FileNotFoundError:
+                    if is_default:
+                        continue
+                    raise
                 loaded.append(
                     ConfiguredRun(
                         run_id=_run_id_from_path(config_path),
