@@ -1,10 +1,9 @@
 import os
 import pandas as pd
 import ast
-from typing import Optional
-from dotenv import load_dotenv
 
-from src.themes.llm_provider import CachedProvider, OpenAIProvider, OllamaProvider, MockProvider
+from src.providers.cached import CachedProvider
+from src.providers.factory import build_theme_provider
 from src.themes.gpt_themes import generate_llm_themes
 # Future imports from Milestone 4, 5, 6 will go here:
 # from src.themes.community_transition import calculate_jaccard_transitions
@@ -18,25 +17,6 @@ from src.visualization.community_transition import draw_community_transition_dia
 from src.visualization.membership_changes import draw_members_transition_diagram
 from src.themes.theme_similarity import extract_themes
 from src.visualization.theme_similarity import draw_theme_similarity_heatmap
-
-def get_llm_provider():
-    load_dotenv()
-    provider_type = os.getenv("LLM_PROVIDER", "mock").lower()
-    
-    if provider_type == "openai":
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            raise ValueError("OPENAI_API_KEY must be set when using OpenAI provider.")
-        return OpenAIProvider(api_key=api_key)
-    
-    elif provider_type == "ollama":
-        base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-        model = os.getenv("OLLAMA_MODEL", "gemma4:12b")
-        return OllamaProvider(base_url=base_url, model=model)
-    
-    else:
-        # Fallback to mock for tests or missing config
-        return MockProvider()
 
 def process_single_file_themes(df: pd.DataFrame, provider) -> pd.DataFrame:
     # Ensure correct lists
@@ -60,15 +40,18 @@ def run_theme_pipeline(
     year: str,
     content_type: str,
     output_dir: str,
+    config: dict | None = None,
     provider=None,
     render_visuals: bool = True,
     similarity_model_name: str = 'paraphrase-MiniLM-L6-v2',
 ):
     """
     Runs the full theme intelligence pipeline on the LDA outputs directory.
+    Provider is resolved from config via the provider factory unless explicitly
+    passed (e.g. in tests via provider=MockProvider(...)).
     """
     os.makedirs(output_dir, exist_ok=True)
-    
+
     # Milestone 1: Data Loading
     print(f"Loading data from {input_dir} for year {year}...")
     monthly_data_dict = load_prepare_data(input_dir, year)
@@ -77,6 +60,7 @@ def run_theme_pipeline(
         year=year,
         content_type=content_type,
         output_dir=output_dir,
+        config=config,
         provider=provider,
         render_visuals=render_visuals,
         similarity_model_name=similarity_model_name,
@@ -88,6 +72,7 @@ def run_theme_pipeline_from_bundle(
     year: str,
     content_type: str,
     output_dir: str,
+    config: dict | None = None,
     provider=None,
     render_visuals: bool = True,
     similarity_model_name: str = 'paraphrase-MiniLM-L6-v2',
@@ -97,6 +82,7 @@ def run_theme_pipeline_from_bundle(
         year=year,
         content_type=content_type,
         output_dir=output_dir,
+        config=config,
         provider=provider,
         render_visuals=render_visuals,
         similarity_model_name=similarity_model_name,
@@ -108,18 +94,25 @@ def run_theme_pipeline_from_monthly_data(
     year: str,
     content_type: str,
     output_dir: str,
+    config: dict | None = None,
     provider=None,
     render_visuals: bool = True,
     similarity_model_name: str = 'paraphrase-MiniLM-L6-v2',
 ):
+    import ast
     os.makedirs(output_dir, exist_ok=True)
     if not monthly_data_dict:
         print("No monthly matched LDA files found. Theme pipeline will emit empty transition output.")
-    
+
     # Milestone 2: GPT Theme Generation
     print("Generating themes via LLM for all months...")
-    provider = provider or get_llm_provider()
-    provider = CachedProvider(provider)
+    if provider is not None:
+        # Test injection — wrap in CachedProvider if not already wrapped
+        if not isinstance(provider, CachedProvider):
+            provider = CachedProvider(provider)
+    else:
+        # Production path — build provider from config (reads providers.yml via factory)
+        provider = build_theme_provider(config or {})
     
     themed_monthly_dict = {}
     for month, df in monthly_data_dict.items():

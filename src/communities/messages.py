@@ -16,11 +16,13 @@ def get_specific_community_info(df_community, community_number, df_network, df_u
     for index, row in community.iterrows():
         result_rows = df_network[(df_network['from_id'] == row['source']) & (df_network['forwarder_id'] == row['target'])]
         
-        producer = df_user.loc[df_user['user_id'] == row['source'], ['username', 'user_id']].iloc[0].to_dict()
+        producer_rows = df_user.loc[df_user['user_id'] == row['source'], ['username', 'user_id']]
+        producer = producer_rows.iloc[0].to_dict() if not producer_rows.empty else {'username': f"anonymous{row['source']}", 'user_id': row['source']}
         producer_username = producer['username']
         producer_user_id = producer['user_id']
    
-        forwarder = df_user.loc[df_user['user_id'] == row['target'], ['username', 'user_id']].iloc[0].to_dict()
+        forwarder_rows = df_user.loc[df_user['user_id'] == row['target'], ['username', 'user_id']]
+        forwarder = forwarder_rows.iloc[0].to_dict() if not forwarder_rows.empty else {'username': f"anonymous{row['target']}", 'user_id': row['target']}
         forwarder_username = forwarder['username']
         forwarder_user_id = forwarder['user_id']
         
