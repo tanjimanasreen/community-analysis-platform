@@ -104,7 +104,7 @@ def test_run_monthly_network_community_phase_task_missing_required(tmp_path):
 
     with patch("src.pipelines.social_network_pipeline.run_network_community_pipeline") as mock_run:
         # Mock doesn't create any files
-        with pytest.raises(PipelineError, match="Expected artifact not found"):
+        with pytest.raises(PipelineError, match="expected output artifact not found after execution"):
             run_monthly_network_community_phase_task.fn(
                 dataset_identity=identity,
                 config=config,

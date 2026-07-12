@@ -1,23 +1,28 @@
 import hashlib
 import json
 from typing import Any, Mapping, Sequence
+
 from src.orchestration.models import TopicInputBundle, ValidatedRunConfiguration
+
 
 def get_canonical_json(data: Any) -> bytes:
     """Return canonical JSON bytes for deterministic hashing."""
-    return json.dumps(data, sort_keys=True, separators=(',', ':')).encode('utf-8')
+    return json.dumps(data, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
 
 def hash_mapping(mapping: Mapping[str, Any]) -> str:
     """Generate a stable SHA-256 digest from a dictionary/mapping."""
     return hashlib.sha256(get_canonical_json(mapping)).hexdigest()
 
+
 def hash_file(filepath: str) -> str:
     """Compute SHA-256 for a file without loading the entire file into memory."""
     hasher = hashlib.sha256()
-    with open(filepath, 'rb') as f:
+    with open(filepath, "rb") as f:
         for chunk in iter(lambda: f.read(4096), b""):
             hasher.update(chunk)
     return hasher.hexdigest()
+
 
 def build_stage_cache_key(
     *,
@@ -26,27 +31,39 @@ def build_stage_cache_key(
     input_hashes: Sequence[str],
     config_subset: Mapping[str, Any],
 ) -> str:
-    """
-    Build a deterministic cache key for a pipeline stage.
-    """
+    """Build a deterministic cache key for a pipeline stage."""
     components = {
         "stage": stage,
         "semantic_version": semantic_version,
         "input_hashes": sorted(list(input_hashes)),
-        "config_subset": config_subset
+        "config_subset": config_subset,
     }
     return hash_mapping(components)
+
 
 def topic_cache_key_fn(context: Any, parameters: dict[str, Any]) -> str:
     """
     Prefect cache key function for topic modeling.
-    Extracts the hashes of the input CSVs, preprocessing config, and LDA parameters.
+
+    Includes:
+        - topic input artifact SHA-256 hashes
+        - preprocessing configuration
+        - LDA configuration (num_topics, passes, iterations, random_state, alpha, eta)
+        - matching thresholds
+        - semantic implementation version
+
+    Explicitly excludes:
+        - theme provider settings
+        - theme prompt version
+        - visualization settings
+        - documentation-only metadata
+        - unrelated network configuration
     """
     input_bundle: TopicInputBundle | None = parameters.get("input_bundle")
     config: ValidatedRunConfiguration | None = parameters.get("config")
-    
+
     if not input_bundle or not config:
-        return "" 
+        return ""
 
     hashes = [
         input_bundle.absolute_community_messages.sha256,
@@ -55,17 +72,17 @@ def topic_cache_key_fn(context: Any, parameters: dict[str, Any]) -> str:
     ]
     if input_bundle.partial_matched_communities:
         hashes.append(input_bundle.partial_matched_communities.sha256)
-        
+
+    raw = config.raw_config
     config_subset = {
-        "preprocessing": config.raw_config.get("preprocessing", {}),
-        "lda": config.raw_config.get("lda", {}),
-        "matching": config.raw_config.get("matching", {})
+        "preprocessing": raw.get("preprocessing", {}),
+        "lda": raw.get("lda", {}),
+        "matching": raw.get("matching", {}),
     }
-    
+
     return build_stage_cache_key(
         stage="topic_model",
         semantic_version="1.0.0",
         input_hashes=hashes,
-        config_subset=config_subset
+        config_subset=config_subset,
     )
-

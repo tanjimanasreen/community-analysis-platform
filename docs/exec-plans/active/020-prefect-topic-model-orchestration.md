@@ -167,9 +167,79 @@ Additively extend the existing manifest generation to record the topic phase lin
 - **Composition Flow**: Rather than altering `run_network_community_pipeline`, a parent flow will orchestrate the phases to adhere to separation of concerns.
 
 ## 25. Progress Log
-- YYYY-MM-DD: Created Plan 020.
+- 2026-07-12: Created Plan 020.
+- 2026-07-12: Milestone 2B and Milestone 3 landed together in commit `4837d7f8`
+  (`feat(orchestration): add topic-model and theme-provider execution stages`)
+  despite the originally intended separate commit boundaries.
+  History was NOT rewritten — both milestones remain in one commit.
+- 2026-07-12: Follow-up hardening commit `test(orchestration): close topic and theme verification gaps`
+  added after full closure verification (see §27).
 
 ## 26. Official Prefect Documentation References
 - Task caching: https://docs.prefect.io/3.0/develop/caching
 - Testing: https://docs.prefect.io/3.0/develop/testing
 - Results: https://docs.prefect.io/3.0/develop/results
+
+## 27. Closure Findings (2026-07-12)
+
+### Exact domain boundary
+- Task wraps: `run_topic_phase` in `src/pipelines/social_network_pipeline.py`.
+- `run_topic_phase_from_saved_inputs` was **not** used — it loads via a fixed directory
+  path convention. The orchestration adapter loads explicit `ArtifactReference` paths
+  and calls `run_topic_phase` directly.
+- DataFrames are loaded inside the task and never serialised to Prefect state.
+
+### Input terminology mapping (from `src/topics/topic_inputs.py`)
+| Orchestration field | File name | Domain parameter |
+|---|---|---|
+| `absolute_community_messages` | `absolute_community_messages.csv` | `abs_community_messages` |
+| `weighted_community_messages` | `weighted_community_messages.csv` | `per_community_messages` |
+| `matched_communities` | `matched_communities.csv` | `matched_df` |
+| `partial_matched_communities` | `partial_matched_communities.csv` | `partial_matched` |
+
+The domain parameter `per_community_messages` corresponds to **weighted** (WIF) graph
+communities. The term `per_community_messages` is a historical alias, not a canonical name.
+`weighted_community_messages` is the canonical file-level name.
+
+### Strict artifact validation
+All `TopicInputBundle` artifacts are now validated before domain code runs via
+`src/orchestration/artifact_validation.py`:
+- Path exists as regular file
+- Path resolves under `context.output_root` (no traversal, no symlink escape)
+- File extension in `{.csv, .json, .html, .png, .parquet}`
+- Byte size matches `ArtifactReference.byte_size`
+- SHA-256 matches `ArtifactReference.sha256`
+- Media type matches expected type
+
+Missing required input → `ErrorCategory.MISSING_REQUIRED_INPUT` (terminal).
+Validation failure → `ErrorCategory.SCHEMA_VIOLATION` (terminal).
+Missing post-execution output → `ErrorCategory.OUTPUT_NOT_FOUND` (distinct from pre-exec failures).
+
+### LDA determinism findings
+- `random_state=100` applied as module constant `RANDOM_STATE` in `src/topics/lda.py`.
+- Both unigram and bigram LDA receive the same seed.
+- Input row ordering is stable (preserved through CSV save/load cycle).
+- Vocabulary ordering is determined by Gensim `Dictionary` in document iteration order — stable when input rows are stable.
+- No multiprocessing: single-threaded Gensim LDA.
+- **Limitation**: byte-identical reproducibility is NOT guaranteed across different Python / NumPy / Gensim / BLAS versions.
+
+### Cache helper status
+- `topic_cache_key_fn` exists in `src/orchestration/hashing.py`.
+- Includes: input artifact SHA-256s, preprocessing config, LDA config, matching config, semantic version.
+- Excludes: theme provider settings, prompt version, visualization config.
+- Task caching remains **disabled** (`cache_key_fn=None`).
+
+### Exact test counts
+| Test group | Baseline (`4837d7f8`) | After hardening |
+|---|---|---|
+| `test_orchestration_topic_tasks.py` | 2 | 18 |
+| `test_orchestration_theme_tasks.py` | 2 | 13 |
+| Combined targeted | 4 | 31 |
+| Full suite | 239 | TBD (running) |
+
+### Combined implementation commit
+`4837d7f8 feat(orchestration): add topic-model and theme-provider execution stages`
+
+### Follow-up hardening commit
+`test(orchestration): close topic and theme verification gaps`
+(adds `artifact_validation.py`, hardens tasks.py, expands tests to 31, fixes all trailing whitespace)

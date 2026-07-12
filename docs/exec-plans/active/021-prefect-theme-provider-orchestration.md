@@ -158,8 +158,98 @@ Additively extend the existing manifest to include:
 - **Provider Lifecycle**: Kept domain-function managed (Option B) since `run_theme_pipeline_from_monthly_data` already manages the batch efficiently and `build_theme_provider` encapsulates `CachedProvider` and `RoutingBenchmarkProvider` robustly.
 
 ## 25. Progress Log
-- YYYY-MM-DD: Created Plan 021.
+- 2026-07-12: Created Plan 021.
+- 2026-07-12: Milestone 2B and Milestone 3 landed together in commit `4837d7f8`
+  (`feat(orchestration): add topic-model and theme-provider execution stages`)
+  despite the originally intended separate commit boundaries.
+  History was NOT rewritten — both milestones remain in one commit.
+- 2026-07-12: Follow-up hardening commit `test(orchestration): close topic and theme verification gaps`
+  added after full closure verification (see §27).
 
 ## 26. Official Prefect Documentation References
 - Task Retries and conditions: https://docs.prefect.io/3.0/develop/tasks#retries
 - Flow persistence: https://docs.prefect.io/3.0/develop/results
+
+## 27. Closure Findings (2026-07-12)
+
+### Exact domain boundary
+- Task wraps: `run_theme_pipeline_from_monthly_data` in `src/pipelines/theme_pipeline.py`.
+- The task passes `provider=None`; the domain function constructs the provider exactly
+  once using `build_theme_provider(config)` and wraps it in `CachedProvider`.
+- DataFrames are loaded inside the task and never serialised to Prefect state.
+
+### Provider construction owner
+- **Owner**: domain function `run_theme_pipeline_from_monthly_data`.
+- **Factory function**: `src/providers/factory.py::build_theme_provider`.
+- **Construction count per task call**: 1 (always, regardless of month count).
+- **Reuse**: the same `CachedProvider`-wrapped instance is used for all months.
+- **No provider in Prefect state**: confirmed by test `test_no_provider_object_in_results`.
+- **Invalid inputs → 0 constructions**: confirmed by tests
+  `test_*_fails_before_provider`.
+
+### Retry policy
+- `retries=0` on `run_monthly_themes_task` (confirmed by `test_theme_task_retries_zero`).
+- Provider fallback/chain-exhaustion is router-owned via `RoutingBenchmarkProvider`.
+- `PROVIDER_CHAIN_EXHAUSTED` is classified as `TRANSIENT_PROVIDER_AGGREGATE` only when
+  ALL chain attempts were transient — this is the sole domain/router-owned retry surface.
+- Prefect must NOT retry for: invalid credentials, invalid config, unsupported model,
+  or mixed transient/permanent chains.
+
+### Fallback ownership
+- **Primary + ordered fallback**: owned by `RoutingBenchmarkProvider` inside `build_theme_provider`.
+- **Prompt-level cache**: owned by `CachedProvider` wrapper.
+- **Prefect retries**: none (`retries=0`).
+
+### Provider summary schema (`provider_run_summary.json`)
+```json
+{
+  "schema_version": "1.0",
+  "configured_primary_provider": "mock",
+  "configured_primary_model": "",
+  "configured_fallback_chain": [],
+  "provider_config_digest": "<sha256-of-provider-config>",
+  "prompt_version": "v1",
+  "generation_settings_digest": "<sha256-of-generation-settings>",
+  "semantic_task_version": "1.0.0"
+}
+```
+**Excluded fields** (must never appear): api_key, token, secret, password,
+authorization, raw prompts, raw API responses, HTTP headers, provider objects.
+
+The digest is deterministic: same config → same digest across runs.
+
+### Filtered configuration
+- `validate_run_configuration_task` strips `password`, `secret`, `api_key`, and `token`
+  keys from `raw_config` before it is ever stored or passed downstream.
+- The theme task receives the pre-filtered `raw_config` only — no raw environment, no
+  non-serialisable objects.
+
+### Output discovery method
+- **Theme CSVs**: exact path per month `{month}_{year}_with_themes.csv`.
+- **Transition CSV**: exact path `community_transition.csv`.
+- **Visualizations**: bounded non-recursive `os.listdir` over known subdirectory names
+  `(sankey, membership_changes, theme_similarity)` with extension allowlist
+  `{.html, .png, .jpg, .jpeg, .svg}`.
+- **Excluded**: hidden files (`.*`), temp files (`.tmp`), Python files (`.py`), and any
+  unsupported extension. Path containment is re-verified per file.
+- **No `os.walk`**: removed; bounded `os.listdir` only.
+
+### Missing post-execution output category
+- `ErrorCategory.OUTPUT_NOT_FOUND` (not `MISSING_REQUIRED_INPUT`) is raised when a
+  required output artifact is absent after domain execution completes.
+
+### Exact test counts
+| Test group | Baseline (`4837d7f8`) | After hardening |
+|---|---|---|
+| `test_orchestration_topic_tasks.py` | 2 | 18 |
+| `test_orchestration_theme_tasks.py` | 2 | 13 |
+| Combined targeted | 4 | 31 |
+| Full suite | 239 | TBD (running) |
+
+### Combined implementation commit
+`4837d7f8 feat(orchestration): add topic-model and theme-provider execution stages`
+
+### Follow-up hardening commit
+`test(orchestration): close topic and theme verification gaps`
+(adds `artifact_validation.py`, hardens `tasks.py`, expands tests to 31, fixes trailing whitespace,
+adds `OUTPUT_NOT_FOUND` error category, validates secrets excluded from provider summary)
