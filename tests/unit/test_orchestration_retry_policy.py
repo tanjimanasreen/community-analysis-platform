@@ -36,11 +36,11 @@ def test_provider_chain_exhausted_unsupported_model_is_terminal():
     ]
     exc = ProviderChainExhaustedError("chain failed", attempt_exceptions=attempts)
     assert not is_retryable(exc)
-    
+
 def test_provider_chain_exhausted_empty_is_terminal():
     exc = ProviderChainExhaustedError("chain failed", attempt_exceptions=[])
     assert not is_retryable(exc)
-    
+
 def test_provider_chain_exhausted_none_is_terminal():
     exc = ProviderChainExhaustedError("chain failed")
     assert not is_retryable(exc)

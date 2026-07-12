@@ -34,7 +34,7 @@ class ProviderChainExhaustedError(PipelineError):
             # Check if at least one attempt, and ALL attempts are retryable
             if all(is_retryable(e) for e in attempt_exceptions):
                 category = ErrorCategory.TRANSIENT_PROVIDER_AGGREGATE
-        
+
         super().__init__(message, category)
         self.attempt_exceptions = attempt_exceptions or []
 

@@ -42,15 +42,15 @@ def test_dataset_identity_sha256_validation():
     # Empty
     with pytest.raises(ValueError, match="sha256 must be"):
         DatasetIdentity("test", "/path", "")
-    
+
     # Fake/Short
     with pytest.raises(ValueError, match="64-character hexadecimal"):
         DatasetIdentity("test", "/path", "fakehash")
-        
+
     # Non-hexadecimal 64 characters
     with pytest.raises(ValueError, match="64-character hexadecimal"):
         DatasetIdentity("test", "/path", "z" * 64)
-        
+
     # Whitespace padding
     with pytest.raises(ValueError, match="64-character hexadecimal"):
         DatasetIdentity("test", "/path", " " + ("a" * 63))
