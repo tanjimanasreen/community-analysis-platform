@@ -53,7 +53,7 @@ def run_orchestration_foundation_flow(
     dataset_identity = DatasetIdentity(
         dataset_id=dataset_metadata.get("dataset_id", "test-dataset"),
         path=dataset_metadata.get("path", "/dev/null"),
-        sha256=dataset_metadata.get("sha256", "mock-hash"),
+        sha256=dataset_metadata.get("sha256", "a" * 64),
         platform=dataset_metadata.get("platform")
     )
     

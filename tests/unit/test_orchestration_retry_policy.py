@@ -15,16 +15,34 @@ def test_transient_aggregate_is_retryable():
     assert is_retryable(exc)
 
 def test_provider_chain_exhausted_all_transient_is_retryable():
-    exc = ProviderChainExhaustedError("chain failed", all_transient=True)
+    attempts = [
+        PipelineError("timeout", ErrorCategory.TRANSIENT_GRAPH_STORE),
+        PipelineError("rate limit", ErrorCategory.TRANSIENT_INFRASTRUCTURE)
+    ]
+    exc = ProviderChainExhaustedError("chain failed", attempt_exceptions=attempts)
     assert is_retryable(exc)
 
 def test_provider_chain_exhausted_mixed_is_terminal():
-    # e.g., one transient, one invalid credential
-    exc = ProviderChainExhaustedError("chain failed", all_transient=False)
+    attempts = [
+        PipelineError("timeout", ErrorCategory.TRANSIENT_INFRASTRUCTURE),
+        PipelineError("invalid auth", ErrorCategory.MISSING_CREDENTIALS)
+    ]
+    exc = ProviderChainExhaustedError("chain failed", attempt_exceptions=attempts)
     assert not is_retryable(exc)
 
 def test_provider_chain_exhausted_unsupported_model_is_terminal():
-    exc = ProviderChainExhaustedError("chain failed", all_transient=False)
+    attempts = [
+        ValueError("unsupported model")
+    ]
+    exc = ProviderChainExhaustedError("chain failed", attempt_exceptions=attempts)
+    assert not is_retryable(exc)
+    
+def test_provider_chain_exhausted_empty_is_terminal():
+    exc = ProviderChainExhaustedError("chain failed", attempt_exceptions=[])
+    assert not is_retryable(exc)
+    
+def test_provider_chain_exhausted_none_is_terminal():
+    exc = ProviderChainExhaustedError("chain failed")
     assert not is_retryable(exc)
 
 def test_invalid_config_is_not_retryable():

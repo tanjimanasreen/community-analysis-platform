@@ -25,14 +25,18 @@ class TransientProviderAggregateError(PipelineError):
 class ProviderChainExhaustedError(PipelineError):
     """
     Raised when all providers in a fallback chain fail.
-    It is only considered retryable if *all* individual failures were transient.
+    It is only considered retryable if *all* individual failures were transient
+    and at least one attempt was made.
     """
-    def __init__(self, message: str, all_transient: bool = False):
-        category = (
-            ErrorCategory.TRANSIENT_PROVIDER_AGGREGATE
-            if all_transient else ErrorCategory.PROVIDER_CHAIN_EXHAUSTED
-        )
+    def __init__(self, message: str, attempt_exceptions: list[Exception] | None = None):
+        category = ErrorCategory.PROVIDER_CHAIN_EXHAUSTED
+        if attempt_exceptions:
+            # Check if at least one attempt, and ALL attempts are retryable
+            if all(is_retryable(e) for e in attempt_exceptions):
+                category = ErrorCategory.TRANSIENT_PROVIDER_AGGREGATE
+        
         super().__init__(message, category)
+        self.attempt_exceptions = attempt_exceptions or []
 
 def classify_error(exc: Exception) -> ErrorCategory:
     """Classify an exception into an explicit retry category."""

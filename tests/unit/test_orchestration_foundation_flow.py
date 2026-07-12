@@ -13,7 +13,7 @@ def test_foundation_flow(tmp_path):
     dataset_metadata = {
         "dataset_id": "ds-test",
         "path": "/mock/path.csv",
-        "sha256": "abcdef123"
+        "sha256": "a" * 64
     }
     output_root = str(tmp_path / "output")
     

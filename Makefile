@@ -60,7 +60,7 @@ install-dev:
 	$(PIP) install -e .[dev]
 
 test:
-	$(PYTHON) -m pytest tests/unit
+	uv run --frozen --extra orchestration python -m pytest tests/unit
 
 db-up:
 	docker compose up -d memgraph

@@ -1,6 +1,15 @@
 import json
+import re
 from dataclasses import dataclass, asdict
 from typing import Any, Mapping, Sequence
+
+def _validate_sha256(val: str) -> str:
+    if not val or not isinstance(val, str):
+        raise ValueError("sha256 must be a non-empty string")
+    val = val.lower().strip()
+    if not re.fullmatch(r"[0-9a-f]{64}", val):
+        raise ValueError(f"sha256 must be a 64-character hexadecimal string, got '{val}'")
+    return val
 
 @dataclass(frozen=True)
 class DatasetIdentity:
@@ -14,8 +23,7 @@ class DatasetIdentity:
     period: str | None = None
     
     def __post_init__(self):
-        if not self.sha256 or not self.sha256.strip():
-            raise ValueError("sha256 must be a non-empty string")
+        object.__setattr__(self, "sha256", _validate_sha256(self.sha256))
 
 @dataclass(frozen=True)
 class ArtifactReference:
@@ -27,8 +35,7 @@ class ArtifactReference:
     byte_size: int | None = None
 
     def __post_init__(self):
-        if not self.sha256 or not self.sha256.strip():
-            raise ValueError("sha256 must be a non-empty string")
+        object.__setattr__(self, "sha256", _validate_sha256(self.sha256))
 
 @dataclass(frozen=True)
 class PipelineRunContext:

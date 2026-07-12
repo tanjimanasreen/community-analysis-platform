@@ -212,11 +212,11 @@ Use Prefect 3 APIs (`Asset`, `@materialize`, explicit upstream dependencies) for
 *   Implement deterministic cache-key helpers (via string hashing of configuration subsets, inputs, and semantic versions).
 *   Add typed data contracts (`DatasetIdentity`, `ArtifactReference`, `PipelineRunContext`).
 *   Establish error retry classifications (`TransientProviderAggregateError`, `ProviderChainExhaustedError`, etc.).
-    *   *Retry Semantics*: Fallback chain exhaustion (`ProviderChainExhaustedError`) is explicitly terminal *unless* all failures were classified as transient (`all_transient=True`), in which case it is retryable. Programming errors, schema violations, invalid configurations, and missing credentials are unconditionally terminal and non-retryable.
+    *   *Retry Semantics*: Derived strictly from typed constituent attempt failures. Fallback chain exhaustion (`ProviderChainExhaustedError`) is terminal unless `attempt_exceptions` is non-empty and *every* attempt is `is_retryable()`. Programming errors, schema violations, invalid configurations, and missing credentials are unconditionally terminal.
 *   Ensure environment settings (`PREFECT_RESULTS_LOCAL_STORAGE_PATH`) are not modified on import, strictly via `configure_prefect_results_dir()`.
-*   *Installation*: `uv sync --frozen --extra orchestration`
-*   *Testing*: `make test` executes standard suite + orchestration tests successfully.
-*   *Smoke Test*: Flow successfully executed offline: `PIPELINE_RUN_ID` and `PREFECT_FLOW_RUN_ID` were produced, tiny artifact was materialized in `output_root`, and storage resolved correctly without modifying global `~/.prefect` database.
+*   *Validation*: `DatasetIdentity` validates strictly for a 64-character lowercase hexadecimal `sha256` string.
+*   *Installation & Testing*: `uv run --frozen --extra orchestration python -m pytest tests/unit` is the authoritative reproducible test command.
+*   *Smoke Test Isolation*: Flow successfully executed offline using isolated `PREFECT_HOME` and `PREFECT_RESULTS_LOCAL_STORAGE_PATH`. Validated that small metadata persists without touching `~/.prefect/prefect.db` or `~/.prefect/storage`.
 
 ## 29. Progress Log
 - [x] Phase 6 Planning completed and revised based on feedback.
