@@ -224,6 +224,42 @@ def test_path_escape_fails_before_provider(mock_build, tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# 6b. Standalone input root accepted
+# ---------------------------------------------------------------------------
+
+@patch("src.pipelines.theme_pipeline.run_theme_pipeline_from_monthly_data")
+def test_explicit_standalone_input_root_accepted(mock_run, tmp_path):
+    import tempfile
+    import shutil
+    
+    other = Path(tempfile.mkdtemp())
+    try:
+        content = b"month,topic\nmarch,A"
+        p = other / "march.csv"
+        p.write_bytes(content)
+        bundle = ThemeInputBundle(
+            monthly_topic_outputs={
+                "march": ArtifactReference(
+                    path=str(p),
+                    sha256=_sha256(content),
+                    media_type="text/csv",
+                    byte_size=len(content),
+                )
+            },
+            allowed_input_roots=(str(other),)
+        )
+        mock_run.side_effect = lambda **kw: _make_theme_outputs(kw["output_dir"])
+        
+        # This should NOT raise an error about being outside allowed_root
+        result = run_monthly_themes_task.fn(bundle, _config(tmp_path), _context(tmp_path))
+        assert isinstance(result, ThemeOutputBundle)
+    finally:
+        shutil.rmtree(str(other), ignore_errors=True)
+
+
+
+
+# ---------------------------------------------------------------------------
 # 7. Provider factory called exactly once (domain ownership)
 # ---------------------------------------------------------------------------
 
@@ -323,7 +359,17 @@ def test_provider_summary_schema(mock_run, tmp_path):
     )
     mock_run.side_effect = lambda **kw: _make_theme_outputs(kw["output_dir"])
 
-    result = run_monthly_themes_task.fn(bundle, _config(tmp_path), _context(tmp_path))
+    raw_extra = {
+        "api_key": "sk-secret-123",
+        "theme_provider": {
+            "primary": "openai",
+            "token": "tok-123",
+            "fallback_chain": ["anthropic"],
+            "password": "my-password",
+        }
+    }
+    cfg = _config(tmp_path, **raw_extra)
+    result = run_monthly_themes_task.fn(bundle, cfg, _context(tmp_path))
 
     assert result.provider_run_summary is not None
     summary_path = result.provider_run_summary.path

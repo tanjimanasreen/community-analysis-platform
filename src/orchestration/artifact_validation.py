@@ -24,7 +24,7 @@ _ALLOWED_IMAGE_MEDIA_TYPES = {"image/png", "image/jpeg"}
 
 def validate_artifact(
     ref: ArtifactReference,
-    allowed_root: str,
+    allowed_roots: Sequence[str | Path],
     *,
     required: bool = True,
     expected_media_type: str | None = None,
@@ -37,7 +37,7 @@ def validate_artifact(
     Checks:
     - Path exists (if required)
     - Path is a regular file (not a directory)
-    - Path resolves strictly under allowed_root (no traversal or symlink escape)
+    - Path resolves strictly under one of the allowed_roots (no traversal or symlink escape)
     - File extension is in the allowed set
     - Byte size matches ref.byte_size when provided
     - SHA-256 matches ref.sha256
@@ -70,15 +70,30 @@ def validate_artifact(
         )
 
     # Path containment — resolve strictly to detect traversal and symlink escapes
+    resolved_path = None
     try:
         resolved_path = Path(path).resolve(strict=True)
-        resolved_root = Path(allowed_root).resolve()
-        resolved_path.relative_to(resolved_root)
     except (ValueError, OSError) as exc:
         raise PipelineError(
-            f"{label}: path {path!r} is outside the allowed root {allowed_root!r}: {exc}",
+            f"{label}: path could not be resolved: {exc}",
             ErrorCategory.SCHEMA_VIOLATION,
         ) from exc
+
+    is_contained = False
+    for root in allowed_roots:
+        try:
+            resolved_root = Path(root).resolve()
+            resolved_path.relative_to(resolved_root)
+            is_contained = True
+            break
+        except (ValueError, OSError):
+            continue
+
+    if not is_contained:
+        raise PipelineError(
+            f"{label}: path {path!r} is outside the allowed roots: {allowed_roots}",
+            ErrorCategory.SCHEMA_VIOLATION,
+        )
 
     # Extension check
     ext = resolved_path.suffix.lower()

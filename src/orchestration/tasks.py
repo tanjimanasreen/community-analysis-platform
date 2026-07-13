@@ -309,23 +309,27 @@ def run_monthly_topic_phase_task(
     os.makedirs(isolated_output, exist_ok=True)
 
     # --- Strict input validation before any domain code runs ---
+    allowed_roots = [context.output_root]
+    if getattr(input_bundle, "allowed_input_roots", None):
+        allowed_roots.extend(input_bundle.allowed_input_roots)
+
     validate_artifact(
         input_bundle.absolute_community_messages,
-        allowed_root=context.output_root,
+        allowed_roots,
         required=True,
         expected_media_type="text/csv",
         label="absolute_community_messages",
     )
     validate_artifact(
         input_bundle.weighted_community_messages,
-        allowed_root=context.output_root,
+        allowed_roots,
         required=True,
         expected_media_type="text/csv",
         label="weighted_community_messages",
     )
     validate_artifact(
         input_bundle.matched_communities,
-        allowed_root=context.output_root,
+        allowed_roots,
         required=True,
         expected_media_type="text/csv",
         label="matched_communities",
@@ -333,7 +337,7 @@ def run_monthly_topic_phase_task(
     if input_bundle.partial_matched_communities is not None:
         validate_artifact(
             input_bundle.partial_matched_communities,
-            allowed_root=context.output_root,
+            allowed_roots,
             required=False,
             expected_media_type="text/csv",
             label="partial_matched_communities",
@@ -535,10 +539,14 @@ def run_monthly_themes_task(
             ErrorCategory.MISSING_REQUIRED_INPUT,
         )
 
+    allowed_roots = [context.output_root]
+    if getattr(input_bundle, "allowed_input_roots", None):
+        allowed_roots.extend(input_bundle.allowed_input_roots)
+
     for month, artifact_ref in input_bundle.monthly_topic_outputs.items():
         validate_artifact(
             artifact_ref,
-            allowed_root=context.output_root,
+            allowed_roots,
             required=True,
             expected_media_type="text/csv",
             label=f"theme_input[{month}]",

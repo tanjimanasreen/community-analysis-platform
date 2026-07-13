@@ -228,6 +228,47 @@ def test_path_outside_allowed_root_raises(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# 5b. Input validation — standalone input root accepted
+# ---------------------------------------------------------------------------
+
+@patch("src.pipelines.social_network_pipeline.run_topic_phase")
+def test_explicit_standalone_input_root_accepted(mock_run, tmp_path):
+    import tempfile
+    other_dir = Path(tempfile.mkdtemp())
+    try:
+        abs_path = other_dir / "abs.csv"
+        abs_path.write_bytes(b"col\nval")
+        ref = ArtifactReference(
+            path=str(abs_path),
+            sha256=_sha256(b"col\nval"),
+            media_type="text/csv",
+            byte_size=7,
+        )
+        bundle = TopicInputBundle(
+            absolute_community_messages=ref,
+            weighted_community_messages=ref,
+            matched_communities=ref,
+            partial_matched_communities=None,
+            allowed_input_roots=(str(other_dir),),
+        )
+        ctx = _context(tmp_path)
+        cfg = _config(tmp_path)
+
+        mock_run.side_effect = lambda **kw: _make_topic_outputs(
+            kw["output_dir"], kw.get("data_type", "twitter"), kw.get("content_type", "reply")
+        )
+        
+        # This should NOT raise an error about being outside allowed_root
+        result = run_monthly_topic_phase_task.fn(bundle, cfg, ctx)
+        assert isinstance(result, TopicOutputBundle)
+    finally:
+        import shutil
+        shutil.rmtree(str(other_dir), ignore_errors=True)
+
+
+
+
+# ---------------------------------------------------------------------------
 # 6. Input validation — byte size mismatch
 # ---------------------------------------------------------------------------
 

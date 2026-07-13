@@ -90,6 +90,7 @@ class TopicInputBundle:
     weighted_community_messages: ArtifactReference
     matched_communities: ArtifactReference
     partial_matched_communities: ArtifactReference | None
+    allowed_input_roots: tuple[str, ...] | None = None
 
 @dataclass(frozen=True)
 class TopicOutputBundle:
@@ -101,6 +102,7 @@ class TopicOutputBundle:
 @dataclass(frozen=True)
 class ThemeInputBundle:
     monthly_topic_outputs: Mapping[str, ArtifactReference]
+    allowed_input_roots: tuple[str, ...] | None = None
 
 @dataclass(frozen=True)
 class ThemeOutputBundle:
