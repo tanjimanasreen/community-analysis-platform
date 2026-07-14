@@ -343,7 +343,8 @@ def test_no_provider_object_in_results(mock_run, tmp_path):
 # ---------------------------------------------------------------------------
 
 @patch("src.pipelines.theme_pipeline.run_theme_pipeline_from_monthly_data")
-def test_provider_summary_schema(mock_run, tmp_path):
+def test_provider_summary_schema(mock_run, tmp_path, caplog):
+    import json
     content = b"month,topic\nmarch,A"
     p = tmp_path / "march.csv"
     p.write_bytes(content)
@@ -360,25 +361,43 @@ def test_provider_summary_schema(mock_run, tmp_path):
     mock_run.side_effect = lambda **kw: _make_theme_outputs(kw["output_dir"])
 
     raw_extra = {
-        "api_key": "sk-secret-123",
-        "theme_provider": {
-            "primary": "openai",
-            "token": "tok-123",
-            "fallback_chain": ["anthropic"],
-            "password": "my-password",
-        }
+        "OPENAI_API_KEY": "secret-a",
+        "GEMINI_API_KEY": "secret-b",
+        "apiKey": "secret-c",
+        "access_token": "secret-d",
+        "client_secret": "secret-e",
+        "authorization": "Bearer secret-f",
+        "provider": {
+            "credentials": {
+                "token": "secret-g",
+                "password": "secret-h",
+            }
+        },
     }
     cfg = _config(tmp_path, **raw_extra)
     result = run_monthly_themes_task.fn(bundle, cfg, _context(tmp_path))
 
+    # Assert it is an ArtifactReference
     assert result.provider_run_summary is not None
-    summary_path = result.provider_run_summary.path
-    assert os.path.isfile(summary_path)
+    assert isinstance(result.provider_run_summary, ArtifactReference)
+    
+    # Assert it is under the run output root
+    summary_path = Path(result.provider_run_summary.path).resolve()
+    assert summary_path.is_relative_to((tmp_path / "run-test").resolve())
+    
+    # Assert it exists
+    assert summary_path.is_file()
+    
+    # Assert media type, sha256, byte size
+    assert result.provider_run_summary.media_type == "application/json"
+    assert result.provider_run_summary.byte_size == summary_path.stat().st_size
+    assert result.provider_run_summary.sha256 == _sha256(summary_path.read_bytes())
 
     with open(summary_path) as f:
         data = json.load(f)
 
-    required_fields = {
+    # Schema contains only allowed keys
+    allowed_fields = {
         "schema_version",
         "configured_primary_provider",
         "configured_primary_model",
@@ -388,16 +407,24 @@ def test_provider_summary_schema(mock_run, tmp_path):
         "generation_settings_digest",
         "semantic_task_version",
     }
-    missing = required_fields - set(data.keys())
-    assert not missing, f"Missing provider summary fields: {missing}"
+    assert set(data.keys()) == allowed_fields
 
-    # Secrets must be absent
-    secret_keywords = {"api_key", "token", "secret", "password", "authorization"}
-    for key in data:
-        assert key.lower() not in secret_keywords, f"Secret key found in summary: {key}"
-    for val in data.values():
-        if isinstance(val, str):
-            assert "sk-" not in val.lower()
+    # None of the injected secret keys or values appears anywhere in the JSON
+    json_str = json.dumps(data).lower()
+    injected_secrets = ["secret-a", "secret-b", "secret-c", "secret-d", "secret-e", "secret-f", "secret-g", "secret-h"]
+    for secret in injected_secrets:
+        assert secret not in json_str, f"Secret {secret} leaked into JSON"
+
+    # None appears in the returned task result
+    import dataclasses
+    result_str = str(dataclasses.asdict(result)).lower()
+    for secret in injected_secrets:
+        assert secret not in result_str, f"Secret {secret} leaked into Task Result"
+        
+    # None appears in captured logs
+    log_str = caplog.text.lower()
+    for secret in injected_secrets:
+        assert secret not in log_str, f"Secret {secret} leaked into logs"
 
 
 # ---------------------------------------------------------------------------

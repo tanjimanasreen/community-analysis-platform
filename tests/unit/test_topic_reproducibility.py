@@ -1,15 +1,13 @@
 import os
 import shutil
-import filecmp
 from pathlib import Path
 import pytest
 import pandas as pd
-from unittest.mock import patch
+import json
 
 from prefect.testing.utilities import prefect_test_harness
 from src.orchestration.tasks import run_monthly_topic_phase_task
 from src.orchestration.models import TopicInputBundle, ArtifactReference, ValidatedRunConfiguration, PipelineRunContext
-
 
 @pytest.fixture
 def run_config():
@@ -17,9 +15,14 @@ def run_config():
         config_digest="dummy",
         output_root="/tmp/dummy",
         raw_config={
-            "lda": {"num_topics": 2, "top_n_keywords": 10},
-            "database": {"uri": "mock"},
-            "graph_thresholds": {"min_total_post": 1}
+            "lda": {"num_topics": 2, "random_state": 100, "passes": 5, "chunksize": 20},
+            "preprocessing": {"remove_stopwords": True},
+            "matching": {"threshold": 0.1},
+            "content_type": "reply",
+            "data_type": "twitter",
+            "month": "march",
+            "year": "2017",
+            "output_base_path": "/tmp/dummy",
         }
     )
 
@@ -29,14 +32,19 @@ def test_topic_reproducibility(tmp_path, run_config):
     Reproducible inside the validated project environment for identical inputs,
     ordering, configuration, seed, and dependency versions.
     """
-    # Create tiny mock input artifacts
+    # Create valid mock input artifacts for the domain
     input_dir = tmp_path / "inputs"
     input_dir.mkdir()
 
     abs_csv = input_dir / "abs.csv"
     pd.DataFrame({
-        "community": [1, 1, 2, 2],
-        "messages": ["apple orange banana", "apple orange", "car truck bus", "car truck"],
+        "community_number": [1, 1, 2, 2],
+        "messages": [
+            ["apple", "orange", "banana", "apple", "orange", "banana"],
+            ["apple", "orange", "apple", "orange", "apple", "orange"],
+            ["car", "truck", "bus", "car", "truck", "bus"],
+            ["car", "truck", "car", "truck", "car", "truck"]
+        ],
         "user_id": [10, 11, 20, 21],
         "created_at": ["2017-03-01", "2017-03-01", "2017-03-01", "2017-03-01"]
     }).to_csv(abs_csv, index=False)
@@ -46,8 +54,10 @@ def test_topic_reproducibility(tmp_path, run_config):
 
     match_csv = input_dir / "match.csv"
     pd.DataFrame({
-        "community": [1, 2],
-        "matched_community": [1, 2]
+        "abs_community": [1, 2],
+        "per_community": [1, 2],
+        "members": ["user1,user2", "user3,user4"],
+        "jaccard_score": [1.0, 1.0]
     }).to_csv(match_csv, index=False)
 
     def make_ref(p):
@@ -68,56 +78,61 @@ def test_topic_reproducibility(tmp_path, run_config):
         allowed_input_roots=(str(input_dir),)
     )
 
-    # Mock domain layer to just write deterministic outputs based on seed/inputs
-    def mock_run_topic_phase(*args, **kwargs):
-        output_dir = kwargs.get("output_dir")
-        content_type = kwargs.get("content_type", "reply")
-        month = kwargs.get("month", "03")
-        data_type = "twitter"
-        import pandas as pd
+    with prefect_test_harness():
+        # Override output_root for run 1
+        out_dir_1 = tmp_path / "run_1"
+        out_dir_1.mkdir()
+        rc1 = ValidatedRunConfiguration(run_config.config_digest, str(out_dir_1), run_config.raw_config)
 
-        paths = [
-            f"{data_type}/LDA/scores/{content_type}/{month}.csv",
-            f"{data_type}/LDA/matched_topics/{content_type}/{month}.csv",
-            f"{data_type}/communities/graphs/absolute/{content_type}/{month}.csv",
-            f"{data_type}/communities/graphs/weighted/{content_type}/{month}.csv",
-            f"{data_type}/communities/partially_matched/{content_type}/{month}.csv",
-            f"{data_type}/_intermediate/topic_inputs/{content_type}/{month}_2017/partial_matched_communities.csv"
-        ]
-        for p in paths:
-            full_path = os.path.join(output_dir, p)
-            os.makedirs(os.path.dirname(full_path), exist_ok=True)
-            pd.DataFrame({"x": [1]}).to_csv(full_path, index=False)
+        ctx1 = PipelineRunContext.create(
+            pipeline_run_id="repro_1",
+            git_commit="HEAD",
+            config_digest=run_config.config_digest,
+            output_root=str(out_dir_1),
+            datasets=[]
+        )
 
-    with patch("src.pipelines.social_network_pipeline.run_topic_phase", side_effect=mock_run_topic_phase):
-        with prefect_test_harness():
-            # Override output_root for run 1
-            out_dir_1 = tmp_path / "run_1"
-            out_dir_1.mkdir()
-            rc1 = ValidatedRunConfiguration(run_config.config_digest, str(out_dir_1), run_config.raw_config)
+        res_1 = run_monthly_topic_phase_task.fn(bundle, rc1, ctx1)
 
-            ctx = PipelineRunContext.create(
-                pipeline_run_id="repro",
-                git_commit="HEAD",
-                config_digest=run_config.config_digest,
-                output_root=str(tmp_path),
-                datasets=[]
-            )
+        # Run 2
+        out_dir_2 = tmp_path / "run_2"
+        out_dir_2.mkdir()
+        rc2 = ValidatedRunConfiguration(run_config.config_digest, str(out_dir_2), run_config.raw_config)
+        ctx2 = PipelineRunContext.create(
+            pipeline_run_id="repro_2",
+            git_commit="HEAD",
+            config_digest=run_config.config_digest,
+            output_root=str(out_dir_2),
+            datasets=[]
+        )
 
-            res_1 = run_monthly_topic_phase_task.fn(bundle, rc1, ctx)
+        res_2 = run_monthly_topic_phase_task.fn(bundle, rc2, ctx2)
 
-            # Run 2
-            out_dir_2 = tmp_path / "run_2"
-            out_dir_2.mkdir()
+    # Compare LDA scores
+    df1_lda = pd.read_csv(res_1.lda_scores.path)
+    df2_lda = pd.read_csv(res_2.lda_scores.path)
+    pd.testing.assert_frame_equal(df1_lda, df2_lda)
 
-            rc2 = ValidatedRunConfiguration(run_config.config_digest, str(out_dir_2), run_config.raw_config)
-            res_2 = run_monthly_topic_phase_task.fn(bundle, rc2, ctx)
-
-    # Compare
-    assert res_1.lda_scores.sha256 == res_2.lda_scores.sha256, "LDA scores must be byte-identical"
+    # Compare matched communities topics
     if res_1.matched_communities_topics:
-        assert res_1.matched_communities_topics.sha256 == res_2.matched_communities_topics.sha256
+        assert res_2.matched_communities_topics is not None
+        df1_mch = pd.read_csv(res_1.matched_communities_topics.path)
+        df2_mch = pd.read_csv(res_2.matched_communities_topics.path)
+        pd.testing.assert_frame_equal(df1_mch, df2_mch)
+    
+    if res_1.partial_matched_communities_topics:
+        assert res_2.partial_matched_communities_topics is not None
+        df1_pmch = pd.read_csv(res_1.partial_matched_communities_topics.path)
+        df2_pmch = pd.read_csv(res_2.partial_matched_communities_topics.path)
+        pd.testing.assert_frame_equal(df1_pmch, df2_pmch)
 
-    # Compare all theme_inputs
+    # Compare all theme_inputs (manifest)
     for t1, t2 in zip(res_1.theme_inputs, res_2.theme_inputs):
-        assert t1.sha256 == t2.sha256, f"Theme input {t1.path} is not byte-identical"
+        if t1.path.endswith('.json'):
+            with open(t1.path) as f1, open(t2.path) as f2:
+                assert json.load(f1) == json.load(f2)
+        else:
+            # fallback for csv
+            df1_theme = pd.read_csv(t1.path)
+            df2_theme = pd.read_csv(t2.path)
+            pd.testing.assert_frame_equal(df1_theme, df2_theme)

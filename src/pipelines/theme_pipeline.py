@@ -3,7 +3,7 @@ import pandas as pd
 import ast
 
 from src.providers.cached import CachedProvider
-from src.providers.factory import build_theme_provider
+from src.providers import factory
 from src.themes.gpt_themes import generate_llm_themes
 # Future imports from Milestone 4, 5, 6 will go here:
 # from src.themes.community_transition import calculate_jaccard_transitions
@@ -23,7 +23,8 @@ def process_single_file_themes(df: pd.DataFrame, provider) -> pd.DataFrame:
     for col in ['absolute_unigram_keywords', 'absolute_bigram_keywords',
                 'weighted_unigram_keywords', 'weighted_bigram_keywords']:
         if col in df.columns:
-            df[col] = df[col].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) and x.startswith('[') else x)
+            if df[col].dtype == object and isinstance(df[col].iloc[0], str):
+                df[col] = df[col].apply(lambda x: ast.literal_eval(x) if x.startswith('[') else x)
         else:
             df[col] = [[] for _ in range(len(df))]
 
@@ -112,7 +113,7 @@ def run_theme_pipeline_from_monthly_data(
             provider = CachedProvider(provider)
     else:
         # Production path — build provider from config (reads providers.yml via factory)
-        provider = build_theme_provider(config or {})
+        provider = factory.build_theme_provider(config or {})
 
     themed_monthly_dict = {}
     for month, df in monthly_data_dict.items():

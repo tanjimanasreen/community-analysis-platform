@@ -344,8 +344,17 @@ def run_monthly_topic_phase_task(
         )
 
     # --- Load DataFrames inside the task (never serialised to Prefect state) ---
-    abs_df = pd.read_csv(input_bundle.absolute_community_messages.path)
-    per_df = pd.read_csv(input_bundle.weighted_community_messages.path)
+    def _load_community_messages(path):
+        import ast
+        df = pd.read_csv(path)
+        if "messages" in df.columns:
+            df["messages"] = df["messages"].apply(
+                lambda x: ast.literal_eval(x) if isinstance(x, str) and x.startswith("[") else x
+            )
+        return df
+
+    abs_df = _load_community_messages(input_bundle.absolute_community_messages.path)
+    per_df = _load_community_messages(input_bundle.weighted_community_messages.path)
     matched_df = pd.read_csv(input_bundle.matched_communities.path)
 
     partial_df = pd.DataFrame()
