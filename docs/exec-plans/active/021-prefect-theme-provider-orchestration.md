@@ -244,7 +244,7 @@ The digest is deterministic: same config → same digest across runs.
 | `test_orchestration_topic_tasks.py` | 2 | 18 |
 | `test_orchestration_theme_tasks.py` | 2 | 13 |
 | Combined targeted | 4 | 31 |
-| Full suite | 239 | TBD (running) |
+| Full suite | 239 | 274 |
 
 ### Combined implementation commit
 `4837d7f8 feat(orchestration): add topic-model and theme-provider execution stages`
