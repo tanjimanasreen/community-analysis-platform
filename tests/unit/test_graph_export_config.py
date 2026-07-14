@@ -13,7 +13,7 @@ def test_neo4j_exporter_get_query():
     exporter = Neo4jExporter()
     query = exporter.get_query("telegram")
     assert "MATCH (source:User)-[r:CREATED]->(target:Message)" in query
-    
+
     with pytest.raises(ValueError):
         exporter.get_query("invalid")
 

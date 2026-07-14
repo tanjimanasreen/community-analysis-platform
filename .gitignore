@@ -29,6 +29,7 @@ outputs/
 reports/
 artifacts/
 data/generated/
+.prefect_results/
 
 # Local sample artifacts are written outside the repo by default, but keep
 # accidental in-repo copies ignored.
@@ -49,3 +50,10 @@ frontend/.vite/
 Thumbs.db
 .idea/
 .vscode/
+
+# Legacy unversioned data locations
+/dataset/
+/twitter/
+
+# Tool-local state where not already covered
+.dvc/config.local

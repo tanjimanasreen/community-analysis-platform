@@ -103,4 +103,3 @@ The project is acceptable when:
 - Metrics and thresholds are covered by tests.
 - Hard-coded local paths and credentials are removed.
 - README explains setup, data preparation, and each pipeline command.
-

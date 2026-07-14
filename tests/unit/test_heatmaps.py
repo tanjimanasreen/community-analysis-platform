@@ -5,12 +5,12 @@ from src.themes.heatmaps import calculate_sentence_similarity, extract_themes
 def test_extract_themes():
     df = pd.DataFrame({
         'general_theme_gpt': [
-            "{'Theme A': ['kw1', 'kw2']}", 
+            "{'Theme A': ['kw1', 'kw2']}",
             "{'Theme B': ['kw3'], 'Theme C': ['kw4']}",
             None
         ]
     })
-    
+
     themes = extract_themes(df)
     assert len(themes) == 3
     assert themes[0] == "Theme A"
@@ -19,9 +19,9 @@ def test_extract_themes():
 
 def test_calculate_sentence_similarity():
     themes = ["Apple orange banana", "Fruit and vegetables", "Car and truck", "Vehicle transportation"]
-    
+
     embeddings, sim_matrix = calculate_sentence_similarity(themes)
-    
+
     assert embeddings is not None
     assert sim_matrix is not None
     assert sim_matrix.shape == (4, 4)

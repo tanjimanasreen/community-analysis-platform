@@ -15,3 +15,5 @@ Use this file to track known cleanup and migration work.
 | TD-009 | Visualization dependencies | Plotly image export may require Kaleido. | PNG export can fail despite valid analysis. | Make PNG optional and always save HTML. | open |
 | TD-010 | Naming | `G_percentage` actually means weighted graph. | Confusing terminology. | Add production alias `weighted_graph` while preserving compatibility. | open |
 
+| TD-011 | Unignored Large Data | The 11 GB `dataset/` and 37 MB `twitter/` output directories were completely untracked and NOT in `.gitignore`. | High risk of accidentally staging/committing 11 GB of raw, potentially sensitive data. | Add `dataset/` and `twitter/` to `.gitignore`. | resolved |
+| TD-012 | No Remote DVC Backup | DVC is initialized and tracking 11 GB locally, but `DVC_REMOTE_URL` is unset and no remote is configured. | Total data loss if local disk fails. | Configure an external remote (e.g. S3, local external drive) and `dvc push`. | open |

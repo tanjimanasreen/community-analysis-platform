@@ -45,6 +45,21 @@ Then implement plans in this order:
 
 Before refactoring, preserve the current behavior with tests or fixture outputs. Do not change metric definitions, graph thresholds, Louvain defaults, LDA defaults, or GPT theme defaults unless the change is documented as a separate experiment.
 
+## Prefect Orchestration (Foundation)
+
+Prefect 3 is now available as an optional orchestration foundation. The full pipeline is not yet orchestrated, and direct domain execution remains fully supported.
+
+Optional local UI command:
+```bash
+prefect server start
+```
+
+Tests do not require a server. Local results and small metadata payloads are directed to a private directory isolated from the Prefect SQLite database:
+```text
+.prefect_results/
+```
+To safely clear the local result cache, simply remove this directory: `rm -rf .prefect_results/`.
+
 ## Final Handoff Docs
 
 - `docs/DEMO_SCRIPT.md`: presenter script for the offline demo and dashboard walkthrough.
@@ -53,7 +68,7 @@ Before refactoring, preserve the current behavior with tests or fixture outputs.
 
 ## Setup
 
-Use Python 3.9 or newer. The sample Make targets assume a project-local
+Use Python 3.11.9 or newer. The sample Make targets assume a project-local
 virtual environment named `.venv`.
 
 Create and install the local environment:
@@ -78,6 +93,28 @@ make frontend-install
 `pyproject.toml` is the canonical Python dependency declaration. The
 `requirements.txt` file is only a compatibility wrapper for hosts that expect
 one.
+
+## Development Quality & CI
+
+This repository uses local `pre-commit` hooks for minimal hygiene and GitHub Actions CI as the authoritative enforcement gate.
+
+To set up local development tools and run CI steps locally, use:
+
+```bash
+uv sync --extra orchestration
+uv run pre-commit install
+uv run pre-commit run --all-files
+make test-unit
+make test-integration
+make test
+```
+
+* **Pre-commit is a local convenience**: It fixes simple issues like trailing whitespace and mixed line endings before you commit.
+* **CI is the authoritative enforcement gate**: GitHub Actions runs the exact same checks on `main` branch pushes and PRs.
+* **Black/Flake8 scope**: Broad codebase formatting with Black and Flake8 is currently deferred (Strategy A) because of extensive legacy formatting. Only low-risk hygiene hooks are active.
+* **Updating hook revisions**: Run `uv run pre-commit autoupdate` or edit `.pre-commit-config.yaml` to pin newer versions.
+* **Reproduce CI locally**: The commands above run exactly what CI runs.
+* **API Credentials**: The full test suite runs entirely offline. Network guards in `tests/conftest.py` block outbound requests. No live API credentials are required to pass tests or CI.
 
 ## Running The Offline Sample
 

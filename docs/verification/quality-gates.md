@@ -136,4 +136,3 @@ Validation:
 make run-pipeline-sample
 make test
 ```
-

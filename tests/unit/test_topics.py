@@ -13,24 +13,24 @@ def test_clean_text():
     assert "ahaha" not in cleaned
     assert "jajaja" not in cleaned
     assert "dog" in cleaned
-    
+
 def test_message_preprocess():
     df = pd.DataFrame({
         'messages': [
             ["This is a test message 😊.", "Another message https://link.com @user"]
         ]
     })
-    
+
     processed = message_preprocess(df)
     assert len(processed) == 1
     processed_text = processed.iloc[0]
-    
+
     assert "😊" not in processed_text
     assert "linkcom" not in processed_text
     assert "user" not in processed_text
     assert "test" in processed_text
     assert "message" in processed_text
-    
+
 def test_get_cutoff_probability():
     # If we have a smooth decrease, elbow should be found
     probs = [0.5, 0.2, 0.1, 0.05, 0.02, 0.01, 0.005, 0.001]

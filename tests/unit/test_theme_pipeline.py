@@ -1,7 +1,8 @@
 import pandas as pd
 
 from src.pipelines.theme_pipeline import process_single_file_themes, run_theme_pipeline
-from src.themes.llm_provider import CachedProvider, MockProvider
+from src.providers.cached import CachedProvider
+from src.providers.mock import MockProvider
 
 
 def _matched_row(members):

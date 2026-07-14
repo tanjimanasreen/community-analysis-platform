@@ -38,11 +38,11 @@ def get_nlp():
 def lemmatization(texts, allowed_postags=None):
     if allowed_postags is None:
         allowed_postags = ['NOUN', 'ADJ', 'VERB', 'ADV']
-        
+
     texts_out = []
     nlp = get_nlp()
     for sent in texts:
-        doc = nlp(" ".join(sent)) 
+        doc = nlp(" ".join(sent))
         texts_out.append([token.lemma_ or token.text for token in doc])
     return texts_out
 
@@ -50,12 +50,12 @@ def get_lda(dictionary, corpus, num_topics=NUM_TOPICS):
     lda_model = LdaModel(
         corpus=corpus,
         id2word=dictionary,
-        num_topics=num_topics, 
+        num_topics=num_topics,
         random_state=RANDOM_STATE,
         iterations=ITERATIONS,
         chunksize=CHUNKSIZE,
         passes=PASSES,
-        alpha=ALPHA, 
+        alpha=ALPHA,
         eta=ETA
     )
     return lda_model
@@ -76,27 +76,27 @@ def get_topic_keywords(lda_model, topic_id, id2word, topn):
     top_words = lda_model.get_topic_terms(topic_id, topn=topn)
     top_keywords = [id2word[word_id] for word_id, prob in top_words]
     return ', '.join(top_keywords)
-    
+
 def assign_dominant_topic(lda_model, corpus, id2word, data, topn_keywords):
     dominant_topics = []
     topic_keywords = []
-    
+
     for doc_bow in corpus:
         if not doc_bow:
             dominant_topics.append(-1)
             topic_keywords.append('')
             continue
-            
+
         topic_distribution = lda_model.get_document_topics(doc_bow)
         topic_distribution = sorted(topic_distribution, key=lambda x: x[1], reverse=True)
         dominant_topic = topic_distribution[0][0]
         dominant_topics.append(dominant_topic)
         keywords = get_topic_keywords(lda_model, dominant_topic, id2word, topn=topn_keywords)
         topic_keywords.append(keywords)
-    
+
     data['dominant_topic'] = dominant_topics
     data['topic_keywords'] = topic_keywords
-    
+
     return data[['community_number', 'dominant_topic', 'topic_keywords', 'messages']]
 
 # Unigram Model
@@ -108,15 +108,15 @@ def get_unigram_lda(text_df):
     data_tokens = get_unigram_tokens(text_df)
     lemmatized_tokens = lemmatization(data_tokens)
 
-    id2word = gensim.corpora.Dictionary(lemmatized_tokens) 
+    id2word = gensim.corpora.Dictionary(lemmatized_tokens)
     corpus = [id2word.doc2bow(doc) for doc in lemmatized_tokens]
 
     optimal_model = get_lda(id2word, corpus)
     perplexity, coherence = get_lda_stat(optimal_model, corpus, id2word, lemmatized_tokens)
-    
+
     data = text_df.copy()
     document_topics = assign_dominant_topic(optimal_model, corpus, id2word, data, topn_keywords=TOP_N_KEYWORDS)
-    
+
     return document_topics, optimal_model, perplexity, coherence
 
 # Bigram Model
@@ -126,7 +126,7 @@ def get_bigrams_tokens(text_df):
 
     bigram = Phrases(bigrams_tokens, min_count=5)
     trigram = Phrases(bigram[bigrams_tokens])
-    
+
     for idx in range(len(bigrams_tokens)):
         for token in bigram[bigrams_tokens[idx]]:
             if '_' in token:
@@ -134,12 +134,12 @@ def get_bigrams_tokens(text_df):
         for token in trigram[bigrams_tokens[idx]]:
             if '_' in token:
                 bigrams_tokens[idx].append(token)
-                
+
     return bigrams_tokens
 
 def get_bigram_lda(text_df):
     bigrams_tokens = get_bigrams_tokens(text_df)
-    id2word = gensim.corpora.Dictionary(bigrams_tokens) 
+    id2word = gensim.corpora.Dictionary(bigrams_tokens)
     corpus = [id2word.doc2bow(doc) for doc in bigrams_tokens]
 
     optimal_model = get_lda(id2word, corpus)

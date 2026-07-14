@@ -1,0 +1,8 @@
+# DVC Migration Manifest
+
+| Original Relative Path | Destination Relative Path | Byte Size | SHA-256 Before Migration | SHA-256 After Migration | DVC Metadata Path | Migration Status | DVC Tracking Status | Remote Push Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `dataset/retweet_january_2017_sampled.csv` | `data/raw/twitter/retweet_quote/2017/retweet_january_2017_sampled.csv` | 365,117 | `6909a1a9ba534f17266024700ccf032d69c3766541f07f0597880bd4f83e6cc5` | `6909a1a9ba534f17266024700ccf032d69c3766541f07f0597880bd4f83e6cc5` | `data/raw/twitter/retweet_quote/2017/retweet_january_2017_sampled.csv.dvc` | SUCCESS | TRACKED | PENDING |
+| `dataset/retweet_february_2017.csv` | `data/raw/twitter/retweet_quote/2017/retweet_february_2017.csv` | 7,902,553,957 | `5d6bc785636fc0b7184eddc7e5365aa225364d10b27f129f8f1f0f30a5a0ca46` | `5d6bc785636fc0b7184eddc7e5365aa225364d10b27f129f8f1f0f30a5a0ca46` | `data/raw/twitter/retweet_quote/2017/retweet_february_2017.csv.dvc` | SUCCESS | TRACKED | PENDING |
+| `dataset/retweet_march_2017.csv` | `data/raw/twitter/retweet_quote/2017/retweet_march_2017.csv` | 3,103,885,935 | `768120e515abbe0b16fa46de3004d8866e06fe5e3ce95fb8ae12b962be1c3678` | `768120e515abbe0b16fa46de3004d8866e06fe5e3ce95fb8ae12b962be1c3678` | `data/raw/twitter/retweet_quote/2017/retweet_march_2017.csv.dvc` | SUCCESS | TRACKED | PENDING |
+| `dataset/retweet_april_2017.csv` | `data/raw/twitter/retweet_quote/2017/retweet_april_2017.csv` | 423,269,060 | `e6ef1939483f9e4cec48c2c7a22a2c6b690901210a3fa260a8dc79987c1f4a98` | `e6ef1939483f9e4cec48c2c7a22a2c6b690901210a3fa260a8dc79987c1f4a98` | `data/raw/twitter/retweet_quote/2017/retweet_april_2017.csv.dvc` | SUCCESS | TRACKED | PENDING |

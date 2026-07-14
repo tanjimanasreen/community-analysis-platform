@@ -31,7 +31,7 @@ def calculate_sentence_similarity(sentences: list, model_name='paraphrase-MiniLM
 def extract_themes(matched_df: pd.DataFrame, paths: list, start_month_theme: str, end_month_theme: str) -> dict:
     all_community_theme = {}
     count = 1
-    
+
     for path in paths:
         themes = {}
         for p in path:
@@ -44,7 +44,7 @@ def extract_themes(matched_df: pd.DataFrame, paths: list, start_month_theme: str
                     themes[p] = str(ends[end_month_theme].values[0])
                 else:
                     themes[p] = ""
-        
+
         all_community_theme[count] = themes
         count += 1
 

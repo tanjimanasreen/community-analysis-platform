@@ -116,4 +116,3 @@ RAW_TO_DERIVED_MAPPINGS = {
         date_field="created_at",
     ),
 }
-

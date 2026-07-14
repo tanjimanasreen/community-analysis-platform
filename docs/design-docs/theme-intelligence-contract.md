@@ -146,4 +146,3 @@ Production requirements:
 - Make the embedding model configurable.
 - Cache model downloads where possible.
 - Add a small deterministic test for sentence similarity shape and diagonal behavior.
-

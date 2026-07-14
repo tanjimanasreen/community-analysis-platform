@@ -186,4 +186,3 @@ Required defaults:
 | response format | JSON object |
 
 OpenAI calls must be optional in tests and local offline runs.
-

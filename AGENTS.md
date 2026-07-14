@@ -123,4 +123,3 @@ Ask the human before:
 - Replacing Memgraph with a different database.
 - Introducing paid cloud dependencies.
 - Making OpenAI/GPT calls mandatory for the full local sample pipeline.
-

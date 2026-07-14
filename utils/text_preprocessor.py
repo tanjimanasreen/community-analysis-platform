@@ -9,7 +9,7 @@ with open('utils/stopwords-list.txt', 'r') as f:
     stop_words = []
     for l in f.readlines():
         # print(l)
-        stop_words.append(l.strip()) 
+        stop_words.append(l.strip())
 
 stop_words.extend(['dont', 'im', 'um', 'un', 'cant', 'i', 'me', 'am', 'mm', 'yyyy', 'ill', 'month', 'yesterday', 'day', 'today', 'do', 'not', 'nomnomnomnom'])
 
@@ -17,10 +17,10 @@ stop_words.extend(['dont', 'im', 'um', 'un', 'cant', 'i', 'me', 'am', 'mm', 'yyy
 def clean_text(text: str) -> str:
     """
         text: a string
-        
+
         return: modified initial string
     """
-    
+
     remove_username = re.compile(r'@[^ ]+')
     remove_urls = re.compile(r'https?://[A-Za-z0-9./]+')
     remove_urls_2 = re.compile(r'https?:[^\s]+')
@@ -40,28 +40,28 @@ def clean_text(text: str) -> str:
     remove_repetition = re.compile(r'\b(\w+)( \1\b)+')
     remove_jaja = re.compile(r'\b(?:ja)+\b')
 
-    text = text.lower() 
-    
-    text = remove_username.sub(' ', text) 
-    text = remove_urls.sub(' ', text) 
+    text = text.lower()
+
+    text = remove_username.sub(' ', text)
+    text = remove_urls.sub(' ', text)
     text = remove_urls_2.sub(' ', text)
-    text = remove_hashtag.sub(' ', text) 
+    text = remove_hashtag.sub(' ', text)
     text = remove_www.sub(' ', text)
-    text = replace_with_space.sub(' ', text) 
+    text = replace_with_space.sub(' ', text)
     text = remove_ahah.sub(' ', text)
     text = remove_aha.sub(' ', text)
     text = remove_haha.sub(' ', text)
     text = remove_jaja.sub(' ', text)
-    
-    # text = remove_cashtags_and_words.sub(' ', text) 
 
-    
-    # text = remove_symbols1.sub('', text) 
-    text = remove_not_chars.sub('', text) 
+    # text = remove_cashtags_and_words.sub(' ', text)
+
+
+    # text = remove_symbols1.sub('', text)
+    text = remove_not_chars.sub('', text)
     # text = remove_3chars.sub('', text)
     text = ' '.join([word for word in text.split() if word not in stop_words])
     text = remove_repetition.sub(r'\1', text)
-    
+
     return text
 
 def replace_emojis(text: str) -> str:
@@ -113,10 +113,6 @@ def message_preprocess(text_df):
     text_df['messages_processed'] = text_df['messages_processed'].apply(lambda x: '.'.join(x))
     # text_df['messages_processed'] = text_df['messages_processed'].apply(lambda messages: [clean_text(message) for message in messages])
     text_df['messages_processed'] = text_df['messages_processed'].apply(lambda messages: clean_text(messages))
-    
-    
-    return text_df['messages_processed'] 
 
 
-
-
+    return text_df['messages_processed']

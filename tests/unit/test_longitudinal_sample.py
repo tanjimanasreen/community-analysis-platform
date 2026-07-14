@@ -7,7 +7,7 @@ import pandas as pd
 from src.ingestion.network_data_extractor import create_network_df, get_creator_spreader
 from src.network.follower_followee import get_follower_followee_network
 from src.pipelines.theme_pipeline import run_theme_pipeline_from_bundle
-from src.themes.llm_provider import MockProvider
+from src.providers.mock import MockProvider
 from src.themes.theme_inputs import load_theme_inputs, save_theme_inputs
 from src.topics.topic_inputs import load_topic_inputs, save_topic_inputs
 

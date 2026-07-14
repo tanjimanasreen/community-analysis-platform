@@ -78,4 +78,3 @@ command
 ## Rollback Plan
 
 Describe how to revert or safely abandon this plan.
-

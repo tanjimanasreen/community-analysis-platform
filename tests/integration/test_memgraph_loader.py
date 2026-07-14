@@ -13,14 +13,14 @@ def test_generate_cypher_telegram():
     source = {'user_id': 'user1', 'username': 'alice'}
     target = {'unique_id': 'msg1', 'text': 'hello'}
     relation = 'CREATED'
-    
+
     query, params = generate_cypher(source, target, relation, 'telegram')
-    
+
     assert query is not None
     assert "MERGE (s:User {user_id: $source_pk})" in query
     assert "MERGE (t:Message {unique_id: $target_pk})" in query
     assert "MERGE (s)-[r:CREATED]->(t)" in query
-    
+
     assert params['source_pk'] == 'user1'
     assert params['target_pk'] == 'msg1'
     assert params['platform'] == 'telegram'
@@ -29,9 +29,9 @@ def test_generate_cypher_fallback_pk():
     source = {'id': 'user1', 'username': 'alice'} # id instead of user_id
     target = {'id': 'msg1', 'text': 'hello'}      # id instead of unique_id
     relation = 'CREATED'
-    
+
     query, params = generate_cypher(source, target, relation, 'telegram')
-    
+
     assert query is not None
     assert params['source_pk'] == 'user1'
     assert params['target_pk'] == 'msg1'
@@ -46,9 +46,9 @@ def test_memgraph_loader_with_mock(tmp_path):
 
     mock_client = MagicMock()
     loader = MemgraphLoader(client=mock_client)
-    
+
     success, error = loader.load_csv(str(csv_file), 'telegram')
-    
+
     assert success == 1
     assert error == 1
     assert mock_client.execute_query.call_count == 1

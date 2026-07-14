@@ -98,4 +98,3 @@ The harness is satisfied when:
 - Theme generation is optional and can be skipped in offline tests.
 - Month-to-month transition, membership-change, and theme similarity outputs are covered.
 - All generated output categories from the current scripts have documented target locations.
-

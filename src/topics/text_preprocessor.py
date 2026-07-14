@@ -13,7 +13,7 @@ stopwords_path = os.path.join(current_dir, 'stopwords-list.txt')
 with open(stopwords_path, 'r') as f:
     stop_words = []
     for l in f.readlines():
-        stop_words.append(l.strip()) 
+        stop_words.append(l.strip())
 
 stop_words.extend(['dont', 'im', 'um', 'un', 'cant', 'i', 'me', 'am', 'mm', 'yyyy', 'ill', 'month', 'yesterday', 'day', 'today', 'do', 'not', 'nomnomnomnom'])
 
@@ -29,30 +29,30 @@ def clean_text(text: str) -> str:
 
     replace_with_space = re.compile(r'[/(){}\[\]\|@,;.]')
     remove_not_chars = re.compile(r'[^a-z A-Z]')
-    
+
     remove_ahah = re.compile(r'\b(?:ah)+\b')
     remove_aha = re.compile(r'\b(?:ah)+a\b')
     remove_haha = re.compile(r'\b(?:ha)+\b')
     remove_repetition = re.compile(r'\b(\w+)( \1\b)+')
     remove_jaja = re.compile(r'\b(?:ja)+\b')
 
-    text = text.lower() 
-    
-    text = remove_username.sub(' ', text) 
-    text = remove_urls.sub(' ', text) 
+    text = text.lower()
+
+    text = remove_username.sub(' ', text)
+    text = remove_urls.sub(' ', text)
     text = remove_urls_2.sub(' ', text)
-    text = remove_hashtag.sub(' ', text) 
+    text = remove_hashtag.sub(' ', text)
     text = remove_www.sub(' ', text)
-    text = replace_with_space.sub(' ', text) 
+    text = replace_with_space.sub(' ', text)
     text = remove_ahah.sub(' ', text)
     text = remove_aha.sub(' ', text)
     text = remove_haha.sub(' ', text)
     text = remove_jaja.sub(' ', text)
-    
-    text = remove_not_chars.sub('', text) 
+
+    text = remove_not_chars.sub('', text)
     text = ' '.join([word for word in text.split() if word not in stop_words])
     text = remove_repetition.sub(r'\1', text)
-    
+
     return text
 
 def replace_emojis(text: str) -> str:
@@ -81,5 +81,5 @@ def message_preprocess(text_df):
     text_df['messages_processed'] = text_df['messages_processed'].apply(lambda x: [sentence for sentence in x if sentence.strip()])
     text_df['messages_processed'] = text_df['messages_processed'].apply(lambda x: '.'.join(x))
     text_df['messages_processed'] = text_df['messages_processed'].apply(lambda messages: clean_text(messages))
-    
-    return text_df['messages_processed'] 
+
+    return text_df['messages_processed']

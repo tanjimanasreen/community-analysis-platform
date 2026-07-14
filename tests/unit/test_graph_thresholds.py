@@ -13,16 +13,16 @@ def test_get_network_graph_thresholds():
         'shared_post': [6, 4, 10],      # u2 doesn't meet shared threshold
         'weighted_post': [0.5, 0.4, 1.25]
     })
-    
+
     G_abs, G_perc = get_network_graph(df)
-    
+
     # Only u1->u2 should be included since it has total_post=12 (>=10) and shared_post=6 (>=5)
     assert G_abs.number_of_edges() == 1
     assert G_abs.has_edge('u1', 'u2')
-    
+
     assert G_perc.number_of_edges() == 1
     assert G_perc.has_edge('u1', 'u2')
-    
+
     # Verify the weight is correctly assigned in the edge attributes
     assert G_abs['u1']['u2'][0]['shared_post'] == 6
     assert G_perc['u1']['u2'][0]['weighted_post'] == 0.5

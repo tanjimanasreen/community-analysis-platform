@@ -14,6 +14,10 @@ LONGITUDINAL_OUTPUT ?= /tmp/community-analysis-longitudinal-sample
 LONGITUDINAL_THEME_OUTPUT ?= /tmp/community-analysis-longitudinal-theme-sample
 LONGITUDINAL_REPORT ?= /tmp/community-analysis-longitudinal-artifact-index.md
 
+# Keep all sample/demo theme generation deterministic and offline.
+# A command-line override remains possible, e.g. `make run-theme-sample OFFLINE_LLM_PROVIDER=mock`.
+OFFLINE_LLM_PROVIDER := mock
+
 help:
 	@echo "Available targets:"
 	@echo "  install              - Create .venv and install runtime dependencies"
@@ -27,7 +31,7 @@ help:
 	@echo "  ingest-sample        - Build derived sample interactions without a database"
 	@echo "  run-network-sample   - Run network/community sample stages offline"
 	@echo "  run-topic-sample     - Run topic sample stages from saved network outputs"
-	@echo "  run-theme-sample     - Run theme sample from saved topic outputs"
+	@echo "  run-theme-sample     - Run theme sample from saved topic outputs using the offline mock provider"
 	@echo "  run-pipeline-sample  - Run the offline sample pipeline and artifact index"
 	@echo "  run-longitudinal-sample - Run two-month offline pipeline and transitions"
 	@echo "  verify-output-contract - Validate generated one-month sample artifact schemas"
@@ -55,8 +59,14 @@ install-dev:
 	$(PIP) install --upgrade pip
 	$(PIP) install -e .[dev]
 
+test-unit:
+	uv run --frozen --extra orchestration python -m pytest tests/unit
+
+test-integration:
+	uv run --frozen --extra orchestration python -m pytest tests/integration
+
 test:
-	$(PYTHON) -m pytest tests/unit
+	uv run --frozen --extra orchestration python -m pytest tests
 
 db-up:
 	docker compose up -d memgraph
@@ -71,7 +81,7 @@ format:
 	$(PYTHON) -m black src/ tests/
 
 lint:
-	$(PYTHON) -m flake8 src/ tests/
+	uv run pre-commit run --all-files --show-diff-on-failure
 
 validate-config:
 	$(PYTHON) -m src.cli validate-config --config $(SAMPLE_CONFIG)
@@ -86,7 +96,7 @@ run-topic-sample:
 	MPLBACKEND=Agg MPLCONFIGDIR=/tmp $(PYTHON) -m src.cli run-topics --config $(SAMPLE_CONFIG)
 
 run-theme-sample:
-	MPLBACKEND=Agg MPLCONFIGDIR=/tmp $(PYTHON) -m src.cli run-theme-analysis --config $(SAMPLE_CONFIG)
+	LLM_PROVIDER=$(OFFLINE_LLM_PROVIDER) MPLBACKEND=Agg MPLCONFIGDIR=/tmp $(PYTHON) -m src.cli run-theme-analysis --config $(SAMPLE_CONFIG)
 
 run-pipeline-sample: ingest-sample run-network-sample run-topic-sample run-theme-sample build-report
 
@@ -97,7 +107,7 @@ run-longitudinal-sample:
 	$(PYTHON) -m src.cli ingest-interactions --file tests/fixtures/longitudinal/twitter_reply_04_2017.csv --config $(LONGITUDINAL_CONFIG_04) --out $(LONGITUDINAL_OUTPUT)/interactions_04.csv --no-db
 	MPLBACKEND=Agg MPLCONFIGDIR=/tmp $(PYTHON) -m src.cli run-social-network --config $(LONGITUDINAL_CONFIG_04)
 	MPLBACKEND=Agg MPLCONFIGDIR=/tmp $(PYTHON) -m src.cli run-topics --config $(LONGITUDINAL_CONFIG_04)
-	MPLBACKEND=Agg MPLCONFIGDIR=/tmp $(PYTHON) -m src.cli run-theme-analysis --config $(LONGITUDINAL_CONFIG_04)
+	LLM_PROVIDER=$(OFFLINE_LLM_PROVIDER) MPLBACKEND=Agg MPLCONFIGDIR=/tmp $(PYTHON) -m src.cli run-theme-analysis --config $(LONGITUDINAL_CONFIG_04)
 	$(PYTHON) -m src.cli build-report --config $(LONGITUDINAL_CONFIG_04) --out $(LONGITUDINAL_REPORT)
 
 verify-output-contract:

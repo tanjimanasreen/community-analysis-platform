@@ -20,10 +20,10 @@ def test_lda_defaults():
     assert default_config.lda.alpha == 'auto'
     assert default_config.lda.eta == 'auto'
 
-def test_gpt_theme_defaults():
-    assert default_config.gpt.model == 'gpt-4o'
-    assert default_config.gpt.seed == 42
-    assert default_config.gpt.temperature == 0.0
+def test_theme_provider_defaults():
+    assert default_config.theme_provider.primary == "mock"
+    assert default_config.theme_provider.fallback is True
+    assert default_config.theme_provider.fallback_chain == ["llm7:fast", "nvidia:meta/llama3-70b-instruct"]
 
 def test_theme_similarity_defaults():
     assert default_config.similarity.embedding_model == 'paraphrase-MiniLM-L6-v2'
