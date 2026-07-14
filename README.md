@@ -68,7 +68,7 @@ To safely clear the local result cache, simply remove this directory: `rm -rf .p
 
 ## Setup
 
-Use Python 3.9 or newer. The sample Make targets assume a project-local
+Use Python 3.11.9 or newer. The sample Make targets assume a project-local
 virtual environment named `.venv`.
 
 Create and install the local environment:
@@ -93,6 +93,28 @@ make frontend-install
 `pyproject.toml` is the canonical Python dependency declaration. The
 `requirements.txt` file is only a compatibility wrapper for hosts that expect
 one.
+
+## Development Quality & CI
+
+This repository uses local `pre-commit` hooks for minimal hygiene and GitHub Actions CI as the authoritative enforcement gate.
+
+To set up local development tools and run CI steps locally, use:
+
+```bash
+uv sync --extra orchestration
+uv run pre-commit install
+uv run pre-commit run --all-files
+make test-unit
+make test-integration
+make test
+```
+
+* **Pre-commit is a local convenience**: It fixes simple issues like trailing whitespace and mixed line endings before you commit.
+* **CI is the authoritative enforcement gate**: GitHub Actions runs the exact same checks on `main` branch pushes and PRs.
+* **Black/Flake8 scope**: Broad codebase formatting with Black and Flake8 is currently deferred (Strategy A) because of extensive legacy formatting. Only low-risk hygiene hooks are active.
+* **Updating hook revisions**: Run `uv run pre-commit autoupdate` or edit `.pre-commit-config.yaml` to pin newer versions.
+* **Reproduce CI locally**: The commands above run exactly what CI runs.
+* **API Credentials**: The full test suite runs entirely offline. Network guards in `tests/conftest.py` block outbound requests. No live API credentials are required to pass tests or CI.
 
 ## Running The Offline Sample
 
