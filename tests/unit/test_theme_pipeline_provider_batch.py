@@ -1,43 +1,70 @@
-import pytest
-from unittest.mock import patch, MagicMock
-import pandas as pd
-from src.pipelines.theme_pipeline import run_theme_pipeline_from_monthly_data
+from unittest.mock import MagicMock
 
-@patch("src.pipelines.theme_pipeline.process_single_file_themes")
-@patch("src.providers.factory.build_theme_provider")
-def test_one_provider_instance_handles_batch(mock_build_theme_provider, mock_process, tmp_path):
-    """
-    Proves that exactly one provider instance is created and that the EXACT same
-    provider instance is passed to every month's batch generation call.
-    """
+import pandas as pd
+
+import src.pipelines.theme_pipeline as theme_pipeline
+
+
+def test_one_provider_instance_handles_batch(monkeypatch, tmp_path):
     monthly_data = {
         "january": pd.DataFrame({"topic": ["A"]}),
         "february": pd.DataFrame({"topic": ["B"]}),
-        "march": pd.DataFrame({"topic": ["C"]})
+        "march": pd.DataFrame({"topic": ["C"]}),
     }
-    
-    constructed_provider = MagicMock()
-    mock_build_theme_provider.return_value = constructed_provider
-    mock_process.side_effect = lambda df, provider: df
-    
-    with patch("src.pipelines.theme_pipeline.draw_community_transition_diagram"), \
-         patch("src.pipelines.theme_pipeline.get_community_transition") as mock_gct:
-        mock_gct.return_value = pd.DataFrame({"source": [], "target": [], "score": []})
-        
-        run_theme_pipeline_from_monthly_data(
-            monthly_data_dict=monthly_data,
-            year="2023",
-            content_type="messages",
-            output_dir=str(tmp_path),
-            config={"theme_provider": {"primary": "mock"}},
-            render_visuals=False
-        )
-            
-    recorded_provider_instances = [call[0][1] for call in mock_process.call_args_list]
 
-    print(f"mock_build: {mock_build_theme_provider}")
-    print(f"mock_process: {mock_process}")
-    print(f"mock_build call_count: {mock_build_theme_provider.call_count}")
-    print(f"recorded_provider_instances: {recorded_provider_instances}")
+    constructed_provider = MagicMock(name="constructed-provider")
+    build_provider = MagicMock(return_value=constructed_provider)
+    recorded_providers = []
 
-    assert mock_build_theme_provider.call_count == 1
+    def fake_process(df, provider):
+        recorded_providers.append(provider)
+        return df
+
+    monkeypatch.setattr(
+        theme_pipeline.factory,
+        "build_theme_provider",
+        build_provider,
+    )
+    monkeypatch.setattr(
+        theme_pipeline,
+        "process_single_file_themes",
+        fake_process,
+    )
+    monkeypatch.setattr(
+        theme_pipeline,
+        "get_community_transition",
+        lambda *_args, **_kwargs: pd.DataFrame(
+            {"source": [], "target": [], "score": []}
+        ),
+    )
+    monkeypatch.setattr(
+        theme_pipeline,
+        "get_path_info",
+        lambda *_args, **_kwargs: ([], [], [], []),
+    )
+    monkeypatch.setattr(
+        theme_pipeline,
+        "find_all_sankey_paths",
+        lambda *_args, **_kwargs: [],
+    )
+    monkeypatch.setattr(
+        theme_pipeline,
+        "extract_themes",
+        lambda *_args, **_kwargs: {},
+    )
+
+    theme_pipeline.run_theme_pipeline_from_monthly_data(
+        monthly_data_dict=monthly_data,
+        year="2023",
+        content_type="messages",
+        output_dir=str(tmp_path),
+        config={"theme_provider": {"primary": "mock"}},
+        render_visuals=False,
+    )
+
+    build_provider.assert_called_once()
+    assert len(recorded_providers) == len(monthly_data)
+    assert all(
+        provider is constructed_provider
+        for provider in recorded_providers
+    )

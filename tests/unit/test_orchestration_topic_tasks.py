@@ -43,7 +43,17 @@ def _sha256(content: bytes) -> str:
     return hashlib.sha256(content).hexdigest()
 
 
-def _write(path: Path, content: bytes = b"col\nval") -> ArtifactReference:
+COMMUNITY_MESSAGE_CSV = b"""community_number,messages,messages_ids,total_messages
+1,"['hello']","['m1']",1
+"""
+MATCHED_COMMUNITY_CSV = b"""abs_community,per_community,jaccard_score,members
+1,2,1.0,"['u1']"
+"""
+PARTIAL_MATCHED_COMMUNITY_CSV = b"""abs_community,absolute_members,per_community,weighted_members,jaccard_score,common_members,uncommon_members
+1,"['u1']",2,"['u1']",1.0,"['u1']","[]"
+"""
+
+def _write(path: Path, content: bytes) -> ArtifactReference:
     path.write_bytes(content)
     return ArtifactReference(
         path=str(path),
@@ -78,14 +88,15 @@ def _config(tmp_path) -> ValidatedRunConfiguration:
 
 
 def _bundle(tmp_path, *, partial=None) -> TopicInputBundle:
-    abs_ref = _write(tmp_path / "abs.csv")
-    wgt_ref = _write(tmp_path / "wgt.csv")
-    mch_ref = _write(tmp_path / "mch.csv")
+    abs_ref = _write(tmp_path / "abs.csv", COMMUNITY_MESSAGE_CSV)
+    wgt_ref = _write(tmp_path / "wgt.csv", COMMUNITY_MESSAGE_CSV)
+    mch_ref = _write(tmp_path / "mch.csv", MATCHED_COMMUNITY_CSV)
     return TopicInputBundle(
         absolute_community_messages=abs_ref,
         weighted_community_messages=wgt_ref,
         matched_communities=mch_ref,
         partial_matched_communities=partial,
+        allowed_input_roots=(str(tmp_path),),
     )
 
 
@@ -237,17 +248,15 @@ def test_explicit_standalone_input_root_accepted(mock_run, tmp_path):
     other_dir = Path(tempfile.mkdtemp())
     try:
         abs_path = other_dir / "abs.csv"
-        abs_path.write_bytes(b"col\nval")
-        ref = ArtifactReference(
-            path=str(abs_path),
-            sha256=_sha256(b"col\nval"),
-            media_type="text/csv",
-            byte_size=7,
-        )
+        weighted_path = other_dir / "weighted.csv"
+        matched_path = other_dir / "matched.csv"
+        abs_ref = _write(abs_path, COMMUNITY_MESSAGE_CSV)
+        weighted_ref = _write(weighted_path, COMMUNITY_MESSAGE_CSV)
+        matched_ref = _write(matched_path, MATCHED_COMMUNITY_CSV)
         bundle = TopicInputBundle(
-            absolute_community_messages=ref,
-            weighted_community_messages=ref,
-            matched_communities=ref,
+            absolute_community_messages=abs_ref,
+            weighted_community_messages=weighted_ref,
+            matched_communities=matched_ref,
             partial_matched_communities=None,
             allowed_input_roots=(str(other_dir),),
         )
@@ -423,7 +432,41 @@ def test_stale_files_excluded_from_output(mock_run, tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# 12. Cache key helper tests
+# 12. Required configuration and schema validation
+# ---------------------------------------------------------------------------
+
+def test_missing_required_topic_config_fails_before_domain(tmp_path):
+    bundle = _bundle(tmp_path)
+    config = ValidatedRunConfiguration(
+        config_digest="d",
+        output_root=str(tmp_path),
+        raw_config={"data_type": "twitter", "content_type": "reply", "month": "march"},
+    )
+    with patch("src.pipelines.social_network_pipeline.run_topic_phase") as mock_run:
+        with pytest.raises(PipelineError) as exc_info:
+            run_monthly_topic_phase_task.fn(bundle, config, _context(tmp_path))
+    assert exc_info.value.category == ErrorCategory.INVALID_CONFIGURATION
+    mock_run.assert_not_called()
+
+
+def test_invalid_topic_csv_schema_fails_before_domain(tmp_path):
+    invalid = _write(tmp_path / "invalid.csv", b"wrong\nvalue\n")
+    bundle = TopicInputBundle(
+        absolute_community_messages=invalid,
+        weighted_community_messages=invalid,
+        matched_communities=invalid,
+        partial_matched_communities=None,
+        allowed_input_roots=(str(tmp_path),),
+    )
+    with patch("src.pipelines.social_network_pipeline.run_topic_phase") as mock_run:
+        with pytest.raises(PipelineError) as exc_info:
+            run_monthly_topic_phase_task.fn(bundle, _config(tmp_path), _context(tmp_path))
+    assert exc_info.value.category == ErrorCategory.SCHEMA_VIOLATION
+    mock_run.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# 13. Cache key helper tests
 # ---------------------------------------------------------------------------
 
 def _make_cache_params(tmp_path, lda_config=None, provider_config=None):

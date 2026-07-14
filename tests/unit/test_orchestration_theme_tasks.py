@@ -41,7 +41,11 @@ def _sha256(content: bytes) -> str:
     return hashlib.sha256(content).hexdigest()
 
 
-def _write(path: Path, content: bytes = b"month,topic\nmarch,A") -> ArtifactReference:
+THEME_INPUT_CONTENT = b"""members,absolute_community,weighted_community,absolute_unigram_keywords,absolute_bigram_keywords,weighted_unigram_keywords,weighted_bigram_keywords
+"['u1']",1,2,"['a']","['b']","['c']","['d']"
+"""
+
+def _write(path: Path, content: bytes = THEME_INPUT_CONTENT) -> ArtifactReference:
     path.write_bytes(content)
     return ArtifactReference(
         path=str(path),
@@ -147,7 +151,7 @@ def test_missing_input_fails_before_provider(mock_build, tmp_path):
 
 @patch("src.providers.factory.build_theme_provider")
 def test_hash_mismatch_fails_before_provider(mock_build, tmp_path):
-    content = b"month,topic\nmarch,A"
+    content = THEME_INPUT_CONTENT
     p = tmp_path / "march.csv"
     p.write_bytes(content)
     bundle = ThemeInputBundle(
@@ -158,7 +162,8 @@ def test_hash_mismatch_fails_before_provider(mock_build, tmp_path):
                 media_type="text/csv",
                 byte_size=len(content),
             )
-        }
+        },
+        allowed_input_roots=(str(tmp_path),),
     )
     with pytest.raises(PipelineError) as exc_info:
         run_monthly_themes_task.fn(bundle, _config(tmp_path), _context(tmp_path))
@@ -172,7 +177,7 @@ def test_hash_mismatch_fails_before_provider(mock_build, tmp_path):
 
 @patch("src.providers.factory.build_theme_provider")
 def test_size_mismatch_fails_before_provider(mock_build, tmp_path):
-    content = b"month,topic\nmarch,A"
+    content = THEME_INPUT_CONTENT
     p = tmp_path / "march.csv"
     p.write_bytes(content)
     bundle = ThemeInputBundle(
@@ -183,7 +188,8 @@ def test_size_mismatch_fails_before_provider(mock_build, tmp_path):
                 media_type="text/csv",
                 byte_size=9999,  # wrong
             )
-        }
+        },
+        allowed_input_roots=(str(tmp_path),),
     )
     with pytest.raises(PipelineError) as exc_info:
         run_monthly_themes_task.fn(bundle, _config(tmp_path), _context(tmp_path))
@@ -202,7 +208,7 @@ def test_path_escape_fails_before_provider(mock_build, tmp_path):
 
     other = Path(tempfile.mkdtemp())
     try:
-        content = b"month,topic\nmarch,A"
+        content = THEME_INPUT_CONTENT
         p = other / "march.csv"
         p.write_bytes(content)
         bundle = ThemeInputBundle(
@@ -213,7 +219,8 @@ def test_path_escape_fails_before_provider(mock_build, tmp_path):
                     media_type="text/csv",
                     byte_size=len(content),
                 )
-            }
+            },
+            allowed_input_roots=(str(tmp_path),),
         )
         with pytest.raises(PipelineError) as exc_info:
             run_monthly_themes_task.fn(bundle, _config(tmp_path), _context(tmp_path))
@@ -234,7 +241,7 @@ def test_explicit_standalone_input_root_accepted(mock_run, tmp_path):
 
     other = Path(tempfile.mkdtemp())
     try:
-        content = b"month,topic\nmarch,A"
+        content = THEME_INPUT_CONTENT
         p = other / "march.csv"
         p.write_bytes(content)
         bundle = ThemeInputBundle(
@@ -271,7 +278,7 @@ def test_provider_factory_called_exactly_once(mock_build, mock_run, tmp_path):
     We patch both the domain function AND build_theme_provider so we can
     count factory calls while allowing the domain call to succeed.
     """
-    content = b"month,topic\nmarch,A"
+    content = THEME_INPUT_CONTENT
     p = tmp_path / "march.csv"
     p.write_bytes(content)
     bundle = ThemeInputBundle(
@@ -282,7 +289,8 @@ def test_provider_factory_called_exactly_once(mock_build, mock_run, tmp_path):
                 media_type="text/csv",
                 byte_size=len(content),
             )
-        }
+        },
+        allowed_input_roots=(str(tmp_path),),
     )
 
     def fake_run(**kw):
@@ -304,7 +312,7 @@ def test_provider_factory_called_exactly_once(mock_build, mock_run, tmp_path):
 
 @patch("src.pipelines.theme_pipeline.run_theme_pipeline_from_monthly_data")
 def test_no_provider_object_in_results(mock_run, tmp_path):
-    content = b"month,topic\nmarch,A"
+    content = THEME_INPUT_CONTENT
     p = tmp_path / "march.csv"
     p.write_bytes(content)
     bundle = ThemeInputBundle(
@@ -315,7 +323,8 @@ def test_no_provider_object_in_results(mock_run, tmp_path):
                 media_type="text/csv",
                 byte_size=len(content),
             )
-        }
+        },
+        allowed_input_roots=(str(tmp_path),),
     )
 
     mock_run.side_effect = lambda **kw: _make_theme_outputs(kw["output_dir"])
@@ -345,7 +354,7 @@ def test_no_provider_object_in_results(mock_run, tmp_path):
 @patch("src.pipelines.theme_pipeline.run_theme_pipeline_from_monthly_data")
 def test_provider_summary_schema(mock_run, tmp_path, caplog):
     import json
-    content = b"month,topic\nmarch,A"
+    content = THEME_INPUT_CONTENT
     p = tmp_path / "march.csv"
     p.write_bytes(content)
     bundle = ThemeInputBundle(
@@ -356,7 +365,8 @@ def test_provider_summary_schema(mock_run, tmp_path, caplog):
                 media_type="text/csv",
                 byte_size=len(content),
             )
-        }
+        },
+        allowed_input_roots=(str(tmp_path),),
     )
     mock_run.side_effect = lambda **kw: _make_theme_outputs(kw["output_dir"])
 
@@ -380,14 +390,14 @@ def test_provider_summary_schema(mock_run, tmp_path, caplog):
     # Assert it is an ArtifactReference
     assert result.provider_run_summary is not None
     assert isinstance(result.provider_run_summary, ArtifactReference)
-    
+
     # Assert it is under the run output root
     summary_path = Path(result.provider_run_summary.path).resolve()
     assert summary_path.is_relative_to((tmp_path / "run-test").resolve())
-    
+
     # Assert it exists
     assert summary_path.is_file()
-    
+
     # Assert media type, sha256, byte size
     assert result.provider_run_summary.media_type == "application/json"
     assert result.provider_run_summary.byte_size == summary_path.stat().st_size
@@ -420,7 +430,7 @@ def test_provider_summary_schema(mock_run, tmp_path, caplog):
     result_str = str(dataclasses.asdict(result)).lower()
     for secret in injected_secrets:
         assert secret not in result_str, f"Secret {secret} leaked into Task Result"
-        
+
     # None appears in captured logs
     log_str = caplog.text.lower()
     for secret in injected_secrets:
@@ -433,7 +443,7 @@ def test_provider_summary_schema(mock_run, tmp_path, caplog):
 
 @patch("src.pipelines.theme_pipeline.run_theme_pipeline_from_monthly_data")
 def test_provider_summary_digest_deterministic(mock_run, tmp_path):
-    content = b"month,topic\nmarch,A"
+    content = THEME_INPUT_CONTENT
     p1 = tmp_path / "m1.csv"
     p2 = tmp_path / "m2.csv"
     p1.write_bytes(content)
@@ -448,7 +458,8 @@ def test_provider_summary_digest_deterministic(mock_run, tmp_path):
                     media_type="text/csv",
                     byte_size=len(content),
                 )
-            }
+            },
+            allowed_input_roots=(str(tmp_path),),
         )
 
     mock_run.side_effect = lambda **kw: _make_theme_outputs(kw["output_dir"])
@@ -470,7 +481,7 @@ def test_provider_summary_digest_deterministic(mock_run, tmp_path):
 
 @patch("src.pipelines.theme_pipeline.run_theme_pipeline_from_monthly_data")
 def test_stale_files_excluded_from_visualizations(mock_run, tmp_path):
-    content = b"month,topic\nmarch,A"
+    content = THEME_INPUT_CONTENT
     p = tmp_path / "march.csv"
     p.write_bytes(content)
     bundle = ThemeInputBundle(
@@ -481,7 +492,8 @@ def test_stale_files_excluded_from_visualizations(mock_run, tmp_path):
                 media_type="text/csv",
                 byte_size=len(content),
             )
-        }
+        },
+        allowed_input_roots=(str(tmp_path),),
     )
 
     def fake_run(**kw):
@@ -490,29 +502,78 @@ def test_stale_files_excluded_from_visualizations(mock_run, tmp_path):
         # Create stale / unexpected files
         sankey_dir = os.path.join(out, "sankey")
         os.makedirs(sankey_dir, exist_ok=True)
-        (Path(sankey_dir) / "real.html").write_text("<html>")
+        (Path(sankey_dir) / "community_transition.html").write_text("<html>")
+        (Path(sankey_dir) / "stale-debug.png").write_bytes(b"stale")
         (Path(sankey_dir) / ".hidden").write_text("hidden")
         (Path(sankey_dir) / "debug.tmp").write_text("debug")
-        (Path(sankey_dir) / "something.py").write_text("code")
+
+        membership_dir = Path(out) / "membership_changes"
+        membership_dir.mkdir(parents=True, exist_ok=True)
+        (membership_dir / "community_changes_0.png").write_bytes(b"real")
+        (membership_dir / "old-output.html").write_text("stale")
+
+        similarity_dir = Path(out) / "theme_similarity"
+        similarity_dir.mkdir(parents=True, exist_ok=True)
+        (similarity_dir / "absolute_theme.html").write_text("<html>")
+        (similarity_dir / "unexpected.svg").write_text("stale")
 
     mock_run.side_effect = fake_run
 
     result = run_monthly_themes_task.fn(bundle, _config(tmp_path), _context(tmp_path))
 
     vis_paths = [a.path for a in result.visualizations]
-    assert any("real.html" in p for p in vis_paths), "real.html must be included"
-    assert not any(".hidden" in p for p in vis_paths), ".hidden must be excluded"
-    assert not any("debug.tmp" in p for p in vis_paths), "debug.tmp must be excluded"
-    assert not any(".py" in p for p in vis_paths), ".py files must be excluded"
+    assert any("community_transition.html" in p for p in vis_paths)
+    assert any("community_changes_0.png" in p for p in vis_paths)
+    assert any("absolute_theme.html" in p for p in vis_paths)
+    assert not any("stale-debug.png" in p for p in vis_paths)
+    assert not any("old-output.html" in p for p in vis_paths)
+    assert not any("unexpected.svg" in p for p in vis_paths)
+    assert not any(".hidden" in p for p in vis_paths)
+    assert not any("debug.tmp" in p for p in vis_paths)
 
 
 # ---------------------------------------------------------------------------
-# 12. Output uses OUTPUT_NOT_FOUND (not MISSING_REQUIRED_INPUT) for missing post-exec output
+# 12. Required configuration and schema validation
+# ---------------------------------------------------------------------------
+
+def test_missing_required_theme_config_fails_before_domain(tmp_path):
+    input_ref = _write(tmp_path / "march.csv")
+    bundle = ThemeInputBundle(
+        monthly_topic_outputs={"march": input_ref},
+        allowed_input_roots=(str(tmp_path),),
+    )
+    config = ValidatedRunConfiguration(
+        config_digest="d",
+        output_root=str(tmp_path),
+        raw_config={"content_type": "reply"},
+    )
+    with patch("src.pipelines.theme_pipeline.run_theme_pipeline_from_monthly_data") as mock_run:
+        with pytest.raises(PipelineError) as exc_info:
+            run_monthly_themes_task.fn(bundle, config, _context(tmp_path))
+    assert exc_info.value.category == ErrorCategory.INVALID_CONFIGURATION
+    mock_run.assert_not_called()
+
+
+def test_invalid_theme_csv_schema_fails_before_domain(tmp_path):
+    invalid = _write(tmp_path / "invalid.csv", b"wrong\nvalue\n")
+    bundle = ThemeInputBundle(
+        monthly_topic_outputs={"march": invalid},
+        allowed_input_roots=(str(tmp_path),),
+    )
+    with patch("src.pipelines.theme_pipeline.run_theme_pipeline_from_monthly_data") as mock_run:
+        with pytest.raises(PipelineError) as exc_info:
+            run_monthly_themes_task.fn(bundle, _config(tmp_path), _context(tmp_path))
+    assert exc_info.value.category == ErrorCategory.SCHEMA_VIOLATION
+    mock_run.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# 13. Output uses OUTPUT_NOT_FOUND (not MISSING_REQUIRED_INPUT) for missing post-exec output
 # ---------------------------------------------------------------------------
 
 @patch("src.pipelines.theme_pipeline.run_theme_pipeline_from_monthly_data")
 def test_missing_post_exec_output_uses_correct_category(mock_run, tmp_path):
-    content = b"month,topic\nmarch,A"
+    content = THEME_INPUT_CONTENT
     p = tmp_path / "march.csv"
     p.write_bytes(content)
     bundle = ThemeInputBundle(
@@ -523,7 +584,8 @@ def test_missing_post_exec_output_uses_correct_category(mock_run, tmp_path):
                 media_type="text/csv",
                 byte_size=len(content),
             )
-        }
+        },
+        allowed_input_roots=(str(tmp_path),),
     )
 
     # Domain runs but writes NO outputs
@@ -541,7 +603,7 @@ def test_missing_post_exec_output_uses_correct_category(mock_run, tmp_path):
 
 @patch("src.pipelines.theme_pipeline.run_theme_pipeline_from_monthly_data")
 def test_artifacts_under_run_directory(mock_run, tmp_path):
-    content = b"month,topic\nmarch,A"
+    content = THEME_INPUT_CONTENT
     p = tmp_path / "march.csv"
     p.write_bytes(content)
     bundle = ThemeInputBundle(
@@ -552,7 +614,8 @@ def test_artifacts_under_run_directory(mock_run, tmp_path):
                 media_type="text/csv",
                 byte_size=len(content),
             )
-        }
+        },
+        allowed_input_roots=(str(tmp_path),),
     )
     mock_run.side_effect = lambda **kw: _make_theme_outputs(kw["output_dir"])
 

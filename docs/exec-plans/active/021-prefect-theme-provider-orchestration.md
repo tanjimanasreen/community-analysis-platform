@@ -106,10 +106,10 @@ Additively extend the existing manifest to include:
 - **Run Topics + Themes**: Piped outputs directly feed the Theme inputs from the current pipeline run.
 
 ## 16. Exact Files Expected to Change
-- `src/orchestration/tasks/theme_tasks.py` (new)
-- `src/orchestration/flows/composition_flow.py` (update)
+- `src/orchestration/tasks.py` (theme task implementation)
+- `src/orchestration/composition_flow.py` (composition flow)
 - `src/orchestration/models.py` (extend schemas)
-- `src/orchestration/manifest.py` (extend logic)
+- `src/orchestration/models.py`, typed output bundles, and stage lineage artifacts (no separate manifest module)
 - `tests/unit/test_orchestration_theme_tasks.py` (new)
 
 ## 17. Tests
@@ -144,7 +144,7 @@ Additively extend the existing manifest to include:
   - **Mitigation**: The design injects config to `run_theme_pipeline_from_monthly_data` which handles provider construction correctly before looping.
 
 ## 21. Rollback Strategy
-- Remove `src/orchestration/tasks/theme_tasks.py`. The legacy execution continues unchanged.
+- Revert the theme-task changes in `src/orchestration/tasks.py`. The legacy domain execution remains available.
 
 ## 22. Deferred Work
 - MLflow provider latencies tracking.
@@ -219,19 +219,15 @@ authorization, raw prompts, raw API responses, HTTP headers, provider objects.
 The digest is deterministic: same config → same digest across runs.
 
 ### Filtered configuration
-- `validate_run_configuration_task` strips `password`, `secret`, `api_key`, and `token`
-  keys from `raw_config` before it is ever stored or passed downstream.
+- `validate_run_configuration_task` recursively removes credential-bearing keys before `raw_config` is persisted or passed downstream.
 - The theme task receives the pre-filtered `raw_config` only — no raw environment, no
   non-serialisable objects.
 
 ### Output discovery method
 - **Theme CSVs**: exact path per month `{month}_{year}_with_themes.csv`.
 - **Transition CSV**: exact path `community_transition.csv`.
-- **Visualizations**: bounded non-recursive `os.listdir` over known subdirectory names
-  `(sankey, membership_changes, theme_similarity)` with extension allowlist
-  `{.html, .png, .jpg, .jpeg, .svg}`.
-- **Excluded**: hidden files (`.*`), temp files (`.tmp`), Python files (`.py`), and any
-  unsupported extension. Path containment is re-verified per file.
+- **Visualizations**: bounded non-recursive discovery under known subdirectories with strict filename contracts: `community_transition.(html|png)`, `community_changes_<n>.png`, and `(absolute|weighted|general)_theme.(html|png)`.
+- **Excluded**: hidden, temporary, unsupported, and stale files even when they use otherwise allowed extensions. Path containment is re-verified per file.
 - **No `os.walk`**: removed; bounded `os.listdir` only.
 
 ### Missing post-execution output category
@@ -254,13 +250,15 @@ The digest is deterministic: same config → same digest across runs.
 (adds `artifact_validation.py`, hardens `tasks.py`, expands tests to 31, fixes trailing whitespace,
 adds `OUTPUT_NOT_FOUND` error category, validates secrets excluded from provider summary)
 
-
 ## Final Closure Status
-- **Status**: Completed and Hardened
-- **Verification**: Detached worktree tests passed, standalone input roots verified, secret leakage guards verified, domain boundaries strictly enforced.
+- **Status**: Implementation corrected; final repository verification required after applying the closure patch.
+- **Required gate**: `uv lock --check`, targeted orchestration tests, integration smoke tests, `make test`, `git diff --check`, and detached-worktree validation must all pass before moving this plan to `completed/`.
 
-### Final Audit Findings (2026-07-14)
-- **Theme pipeline provider reuse**: `tests/unit/test_theme_pipeline_provider_batch.py` confirms exactly 1 `CachedProvider` instance is reused for the entire batch.
-- **Result boundary safety**: Asserts that `ThemeOutputBundle` paths do not contain raw DataFrames in `test_orchestration_theme_tasks.py`.
-- **Negative-control network test**: `tests/unit/test_pipelines.py` ensures no external calls are made.
-- **Full suite passing**: 282 tests passed, 1 expected DB skip, 6 warnings, 0 failures. No contamination found.
+### Closure Patch Scope (2026-07-14)
+- Recursively sanitizes persisted run configuration and removes silent Topic/Theme required-field defaults.
+- Restricts implicit input authorization to the current pipeline-run directory; standalone roots remain explicit.
+- Applies Topic and Theme CSV schema validation before domain execution.
+- Uses strict visualization filename contracts so stale allowed-extension files are excluded.
+- Adds real Prefect Topic-only, Theme-only, and network → Topic → Theme smoke flows under `tests/integration/test_orchestration_smoke.py`.
+- Proves one provider instance is reused across every monthly theme-generation call.
+- Keeps Topic and Theme Prefect retries and task-level caches disabled.

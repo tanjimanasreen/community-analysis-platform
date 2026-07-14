@@ -112,10 +112,10 @@ Additively extend the existing manifest generation to record the topic phase lin
 - **Run network only**: The topic task is skipped entirely.
 
 ## 16. Exact Files Expected to Change
-- `src/orchestration/tasks/topic_tasks.py` (new)
-- `src/orchestration/flows/composition_flow.py` (new or updated)
+- `src/orchestration/tasks.py` (topic task implementation)
+- `src/orchestration/composition_flow.py` (composition flow)
 - `src/orchestration/models.py` (extend schemas)
-- `src/orchestration/manifest.py` (extend manifest logic)
+- `src/orchestration/models.py`, typed output bundles, and stage lineage artifacts (no separate manifest module)
 - `tests/unit/test_orchestration_topic_tasks.py` (new)
 
 ## 17. Tests
@@ -152,7 +152,7 @@ Additively extend the existing manifest generation to record the topic phase lin
   - **Mitigation**: Enforce semantic versioning in `topic_cache_key_fn`.
 
 ## 21. Rollback Strategy
-- Remove the `src/orchestration/tasks/topic_tasks.py` and revert the flow composition if necessary. The baseline `social_network_pipeline.py` remains intact.
+- Revert the topic-task changes in `src/orchestration/tasks.py` and the composition changes in `src/orchestration/composition_flow.py` if necessary. The baseline `social_network_pipeline.py` remains intact.
 
 ## 22. Deferred Work
 - Prefect Assets representation.
@@ -205,7 +205,7 @@ communities. The term `per_community_messages` is a historical alias, not a cano
 All `TopicInputBundle` artifacts are now validated before domain code runs via
 `src/orchestration/artifact_validation.py`:
 - Path exists as regular file
-- Path resolves under `context.output_root` (no traversal, no symlink escape)
+- Path resolves under the current run root `<output_root>/<pipeline_run_id>` or an explicitly authorized standalone input root (no traversal or symlink escape)
 - File extension in `{.csv, .json, .html, .png, .parquet}`
 - Byte size matches `ArtifactReference.byte_size`
 - SHA-256 matches `ArtifactReference.sha256`
@@ -244,12 +244,15 @@ Missing post-execution output → `ErrorCategory.OUTPUT_NOT_FOUND` (distinct fro
 `test(orchestration): close topic and theme verification gaps`
 (adds `artifact_validation.py`, hardens tasks.py, expands tests to 31, fixes all trailing whitespace)
 
-
 ## Final Closure Status
-- **Status**: Completed and Hardened
-- **Verification**: Detached worktree tests passed, standalone input roots verified, secret leakage guards added, domain boundaries strictly enforced.
+- **Status**: Implementation corrected; final repository verification required after applying the closure patch.
+- **Required gate**: `uv lock --check`, targeted orchestration tests, integration smoke tests, `make test`, `git diff --check`, and detached-worktree validation must all pass before moving this plan to `completed/`.
 
-### Final Audit Findings (2026-07-14)
-- **Theme pipeline provider reuse**: `tests/unit/test_theme_pipeline_provider_batch.py` confirms exactly 1 `CachedProvider` instance is reused for the entire batch.
-- **Provider construction safety**: Modified `theme_pipeline.py` to use `from src.providers import factory` for robust testing across orchestration boundaries.
-- **Full suite passing**: 282 tests passed, 1 expected DB skip, 6 warnings, 0 failures. No contamination found.
+### Closure Patch Scope (2026-07-14)
+- Recursively sanitizes persisted run configuration and removes silent Topic/Theme required-field defaults.
+- Restricts implicit input authorization to the current pipeline-run directory; standalone roots remain explicit.
+- Applies Topic and Theme CSV schema validation before domain execution.
+- Uses strict visualization filename contracts so stale allowed-extension files are excluded.
+- Adds real Prefect Topic-only, Theme-only, and network → Topic → Theme smoke flows under `tests/integration/test_orchestration_smoke.py`.
+- Proves one provider instance is reused across every monthly theme-generation call.
+- Keeps Topic and Theme Prefect retries and task-level caches disabled.

@@ -2,6 +2,7 @@ import json
 import os
 from pathlib import Path
 from typing import Any, Mapping, Optional
+import re
 
 import pandas as pd
 from prefect import task
@@ -19,6 +20,75 @@ from src.orchestration.models import (
     ValidatedRunConfiguration,
 )
 from src.orchestration.retry_policy import ErrorCategory, PipelineError
+
+# ---------------------------------------------------------------------------
+# Validation helpers
+# ---------------------------------------------------------------------------
+
+_SENSITIVE_CONFIG_KEYS = {
+    "api_key",
+    "apikey",
+    "access_token",
+    "auth",
+    "authorization",
+    "client_secret",
+    "credential",
+    "credentials",
+    "password",
+    "secret",
+    "token",
+}
+
+_SENSITIVE_CONFIG_KEY_SUFFIXES = (
+    "_api_key",
+    "_access_token",
+    "_authorization",
+    "_client_secret",
+    "_credential",
+    "_credentials",
+    "_password",
+    "_secret",
+    "_token",
+)
+
+
+def _is_sensitive_config_key(key: object) -> bool:
+    normalized = str(key).strip().lower().replace("-", "_")
+    return normalized in _SENSITIVE_CONFIG_KEYS or normalized.endswith(
+        _SENSITIVE_CONFIG_KEY_SUFFIXES
+    )
+
+
+def _sanitize_config_for_persistence(value: Any) -> Any:
+    """Return a recursively secret-free, serializable configuration value."""
+    if isinstance(value, Mapping):
+        return {
+            str(key): _sanitize_config_for_persistence(item)
+            for key, item in value.items()
+            if item is not None and not _is_sensitive_config_key(key)
+        }
+    if isinstance(value, tuple):
+        return tuple(_sanitize_config_for_persistence(item) for item in value)
+    if isinstance(value, list):
+        return [_sanitize_config_for_persistence(item) for item in value]
+    if isinstance(value, set):
+        return sorted(_sanitize_config_for_persistence(item) for item in value)
+    return value
+
+
+def _required_config_value(raw: Mapping[str, Any], key: str) -> Any:
+    value = raw.get(key)
+    if value is None or (isinstance(value, str) and not value.strip()):
+        raise PipelineError(
+            f"{key} is required in validated run configuration",
+            ErrorCategory.INVALID_CONFIGURATION,
+        )
+    return value
+
+
+def _current_run_root(context: PipelineRunContext) -> str:
+    return str((Path(context.output_root) / context.pipeline_run_id).resolve())
+
 
 # ---------------------------------------------------------------------------
 # Validation task
@@ -49,20 +119,13 @@ def validate_run_configuration_task(
         )
 
     try:
-        _ = normalize_month(config.get("month", "march"))
-    except ValueError as e:
+        _ = normalize_month(config["month"])
+    except (KeyError, ValueError) as e:
         raise PipelineError(str(e), ErrorCategory.INVALID_CONFIGURATION) from e
 
-    # Build a clean config: strip None values and any obvious secret keys.
-    clean_config = {
-        k: v
-        for k, v in config.items()
-        if v is not None
-        and "password" not in k.lower()
-        and "secret" not in k.lower()
-        and "api_key" not in k.lower()
-        and "token" not in k.lower()
-    }
+    # Persist only a recursively sanitized configuration. Runtime credentials
+    # remain environment/provider-factory concerns and never enter Prefect results.
+    clean_config = _sanitize_config_for_persistence(dict(config))
     digest = hash_mapping(clean_config)
 
     return ValidatedRunConfiguration(
@@ -300,24 +363,33 @@ def run_monthly_topic_phase_task(
     from src.pipelines.social_network_pipeline import run_topic_phase
 
     raw = config.raw_config
-    data_type = raw.get("data_type", "twitter")
-    content_type = raw.get("content_type", "reply")
-    month = str(raw.get("month", "march"))
-    year = str(raw.get("year", "2017"))
+    data_type = str(_required_config_value(raw, "data_type"))
+    content_type = str(_required_config_value(raw, "content_type"))
+    month = str(_required_config_value(raw, "month"))
+    year = str(_required_config_value(raw, "year"))
 
-    isolated_output = os.path.join(context.output_root, context.pipeline_run_id)
+    isolated_output = _current_run_root(context)
     os.makedirs(isolated_output, exist_ok=True)
 
     # --- Strict input validation before any domain code runs ---
-    allowed_roots = [context.output_root]
+    # Current-run inputs are trusted only inside this pipeline run directory.
+    # Standalone/prior-run inputs must be authorized explicitly by the bundle.
+    allowed_roots = [isolated_output]
     if getattr(input_bundle, "allowed_input_roots", None):
         allowed_roots.extend(input_bundle.allowed_input_roots)
+
+    from src.topics.topic_inputs import (
+        COMMUNITY_MESSAGE_COLUMNS,
+        MATCHED_COMMUNITY_COLUMNS,
+        PARTIAL_MATCHED_COMMUNITY_COLUMNS,
+    )
 
     validate_artifact(
         input_bundle.absolute_community_messages,
         allowed_roots,
         required=True,
         expected_media_type="text/csv",
+        required_csv_columns=COMMUNITY_MESSAGE_COLUMNS,
         label="absolute_community_messages",
     )
     validate_artifact(
@@ -325,6 +397,7 @@ def run_monthly_topic_phase_task(
         allowed_roots,
         required=True,
         expected_media_type="text/csv",
+        required_csv_columns=COMMUNITY_MESSAGE_COLUMNS,
         label="weighted_community_messages",
     )
     validate_artifact(
@@ -332,6 +405,7 @@ def run_monthly_topic_phase_task(
         allowed_roots,
         required=True,
         expected_media_type="text/csv",
+        required_csv_columns=MATCHED_COMMUNITY_COLUMNS,
         label="matched_communities",
     )
     if input_bundle.partial_matched_communities is not None:
@@ -340,6 +414,7 @@ def run_monthly_topic_phase_task(
             allowed_roots,
             required=False,
             expected_media_type="text/csv",
+            required_csv_columns=PARTIAL_MATCHED_COMMUNITY_COLUMNS,
             label="partial_matched_communities",
         )
 
@@ -450,19 +525,20 @@ def run_monthly_topic_phase_task(
 # Theme / provider phase task
 # ---------------------------------------------------------------------------
 
-# Fields that must NOT appear in the provider_run_summary.
-_PROVIDER_SUMMARY_EXCLUDED_KEYS = {
-    "api_key",
-    "token",
-    "secret",
-    "password",
-    "credential",
-    "authorization",
-    "auth",
+# Exact visualization filename contracts. Extension-only discovery is unsafe
+# because stale files with valid extensions would otherwise leak into lineage.
+_VISUALIZATION_NAME_PATTERNS = {
+    "sankey": re.compile(r"^community_transition\.(?:html|png)$"),
+    "membership_changes": re.compile(r"^community_changes_\d+\.png$"),
+    "theme_similarity": re.compile(
+        r"^(?:absolute_theme|weighted_theme|general_theme)\.(?:html|png)$"
+    ),
 }
 
-# Allowed visualization file extensions (explicit allowlist)
-_ALLOWED_VIS_EXTENSIONS = {".html", ".png", ".jpg", ".jpeg", ".svg"}
+_VISUALIZATION_MEDIA_TYPES = {
+    ".html": "text/html",
+    ".png": "image/png",
+}
 
 
 def _build_provider_summary(raw: Mapping[str, Any]) -> dict:
@@ -534,11 +610,10 @@ def run_monthly_themes_task(
     from src.pipelines.theme_pipeline import run_theme_pipeline_from_monthly_data
 
     raw = config.raw_config
-    # Required values come from validated config — no silent defaults for year/content_type.
-    content_type = str(raw.get("content_type", "reply"))
-    year = str(raw.get("year", "2017"))
+    content_type = str(_required_config_value(raw, "content_type"))
+    year = str(_required_config_value(raw, "year"))
 
-    isolated_output = os.path.join(context.output_root, context.pipeline_run_id)
+    isolated_output = _current_run_root(context)
     os.makedirs(isolated_output, exist_ok=True)
 
     # --- 1. Validate inputs BEFORE provider construction ---
@@ -548,9 +623,11 @@ def run_monthly_themes_task(
             ErrorCategory.MISSING_REQUIRED_INPUT,
         )
 
-    allowed_roots = [context.output_root]
+    allowed_roots = [isolated_output]
     if getattr(input_bundle, "allowed_input_roots", None):
         allowed_roots.extend(input_bundle.allowed_input_roots)
+
+    from src.themes.theme_inputs import LIST_COLUMNS, REQUIRED_COLUMNS
 
     for month, artifact_ref in input_bundle.monthly_topic_outputs.items():
         validate_artifact(
@@ -558,14 +635,36 @@ def run_monthly_themes_task(
             allowed_roots,
             required=True,
             expected_media_type="text/csv",
+            required_csv_columns=REQUIRED_COLUMNS,
             label=f"theme_input[{month}]",
         )
 
-    # --- 2. Load DataFrames inside the task (never serialised) ---
-    monthly_data_dict = {
-        month: pd.read_csv(ref.path)
-        for month, ref in input_bundle.monthly_topic_outputs.items()
-    }
+    # --- 2. Load and parse DataFrames inside the task (never serialised) ---
+    import ast
+
+    def _parse_list(value: Any) -> list[Any]:
+        if isinstance(value, list):
+            return value
+        if pd.isna(value) or value == "":
+            return []
+        if isinstance(value, str):
+            text = value.strip()
+            try:
+                parsed = json.loads(text)
+            except json.JSONDecodeError:
+                try:
+                    parsed = ast.literal_eval(text)
+                except (SyntaxError, ValueError):
+                    parsed = [item.strip() for item in text.split(",") if item.strip()]
+            return parsed if isinstance(parsed, list) else [parsed]
+        return [value]
+
+    monthly_data_dict: dict[str, pd.DataFrame] = {}
+    for month, ref in input_bundle.monthly_topic_outputs.items():
+        frame = pd.read_csv(ref.path)
+        for column in LIST_COLUMNS:
+            frame[column] = frame[column].apply(_parse_list)
+        monthly_data_dict[month] = frame
 
     # --- 3. Delegate to domain (provider constructed once inside the domain) ---
     run_theme_pipeline_from_monthly_data(
@@ -614,15 +713,14 @@ def run_monthly_themes_task(
         vis_dir = os.path.join(isolated_output, vis_dir_name)
         if not os.path.exists(vis_dir) or not os.path.isdir(vis_dir):
             continue
+        filename_pattern = _VISUALIZATION_NAME_PATTERNS[vis_dir_name]
         for filename in sorted(os.listdir(vis_dir)):  # sorted for determinism
-            if filename.startswith("."):
+            if not filename_pattern.fullmatch(filename):
                 continue
             file_path = os.path.join(vis_dir, filename)
             if not os.path.isfile(file_path):
                 continue
             ext = Path(filename).suffix.lower()
-            if ext not in _ALLOWED_VIS_EXTENSIONS:
-                continue  # reject unsupported extensions and temp/debug files
             # Path containment enforced below
             try:
                 Path(file_path).resolve(strict=True).relative_to(
@@ -630,13 +728,7 @@ def run_monthly_themes_task(
                 )
             except ValueError:
                 continue
-            media_type = (
-                "image/png"
-                if ext == ".png"
-                else "text/html"
-                if ext == ".html"
-                else "application/octet-stream"
-            )
+            media_type = _VISUALIZATION_MEDIA_TYPES[ext]
             visualizations.append(
                 ArtifactReference(
                     path=file_path,

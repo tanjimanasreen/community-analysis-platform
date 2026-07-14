@@ -47,6 +47,46 @@ def test_validate_run_configuration_equivalence():
     assert val_config.raw_config["data_type"] == "twitter"
     assert val_config.raw_config["month"] == "march"
     assert val_config.output_root == "/mock/out"
+
+
+def test_validate_run_configuration_recursively_removes_secrets():
+    config = {
+        "output_base_path": "/mock/out",
+        "input_path": "/mock/in.csv",
+        "data_type": "twitter",
+        "content_type": "reply",
+        "month": "march",
+        "year": "2017",
+        "creator_relation": "REPLIED_TO",
+        "spreader_relation": "REPLIED_BY",
+        "creator_node_column": "target",
+        "spreader_node_column": "target",
+        "text_node_column": "source",
+        "date_column": "created_at",
+        "OPENAI_API_KEY": "secret-a",
+        "provider": {
+            "model": "mock-model",
+            "max_tokens": 512,
+            "credentials": {
+                "token": "secret-b",
+                "password": "secret-c",
+            },
+        },
+    }
+
+    validated = validate_run_configuration_task.fn(config)
+
+    assert "OPENAI_API_KEY" not in validated.raw_config
+    assert validated.raw_config["provider"] == {
+        "model": "mock-model",
+        "max_tokens": 512,
+    }
+    serialized = repr(validated.raw_config)
+    assert "secret-a" not in serialized
+    assert "secret-b" not in serialized
+    assert "secret-c" not in serialized
+
+
 def test_validate_run_configuration_task_missing_output_dir():
     config = {"other": "val"}
     with pytest.raises(PipelineError, match="Missing required config keys"):

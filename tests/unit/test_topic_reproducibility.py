@@ -1,4 +1,3 @@
-import os
 import shutil
 from pathlib import Path
 import pytest
@@ -45,8 +44,10 @@ def test_topic_reproducibility(tmp_path, run_config):
             ["car", "truck", "bus", "car", "truck", "bus"],
             ["car", "truck", "car", "truck", "car", "truck"]
         ],
+        "messages_ids": [["m1"], ["m2"], ["m3"], ["m4"]],
+        "total_messages": [6, 6, 6, 6],
         "user_id": [10, 11, 20, 21],
-        "created_at": ["2017-03-01", "2017-03-01", "2017-03-01", "2017-03-01"]
+        "created_at": ["2017-03-01", "2017-03-01", "2017-03-01", "2017-03-01"],
     }).to_csv(abs_csv, index=False)
 
     wgt_csv = input_dir / "wgt.csv"
@@ -119,7 +120,7 @@ def test_topic_reproducibility(tmp_path, run_config):
         df1_mch = pd.read_csv(res_1.matched_communities_topics.path)
         df2_mch = pd.read_csv(res_2.matched_communities_topics.path)
         pd.testing.assert_frame_equal(df1_mch, df2_mch)
-    
+
     if res_1.partial_matched_communities_topics:
         assert res_2.partial_matched_communities_topics is not None
         df1_pmch = pd.read_csv(res_1.partial_matched_communities_topics.path)

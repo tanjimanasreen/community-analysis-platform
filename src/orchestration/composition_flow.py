@@ -122,7 +122,7 @@ def run_monthly_analysis_flow(
 
     theme_outputs = None
     if run_themes and topic_outputs and topic_outputs.matched_communities_topics:
-        month_str = str(val_config.raw_config.get("month", "march"))
+        month_str = str(val_config.raw_config["month"])
         theme_input_bundle = ThemeInputBundle(
             monthly_topic_outputs={month_str: topic_outputs.matched_communities_topics}
         )
