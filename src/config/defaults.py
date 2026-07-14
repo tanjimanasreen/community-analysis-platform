@@ -58,12 +58,24 @@ class ThemeSimilarityDefaults(BaseModel):
     default_transition_threshold: float = 0.5
 
 
+class TrackingDefaults(BaseModel):
+    enabled: bool = False
+    backend: str = "mlflow"
+    experiment_name: str = "community-analysis"
+    backend_store_path: str = ".mlflow/mlflow.db"
+    artifact_root: str = ".mlflow/artifacts"
+    nested_stage_runs: bool = True
+    failure_policy: str = "warn"
+    log_artifact_references: bool = True
+
+
 class ProjectDefaults(BaseModel):
     graph: GraphThresholds = Field(default_factory=GraphThresholds)
     louvain: LouvainDefaults = Field(default_factory=LouvainDefaults)
     lda: LDADefaults = Field(default_factory=LDADefaults)
     theme_provider: ThemeProviderDefaults = Field(default_factory=ThemeProviderDefaults)
     similarity: ThemeSimilarityDefaults = Field(default_factory=ThemeSimilarityDefaults)
+    tracking: TrackingDefaults = Field(default_factory=TrackingDefaults)
 
 
 # Module-level singleton — import this in provider and pipeline code.

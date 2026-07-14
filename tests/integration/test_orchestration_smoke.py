@@ -258,7 +258,15 @@ def _assert_result_boundary(obj, path: str = "root") -> None:
     )
     if isinstance(obj, forbidden_types):
         pytest.fail(f"Forbidden type {type(obj)!r} at {path}")
-    if type(obj).__name__ in {"Dictionary", "LdaModel", "Client", "Session"}:
+    if type(obj).__name__ in {
+        "Dictionary",
+        "LdaModel",
+        "Client",
+        "Session",
+        "MlflowClient",
+        "Run",
+        "ActiveRun",
+    }:
         pytest.fail(f"Forbidden type {type(obj)!r} at {path}")
     if isinstance(obj, (bytes, bytearray)) and len(obj) > 1024:
         pytest.fail(f"Large byte payload at {path}: {len(obj)} bytes")

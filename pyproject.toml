@@ -47,6 +47,9 @@ dev = [
 orchestration = [
     "prefect>=3.7.8,<4",
 ]
+tracking = [
+    "mlflow-skinny==3.14.0",
+]
 
 [tool.pytest.ini_options]
 minversion = "7.0"

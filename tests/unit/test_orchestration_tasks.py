@@ -1,5 +1,6 @@
 import pytest
 import os
+from pathlib import Path
 from unittest.mock import patch
 from src.orchestration.models import DatasetIdentity, ArtifactReference, PipelineRunContext, ValidatedRunConfiguration
 from src.orchestration.tasks import validate_run_configuration_task, resolve_dataset_identity_task, run_monthly_network_community_phase_task
@@ -230,3 +231,23 @@ def test_resolve_dataset_identity_task_verify_hash_mismatch(tmp_path):
             known_sha256="a"*64,
             verify_file_hash=True
         )
+
+
+def test_resolve_dataset_identity_captures_adjacent_dvc_pointer(tmp_path):
+    dataset = tmp_path / "dataset.csv"
+    dataset.write_text("value\n1\n", encoding="utf-8")
+    pointer = Path(f"{dataset}.dvc")
+    pointer.write_text(
+        "outs:\n- md5: abcdef1234567890\n  size: 8\n  path: dataset.csv\n",
+        encoding="utf-8",
+    )
+
+    identity = resolve_dataset_identity_task.fn(
+        path=str(dataset),
+        dataset_id="dataset-1",
+        dvc_revision="git-revision-1",
+    )
+
+    assert identity.dvc_pointer == str(pointer.resolve())
+    assert identity.dvc_content_hash == "abcdef1234567890"
+    assert identity.dvc_revision == "git-revision-1"

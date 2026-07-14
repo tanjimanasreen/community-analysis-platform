@@ -1,4 +1,4 @@
-.PHONY: help install install-dev test format lint db-up db-down db-check validate-config ingest-sample run-network-sample run-topic-sample run-theme-sample run-pipeline-sample run-longitudinal-sample verify-output-contract verify-longitudinal-output-contract api-smoke-test run-api demo demo-api demo-frontend frontend-install frontend-build frontend-lint run-frontend clean-generated clean-cache build-report
+.PHONY: help install install-dev test format lint mlflow-ui db-up db-down db-check validate-config ingest-sample run-network-sample run-topic-sample run-theme-sample run-pipeline-sample run-longitudinal-sample verify-output-contract verify-longitudinal-output-contract api-smoke-test run-api demo demo-api demo-frontend frontend-install frontend-build frontend-lint run-frontend clean-generated clean-cache build-report
 
 PYTHON ?= .venv/bin/python
 PYTHON_BOOTSTRAP ?= python3
@@ -22,7 +22,8 @@ help:
 	@echo "Available targets:"
 	@echo "  install              - Create .venv and install runtime dependencies"
 	@echo "  install-dev          - Create .venv and install runtime + dev dependencies"
-	@echo "  test                 - Run unit tests"
+	@echo "  test                 - Run the full test suite"
+	@echo "  mlflow-ui            - Start the local MLflow UI on 127.0.0.1:5000"
 	@echo "  format               - Format code with black"
 	@echo "  lint                 - Lint code with flake8"
 	@echo "  db-up                - Start local Memgraph instance"
@@ -60,13 +61,21 @@ install-dev:
 	$(PIP) install -e .[dev]
 
 test-unit:
-	uv run --frozen --extra orchestration python -m pytest tests/unit
+	uv run --frozen --extra orchestration --extra tracking python -m pytest tests/unit
 
 test-integration:
-	uv run --frozen --extra orchestration python -m pytest tests/integration
+	uv run --frozen --extra orchestration --extra tracking python -m pytest tests/integration
 
 test:
-	uv run --frozen --extra orchestration python -m pytest tests
+	uv run --frozen --extra orchestration --extra tracking python -m pytest tests
+
+mlflow-ui:
+	@mkdir -p .mlflow/artifacts
+	uvx --from mlflow==3.14.0 mlflow ui \
+		--host 127.0.0.1 \
+		--port 5000 \
+		--backend-store-uri "sqlite:///$$(pwd)/.mlflow/mlflow.db" \
+		--default-artifact-root "file://$$(pwd)/.mlflow/artifacts"
 
 db-up:
 	docker compose up -d memgraph
