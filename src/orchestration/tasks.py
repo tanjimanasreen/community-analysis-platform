@@ -1,8 +1,8 @@
 import json
 import os
+import re
 from pathlib import Path
 from typing import Any, Mapping, Optional
-import re
 
 import pandas as pd
 from prefect import task
@@ -90,6 +90,45 @@ def _current_run_root(context: PipelineRunContext) -> str:
     return str((Path(context.output_root) / context.pipeline_run_id).resolve())
 
 
+def _csv_row_count(path: str) -> int:
+    """Return an exact CSV row count for a validated analytical artifact."""
+    return int(len(pd.read_csv(path)))
+
+
+def _read_dvc_pointer_metadata(dataset_path: str) -> tuple[str | None, str | None]:
+    """Return the adjacent DVC pointer path and its content hash when available."""
+    pointer = Path(f"{dataset_path}.dvc")
+    if not pointer.is_file():
+        return None, None
+
+    content_hash: str | None = None
+    try:
+        import yaml
+
+        payload = yaml.safe_load(pointer.read_text(encoding="utf-8")) or {}
+        outs = payload.get("outs", []) if isinstance(payload, Mapping) else []
+        if outs and isinstance(outs[0], Mapping):
+            raw_hash = outs[0].get("md5") or outs[0].get("hash")
+            if raw_hash is not None:
+                content_hash = str(raw_hash)
+    except (OSError, ValueError, TypeError):
+        content_hash = None
+
+    if content_hash is None:
+        try:
+            pointer_text = pointer.read_text(encoding="utf-8")
+        except OSError:
+            pointer_text = ""
+        match = re.search(
+            r"(?m)^\s*(?:md5|hash):\s*['\"]?([^'\"\s]+)",
+            pointer_text,
+        )
+        if match:
+            content_hash = match.group(1)
+
+    return str(pointer.resolve()), content_hash
+
+
 # ---------------------------------------------------------------------------
 # Validation task
 # ---------------------------------------------------------------------------
@@ -151,6 +190,7 @@ def resolve_dataset_identity_task(
     known_sha256: Optional[str] = None,
     platform: Optional[str] = None,
     verify_file_hash: bool = False,
+    dvc_revision: Optional[str] = None,
 ) -> DatasetIdentity:
     """Resolves a valid dataset identity from a physical file or DVC pointer."""
     if not os.path.exists(path):
@@ -179,10 +219,15 @@ def resolve_dataset_identity_task(
             ErrorCategory.INVALID_CONFIGURATION,
         )
 
+    dvc_pointer, dvc_content_hash = _read_dvc_pointer_metadata(path)
+
     return DatasetIdentity(
         dataset_id=dataset_id,
         path=path,
         sha256=sha256,
+        dvc_pointer=dvc_pointer,
+        dvc_content_hash=dvc_content_hash,
+        dvc_revision=dvc_revision,
         platform=platform,
         identity_source=identity_source,
     )
@@ -294,6 +339,9 @@ def run_monthly_network_community_phase_task(
                 sha256=hash_file(filepath),
                 media_type="application/json" if filepath.endswith(".json") else "text/csv",
                 byte_size=os.path.getsize(filepath),
+                row_count=(
+                    _csv_row_count(filepath) if filepath.endswith(".csv") else None
+                ),
                 asset_key=key,
             )
         )
@@ -307,6 +355,9 @@ def run_monthly_network_community_phase_task(
                     sha256=hash_file(filepath),
                     media_type="application/json" if filepath.endswith(".json") else "text/csv",
                     byte_size=os.path.getsize(filepath),
+                    row_count=(
+                        _csv_row_count(filepath) if filepath.endswith(".csv") else None
+                    ),
                     asset_key=key,
                 )
             )
@@ -462,6 +513,7 @@ def run_monthly_topic_phase_task(
         sha256=hash_file(scores_path),
         media_type="text/csv",
         byte_size=os.path.getsize(scores_path),
+        row_count=_csv_row_count(scores_path),
         asset_key="lda_scores",
     )
 
@@ -475,6 +527,7 @@ def run_monthly_topic_phase_task(
             sha256=hash_file(matched_path),
             media_type="text/csv",
             byte_size=os.path.getsize(matched_path),
+            row_count=_csv_row_count(matched_path),
             asset_key="matched_communities_topics",
         )
 
@@ -488,6 +541,7 @@ def run_monthly_topic_phase_task(
             sha256=hash_file(partial_path),
             media_type="text/csv",
             byte_size=os.path.getsize(partial_path),
+            row_count=_csv_row_count(partial_path),
             asset_key="partial_matched_communities_topics",
         )
 
@@ -691,6 +745,7 @@ def run_monthly_themes_task(
                 sha256=hash_file(theme_path),
                 media_type="text/csv",
                 byte_size=os.path.getsize(theme_path),
+                row_count=_csv_row_count(theme_path),
                 asset_key=f"themes_{month}",
             )
         )
@@ -704,6 +759,7 @@ def run_monthly_themes_task(
             sha256=hash_file(transition_path),
             media_type="text/csv",
             byte_size=os.path.getsize(transition_path),
+            row_count=_csv_row_count(transition_path),
             asset_key="community_transitions",
         )
 

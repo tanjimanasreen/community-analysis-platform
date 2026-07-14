@@ -24,3 +24,15 @@ theme:
   transition_threshold: 0.5
   render_visuals: false
   similarity_model: paraphrase-MiniLM-L6-v2
+
+# Local experiment tracking is opt-in. DVC remains the dataset-versioning
+# system; Prefect remains the orchestration system.
+tracking:
+  enabled: false
+  backend: mlflow
+  experiment_name: community-analysis
+  backend_store_path: .mlflow/mlflow.db
+  artifact_root: .mlflow/artifacts
+  nested_stage_runs: true
+  failure_policy: warn
+  log_artifact_references: true

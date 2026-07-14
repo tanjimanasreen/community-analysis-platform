@@ -45,20 +45,55 @@ Then implement plans in this order:
 
 Before refactoring, preserve the current behavior with tests or fixture outputs. Do not change metric definitions, graph thresholds, Louvain defaults, LDA defaults, or GPT theme defaults unless the change is documented as a separate experiment.
 
-## Prefect Orchestration (Foundation)
+## Prefect Orchestration
 
-Prefect 3 is now available as an optional orchestration foundation. The full pipeline is not yet orchestrated, and direct domain execution remains fully supported.
+Prefect 3 orchestrates the sequential network/community, Topic, and Theme stages through `run_monthly_analysis_flow`. Direct domain execution remains supported, and analytical objects stay inside task boundaries; only typed metadata and artifact references cross Prefect boundaries.
 
 Optional local UI command:
+
 ```bash
 prefect server start
 ```
 
-Tests do not require a server. Local results and small metadata payloads are directed to a private directory isolated from the Prefect SQLite database:
+Tests do not require a dedicated server. Local result payloads are isolated from Prefect state under:
+
 ```text
 .prefect_results/
 ```
-To safely clear the local result cache, simply remove this directory: `rm -rf .prefect_results/`.
+
+To clear only the local Prefect result cache, run `rm -rf .prefect_results/`.
+
+## Local MLflow Experiment Tracking
+
+MLflow tracking is optional and disabled by default. The pipeline uses the lightweight `mlflow-skinny` client; `make mlflow-ui` launches the full pinned MLflow UI through `uvx`. DVC remains responsible for dataset versioning, Prefect remains responsible for orchestration, and MLflow records only safe experiment metadata, metrics, stage status, lineage summaries, and artifact references. Raw datasets, full analytical CSV outputs, prompts, provider responses, credentials, clients, DataFrames, graphs, and models are not uploaded to MLflow.
+
+Install the tracking extra together with orchestration support:
+
+```bash
+uv sync --frozen --extra orchestration --extra tracking
+```
+
+Enable local tracking in a run configuration:
+
+```yaml
+tracking:
+  enabled: true
+  backend: mlflow
+  experiment_name: community-analysis
+  backend_store_path: .mlflow/mlflow.db
+  artifact_root: .mlflow/artifacts
+  nested_stage_runs: true
+  failure_policy: warn
+  log_artifact_references: true
+```
+
+Start the loopback-only local UI after at least one tracked run:
+
+```bash
+make mlflow-ui
+```
+
+Then open `http://127.0.0.1:5000`. Tracking failures are warning-only and do not alter analytical success or retry behavior. Local MLflow state lives under `.mlflow/`; remove that directory only when you intentionally want to delete local experiment history.
 
 ## Final Handoff Docs
 
@@ -101,7 +136,7 @@ This repository uses local `pre-commit` hooks for minimal hygiene and GitHub Act
 To set up local development tools and run CI steps locally, use:
 
 ```bash
-uv sync --extra orchestration
+uv sync --extra orchestration --extra tracking
 uv run pre-commit install
 uv run pre-commit run --all-files
 make test-unit

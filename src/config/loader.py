@@ -172,6 +172,12 @@ def validate_run_config(config: dict[str, Any]) -> None:
         if key in thresholds and int(thresholds[key]) < 0:
             raise ValueError(f"graph_thresholds.{key} must be non-negative")
 
+    # Validate tracking shape and repository-relative local storage paths without
+    # importing MLflow or creating any local tracking state.
+    from src.tracking.factory import parse_tracking_settings
+
+    parse_tracking_settings(config, _PROJECT_ROOT)
+
 
 def validate_provider_config(config: dict[str, Any]) -> None:
     """Validate theme_provider settings in a merged config dict."""

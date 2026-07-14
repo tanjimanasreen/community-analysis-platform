@@ -57,3 +57,8 @@ Thumbs.db
 
 # Tool-local state where not already covered
 .dvc/config.local
+
+# Local MLflow experiment tracking state
+.mlflow/
+mlruns/
+mlflow.db
