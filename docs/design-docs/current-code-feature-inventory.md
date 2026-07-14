@@ -220,4 +220,3 @@ The production rebuild must preserve or explicitly replace these outputs:
 - `LDA/theme_similarity/<content_type>/absolute_theme.png`
 - `LDA/theme_similarity/<content_type>/weighted_theme.png`
 - `LDA/theme_similarity/<content_type>/general_theme.png`
-

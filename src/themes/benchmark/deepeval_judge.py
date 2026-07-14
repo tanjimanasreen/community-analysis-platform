@@ -40,7 +40,7 @@ def evaluate_with_deepeval(
 ) -> None:
     provider = get_provider(judge_provider_id, config=config, allow_live=True)
     custom_model = DeepEvalProviderAdapter(provider=provider, model_name=judge_provider_id)
-    
+
     fidelity_metric = GEval(
         name="Fidelity",
         criteria="Evaluate if the generated themes faithfully represent the provided request keywords without introducing hallucinated concepts.",
@@ -62,23 +62,23 @@ def evaluate_with_deepeval(
         model=custom_model,
         strict_mode=True,
     )
-    
+
     df = pd.read_csv(input_csv)
-    
+
     results = []
     for _, row in df.iterrows():
         input_data = f"Keywords: {row['request_keywords']}"
         actual_output = str(row['theme_json'])
-        
+
         test_case = LLMTestCase(
             input=input_data,
             actual_output=actual_output,
         )
-        
+
         fidelity_metric.measure(test_case)
         coherence_metric.measure(test_case)
         specificity_metric.measure(test_case)
-        
+
         row_dict = row.to_dict()
         # Scale GEval's 0-1 score to our 1-5 scale
         row_dict["fidelity"] = _scale_score(fidelity_metric.score)
@@ -88,9 +88,9 @@ def evaluate_with_deepeval(
         row_dict["non_redundancy"] = 3
         row_dict["usefulness"] = 3
         row_dict["overall_preference"] = 3
-        
+
         results.append(row_dict)
-        
+
     out_df = pd.DataFrame(results)
     out_path = Path(output_csv)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -102,4 +102,3 @@ def _scale_score(score: float | None) -> int:
         return 3
     # GEval returns 0 to 1
     return int(round(score * 4)) + 1
-

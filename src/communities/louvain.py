@@ -7,7 +7,7 @@ def get_louvain_community(G, weight):
     """
     communities = list(nx.community.louvain_communities(G, weight=weight, resolution=1, seed=123))
     partition = {node: idx for idx, community in enumerate(communities) for node in community}
-    
+
     return communities, partition
 
 def detect_prominent_communities(communities, min_members):
@@ -23,7 +23,7 @@ def get_prominent_communities(prominent_communities, G):
     """
     community_number = 0
     community_data = {'source': [], 'target': [], 'community_number': [], 'direction': [], 'weight': []}
-    
+
     for community in prominent_communities:
         subgraph = G.subgraph(community)
         edges = subgraph.edges(data=True)

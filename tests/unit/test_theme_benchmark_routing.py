@@ -8,7 +8,7 @@ class FailingMockProvider(BenchmarkMockProvider):
     def __init__(self, error_message="Simulated rate limit"):
         self.error_message = error_message
         super().__init__()
-        
+
     def generate(self, request):
         raise ThemeBenchmarkError(self.error_message)
 
@@ -16,7 +16,7 @@ class FailingMockProvider(BenchmarkMockProvider):
 def test_routing_provider_success():
     mock1 = BenchmarkMockProvider()
     routing = RoutingBenchmarkProvider([mock1])
-    
+
     req = ThemeBenchmarkRequest(
         example_id="1",
         keyword_mode="general",
@@ -34,9 +34,9 @@ def test_routing_provider_success():
 def test_routing_provider_fallback():
     failing = FailingMockProvider()
     success = BenchmarkMockProvider()
-    
+
     routing = RoutingBenchmarkProvider([failing, success])
-    
+
     req = ThemeBenchmarkRequest(
         example_id="1",
         keyword_mode="general",
@@ -47,19 +47,19 @@ def test_routing_provider_fallback():
         prompt_hash="123",
         input_hash="456",
     )
-    
+
     # We add a fake benchmark metadata so the fallback metadata is captured
     orig_generate = success.generate
     def patched_generate(request):
         res = orig_generate(request)
         res["_benchmark_metadata"] = {}
         return res
-        
+
     success.generate = patched_generate
-    
+
     result = routing.generate(req)
     assert result["themes"] == [{"name": "Benchmark General Theme", "keywords": ["apple", "banana"]}]
-    
+
     fallback_attempts = result["_benchmark_metadata"]["fallback_attempts"]
     assert len(fallback_attempts) == 1
     assert fallback_attempts[0]["provider_id"] == failing.metadata.provider_id
@@ -69,9 +69,9 @@ def test_routing_provider_fallback():
 def test_routing_provider_exhausted():
     failing1 = FailingMockProvider("Error 1")
     failing2 = FailingMockProvider("Error 2")
-    
+
     routing = RoutingBenchmarkProvider([failing1, failing2])
-    
+
     req = ThemeBenchmarkRequest(
         example_id="1",
         keyword_mode="general",
@@ -82,6 +82,6 @@ def test_routing_provider_exhausted():
         prompt_hash="123",
         input_hash="456",
     )
-    
+
     with pytest.raises(ThemeBenchmarkError, match="exhausted all fallbacks"):
         routing.generate(req)

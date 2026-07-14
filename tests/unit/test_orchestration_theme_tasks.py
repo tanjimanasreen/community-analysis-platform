@@ -231,7 +231,7 @@ def test_path_escape_fails_before_provider(mock_build, tmp_path):
 def test_explicit_standalone_input_root_accepted(mock_run, tmp_path):
     import tempfile
     import shutil
-    
+
     other = Path(tempfile.mkdtemp())
     try:
         content = b"month,topic\nmarch,A"
@@ -249,7 +249,7 @@ def test_explicit_standalone_input_root_accepted(mock_run, tmp_path):
             allowed_input_roots=(str(other),)
         )
         mock_run.side_effect = lambda **kw: _make_theme_outputs(kw["output_dir"])
-        
+
         # This should NOT raise an error about being outside allowed_root
         result = run_monthly_themes_task.fn(bundle, _config(tmp_path), _context(tmp_path))
         assert isinstance(result, ThemeOutputBundle)

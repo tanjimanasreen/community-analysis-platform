@@ -24,16 +24,16 @@ def calculate_sentence_similarity(themes, model=None, model_name=None):
 
 def extract_themes(df):
     general_theme = []
-    
+
     if 'general_theme_gpt' not in df.columns:
         return []
-        
+
     for idx, row in df.iterrows():
         try:
             if pd.isna(row['general_theme_gpt']):
                 general_theme.append("")
                 continue
-                
+
             theme_dict = ast.literal_eval(row['general_theme_gpt'])
             if isinstance(theme_dict, dict):
                 theme_str = ' '.join(list(theme_dict.keys()))
@@ -42,13 +42,13 @@ def extract_themes(df):
                 general_theme.append(str(theme_dict))
         except Exception:
             general_theme.append(str(row['general_theme_gpt']))
-            
+
     return general_theme
 
 def draw_theme_similarity_heatmap(themes, sim_matrix):
     if len(themes) == 0 or sim_matrix is None:
         return None
-        
+
     fig = go.Figure(data=go.Heatmap(
         z=sim_matrix,
         x=themes,
@@ -62,7 +62,7 @@ def draw_theme_similarity_heatmap(themes, sim_matrix):
         xaxis_title="Themes",
         yaxis_title="Themes",
     )
-    
+
     return fig
 
 

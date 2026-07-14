@@ -21,7 +21,7 @@ def create_test_artifact_task(content: str, output_path: str) -> ArtifactReferen
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(content)
-        
+
     sha256 = hash_file(output_path)
     return ArtifactReference(
         path=output_path,
@@ -48,7 +48,7 @@ def run_orchestration_foundation_flow(
         flow_run_id = str(ctx.flow_run.id) if ctx.flow_run else None
     except Exception:
         flow_run_id = None
-        
+
     # 2. Build DatasetIdentity
     dataset_identity = DatasetIdentity(
         dataset_id=dataset_metadata.get("dataset_id", "test-dataset"),
@@ -56,10 +56,10 @@ def run_orchestration_foundation_flow(
         sha256=dataset_metadata.get("sha256", "a" * 64),
         platform=dataset_metadata.get("platform")
     )
-    
+
     # 3. Task: Config digest
     config_digest = build_config_digest_task(config)
-    
+
     # 4. Create Run Context
     pipeline_run_id = str(uuid.uuid4())
     run_context = PipelineRunContext.create(
@@ -70,11 +70,11 @@ def run_orchestration_foundation_flow(
         datasets=[dataset_identity],
         prefect_flow_run_id=flow_run_id
     )
-    
+
     # 5. Task: Artifact creation
     artifact_path = os.path.join(output_root, "test_artifact.txt")
     artifact_ref = create_test_artifact_task("foundation test content", artifact_path)
-    
+
     # Return serializable summary
     return {
         "pipeline_run_id": run_context.pipeline_run_id,

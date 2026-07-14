@@ -257,7 +257,7 @@ def test_explicit_standalone_input_root_accepted(mock_run, tmp_path):
         mock_run.side_effect = lambda **kw: _make_topic_outputs(
             kw["output_dir"], kw.get("data_type", "twitter"), kw.get("content_type", "reply")
         )
-        
+
         # This should NOT raise an error about being outside allowed_root
         result = run_monthly_topic_phase_task.fn(bundle, cfg, ctx)
         assert isinstance(result, TopicOutputBundle)

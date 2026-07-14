@@ -1,7 +1,7 @@
 def calculate_membership_changes(communities: dict) -> dict:
     """
     Calculates existing, new, and lost members over time for a given path of communities.
-    
+
     Args:
         communities: Dictionary of month -> list of members
     """
@@ -11,7 +11,7 @@ def calculate_membership_changes(communities: dict) -> dict:
 
     for month, members in communities.items():
         current_members = set(members)
-        
+
         if len(prev_members) == 0:
             new_members = set()
             lost_members = set()
@@ -30,7 +30,7 @@ def calculate_membership_changes(communities: dict) -> dict:
             'lost_members': list(lost_members),
             'reappearing_members': list(reappearing_members)
         }
-        
+
         seen_members.update(current_members)
         prev_members = current_members
 

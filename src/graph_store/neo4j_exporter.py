@@ -2,21 +2,21 @@ import os
 import csv
 
 TELEGRAM_QUERY = """MATCH (source:User)-[r:CREATED]->(target:Message) WHERE datetime({year:$year, month: $month, day:1}) <= target.date < datetime({year:$year_next, month: $month_next, day:1})
-    Return source, target, TYPE(r) as relation 
+    Return source, target, TYPE(r) as relation
     UNION
     MATCH (source:Message)-[r:SENT_TO]->(target:Channel) WHERE datetime({year:$year, month: $month, day:1}) <= source.date < datetime({year:$year_next, month: $month_next, day:1})
     Return source, target, TYPE(r) as relation
     UNION
-    MATCH (source:User)-[r:PRODUCED]->(target:Forward_Message) WHERE datetime({year:$year, month: $month, day:1}) <= target.forwarded_date < datetime({year:$year_next, month: $month_next, day:1}) 
+    MATCH (source:User)-[r:PRODUCED]->(target:Forward_Message) WHERE datetime({year:$year, month: $month, day:1}) <= target.forwarded_date < datetime({year:$year_next, month: $month_next, day:1})
     Return source, target, TYPE(r) as relation
     UNION
-    MATCH (source:Forward_Message)-[r:FORWARDED_BY]->(target:User) WHERE datetime({year:$year, month: $month, day:1}) <= source.forwarded_date < datetime({year:$year_next, month: $month_next, day:1}) 
+    MATCH (source:Forward_Message)-[r:FORWARDED_BY]->(target:User) WHERE datetime({year:$year, month: $month, day:1}) <= source.forwarded_date < datetime({year:$year_next, month: $month_next, day:1})
     Return source, target, TYPE(r) as relation
     UNION
-    MATCH (source:Forward_Message)-[r:FORWARDED_TO]->(target:Channel) WHERE datetime({year:$year, month: $month, day:1}) <= source.forwarded_date < datetime({year:$year_next, month: $month_next, day:1}) 
+    MATCH (source:Forward_Message)-[r:FORWARDED_TO]->(target:Channel) WHERE datetime({year:$year, month: $month, day:1}) <= source.forwarded_date < datetime({year:$year_next, month: $month_next, day:1})
     Return source, target, TYPE(r) as relation
     UNION
-    MATCH (source:Channel)-[r:ORIGINATED]->(target:Forward_Message) WHERE datetime({year:$year, month: $month, day:1}) <= target.forwarded_date < datetime({year:$year_next, month: $month_next, day:1}) 
+    MATCH (source:Channel)-[r:ORIGINATED]->(target:Forward_Message) WHERE datetime({year:$year, month: $month, day:1}) <= target.forwarded_date < datetime({year:$year_next, month: $month_next, day:1})
     Return source, target, TYPE(r) as relation
 """
 
@@ -54,7 +54,7 @@ class Neo4jExporter:
 
     def export(self, query_name, year, month, output_file):
         query = self.get_query(query_name)
-        
+
         month = int(month)
         year = int(year)
         month_next = month + 1
@@ -79,12 +79,12 @@ class Neo4jExporter:
                 parameters_=params,
                 database_=self.database
             )
-        
+
             with open(output_file, 'w+', newline='') as f:
                 writer = csv.writer(f)
                 writer.writerow(['source', 'target', 'relation'])
-                
+
                 for record in records:
                     writer.writerow([record.data()['source'], record.data()['target'], record.data()['relation']])
-            
+
             return summary

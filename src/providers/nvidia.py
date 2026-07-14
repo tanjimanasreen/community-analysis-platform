@@ -75,7 +75,7 @@ class NvidiaBenchmarkProvider(BaseLLMProvider):
     ):
         if not allow_live:
             raise ThemeBenchmarkError("NVIDIA benchmark provider requires --allow-live.")
-        
+
         super().__init__()
         self.rate_limit_rpm = rate_limit_rpm
         self.model_id = model_id
@@ -90,7 +90,7 @@ class NvidiaBenchmarkProvider(BaseLLMProvider):
         self.client = client if client is not None else _create_nvidia_client(api_key=api_key)
         self.request_budget = request_budget or NvidiaRequestBudget(max_outbound_requests)
         self.sleep_fn = sleep_fn or time.sleep
-        
+
         parameters = self.config.to_cache_parameters()
         self.metadata = ProviderMetadata(
             provider_id=self.provider_id,
@@ -99,10 +99,10 @@ class NvidiaBenchmarkProvider(BaseLLMProvider):
         )
 
     def generate(self, request: ThemeBenchmarkRequest) -> dict[str, Any]:
-        # Enforce dynamic rate limit 
+        # Enforce dynamic rate limit
         sleep_duration = 60.0 / max(1, self.rate_limit_rpm)
         self.sleep_fn(sleep_duration)
-        
+
         attempts = 0
         last_error: Exception | None = None
         while attempts <= self.config.max_retries:
@@ -121,7 +121,7 @@ class NvidiaBenchmarkProvider(BaseLLMProvider):
                 }
                 if self.config.timeout is not None:
                     kwargs["timeout"] = self.config.timeout
-                
+
                 completion = self.client.chat.completions.create(**kwargs)
                 return _normalize_completion(completion, request, retries=attempts - 1)
             except Exception as exc:
@@ -130,14 +130,14 @@ class NvidiaBenchmarkProvider(BaseLLMProvider):
                 if error_type not in RETRYABLE_ERROR_TYPES or attempts > self.config.max_retries:
                     raise ThemeBenchmarkError(f"NVIDIA {error_type}: {_safe_error_message(exc)}") from exc
                 self.sleep_fn(min(2 ** (attempts - 1), 8))
-        
+
         raise ThemeBenchmarkError(f"NVIDIA request failed: {_safe_error_message(last_error)}")
 
 
     def generate_text(self, prompt: str) -> str:
         sleep_duration = 60.0 / max(1, self.rate_limit_rpm)
         self.sleep_fn(sleep_duration)
-        
+
         attempts = 0
         last_error = None
         while attempts <= self.config.max_retries:
@@ -212,7 +212,7 @@ def _normalize_completion(
         raise ThemeBenchmarkError(f"NVIDIA invalid_json: {exc}") from exc
     normalized = _normalize_theme_payload(parsed, request)
     usage = _jsonable(_attr(completion, "usage", None))
-    
+
     metadata_payload = _raw_metadata(completion, choice)
     return {
         "themes": normalized,
@@ -247,7 +247,7 @@ def _normalize_theme_payload(parsed: Any, request: ThemeBenchmarkRequest) -> lis
                 }
             )
         return normalized
-    
+
     # Fallback for LLMs that just return {"theme_name": ["kw1", "kw2"]}
     if isinstance(parsed, Mapping):
         allowed = set(request.keywords)

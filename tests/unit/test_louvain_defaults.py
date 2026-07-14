@@ -8,10 +8,10 @@ def test_louvain_community_defaults():
     G.add_edge(1, 2, weight=1.0)
     G.add_edge(2, 3, weight=1.0)
     G.add_edge(4, 5, weight=1.0)
-    
+
     communities, partition = get_louvain_community(G, 'weight')
     assert len(communities) == 2
-    
+
 def test_detect_prominent_communities():
     communities = [{1, 2, 3}, {4, 5}, {6}]
     prominent = detect_prominent_communities(communities, min_members=2)
@@ -23,7 +23,7 @@ def test_get_prominent_communities_df():
     G.add_edge(1, 2, weight=1.5)
     G.add_edge(2, 3, weight=2.0)
     prominent = [{1, 2, 3}]
-    
+
     df = get_prominent_communities(prominent, G)
     assert len(df) == 2
     assert 'community_number' in df.columns

@@ -40,6 +40,7 @@ dev = [
     "black>=22.0",
     "flake8>=6.0",
     "httpx>=0.25.0",
+    "pre-commit>=4.6.0",
 ]
 
 [project.optional-dependencies]

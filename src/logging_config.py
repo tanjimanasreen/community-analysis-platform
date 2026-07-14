@@ -14,7 +14,7 @@ def setup_logging(level=logging.INFO):
             logging.StreamHandler(sys.stdout)
         ]
     )
-    
+
     # Silence noisy third-party libraries
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("google").setLevel(logging.WARNING)

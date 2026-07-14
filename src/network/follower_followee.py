@@ -10,13 +10,13 @@ def extract_network_structure(df_network, followee_id):
     total_post = len(temp_df)
     result = temp_df['forwarder_id'].value_counts().reset_index()
     result.columns = ['target', 'shared_post']
-    
+
     # Removes the rows where the followee is also their message forwarder
     result = result[result['target'] != followee_id]
     result['source'] = followee_id
     result['total_post'] = total_post
     result['weighted_post'] = result['shared_post'] / total_post
-    
+
     return result
 
 def get_follower_followee_network(df_network):
@@ -30,18 +30,18 @@ def get_follower_followee_network(df_network):
     Input: Network dataframe
     Output: Follower-followee dataframe
     """
-    
+
     followee = list(df_network['from_id'].value_counts().index)
     results = []
-    
+
     for followee_id in followee:
         result = extract_network_structure(df_network, followee_id)
-        if len(result) > 0:  
+        if len(result) > 0:
             results.append(result)
-            
+
     if results:
         followee_follower_df = pd.concat(results, ignore_index=True)
     else:
         followee_follower_df = pd.DataFrame(columns=['target', 'shared_post', 'source', 'total_post', 'weighted_post'])
-        
+
     return followee_follower_df

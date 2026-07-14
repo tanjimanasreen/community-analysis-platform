@@ -9,12 +9,12 @@ def draw_theme_similarity_heatmap(all_community_theme: dict, output_dir: str, fi
     if not all_community_theme:
         print(f"No themes to calculate similarity for {file_name}.")
         return
-        
+
     num_sets = len(all_community_theme)
-    cols = 3 
-    rows = (num_sets + cols - 1) // cols 
-    
-    fig = make_subplots(rows=max(1, rows), cols=max(1, cols), 
+    cols = 3
+    rows = (num_sets + cols - 1) // cols
+
+    fig = make_subplots(rows=max(1, rows), cols=max(1, cols),
                         subplot_titles=[f'Community Set {i}' for i in range(1, num_sets + 1)],
                         horizontal_spacing=0.1, vertical_spacing=0.1)
 
@@ -34,14 +34,14 @@ def draw_theme_similarity_heatmap(all_community_theme: dict, output_dir: str, fi
     for index, (community_set_number, communities) in enumerate(all_community_theme.items()):
         themes = list(communities.values())
         community_names = list(communities.keys())
-        
+
         if not themes: continue
-    
+
         similarity_matrix = calculate_sentence_similarity(themes, model_name=model_name)
 
         mask = np.tril(np.ones(similarity_matrix.shape, dtype=bool))
         similarity_matrix = np.where(mask, np.nan, similarity_matrix)
-        
+
         row = index // cols + 1
         col = index % cols + 1
 
@@ -56,11 +56,11 @@ def draw_theme_similarity_heatmap(all_community_theme: dict, output_dir: str, fi
                 showscale=False,
                 texttemplate="%{z:.2f}",
                 hoverongaps=False,
-                zauto=False 
+                zauto=False
             ),
             row=row, col=col
         )
-    
+
     fig.update_layout(
         title_text=f'Cosine Similarity Score ({file_name})',
         height=max(360, rows * 360),
@@ -73,17 +73,17 @@ def draw_theme_similarity_heatmap(all_community_theme: dict, output_dir: str, fi
             len=0.3,
             yanchor="middle",
             y=0.4
-        )     
+        )
     )
 
     for trace in fig.data:
         trace['coloraxis'] = 'coloraxis'
-    
+
     os.makedirs(output_dir, exist_ok=True)
     html_file = os.path.join(output_dir, f"{file_name}.html")
     fig.write_html(html_file)
     print(f"Saved Heatmap HTML to {html_file}")
-    
+
     try:
         png_file = os.path.join(output_dir, f"{file_name}.png")
         fig.write_image(png_file, scale=2)

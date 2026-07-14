@@ -74,7 +74,7 @@ def get_provider(
 
     if provider_id.startswith("nvidia:"):
         from src.providers.nvidia import NvidiaBenchmarkProvider
-        
+
         model_id = provider_id.split(":", 1)[1].strip()
         kwargs = {
             "model_id": model_id,
@@ -90,10 +90,10 @@ def get_provider(
 
     if provider_id.startswith("routing:"):
         from src.providers.routing import RoutingBenchmarkProvider
-        
+
         chain_str = provider_id.split(":", 1)[1].strip()
         provider_strings = [p.strip() for p in chain_str.split(",") if p.strip()]
-        
+
         providers = []
         for p_str in provider_strings:
             providers.append(
@@ -108,7 +108,7 @@ def get_provider(
                     benchmark_run_dir=benchmark_run_dir,
                 )
             )
-            
+
         return RoutingBenchmarkProvider(providers)
 
     providers = {

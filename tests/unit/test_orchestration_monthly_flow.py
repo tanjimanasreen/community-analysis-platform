@@ -27,9 +27,9 @@ def test_run_monthly_network_foundation_flow(tmp_path):
     })
     input_path = tmp_path / "tiny_input.csv"
     input_df.to_csv(input_path, index=False)
-    
+
     output_root = tmp_path / "output"
-    
+
     config = {
         "output_base_path": str(output_root),
         "input_path": str(input_path),
@@ -49,19 +49,19 @@ def test_run_monthly_network_foundation_flow(tmp_path):
             "min_members": 1
         }
     }
-    
+
     # Execution
     result = run_monthly_network_foundation_flow(
         config=config,
         dataset_path=str(input_path),
         dataset_id="tiny_test"
     )
-    
+
     # Verify outputs
     assert result.context.pipeline_run_id is not None
     assert result.context.output_root == str(output_root)
     assert len(result.context.dataset_identities) == 1
-    
+
     assert len(result.artifacts) > 0
     # ensure everything is written into the pipeline output root
     for art in result.artifacts:

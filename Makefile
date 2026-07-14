@@ -59,8 +59,14 @@ install-dev:
 	$(PIP) install --upgrade pip
 	$(PIP) install -e .[dev]
 
-test:
+test-unit:
 	uv run --frozen --extra orchestration python -m pytest tests/unit
+
+test-integration:
+	uv run --frozen --extra orchestration python -m pytest tests/integration
+
+test:
+	uv run --frozen --extra orchestration python -m pytest tests
 
 db-up:
 	docker compose up -d memgraph
@@ -75,7 +81,7 @@ format:
 	$(PYTHON) -m black src/ tests/
 
 lint:
-	$(PYTHON) -m flake8 src/ tests/
+	uv run pre-commit run --all-files --show-diff-on-failure
 
 validate-config:
 	$(PYTHON) -m src.cli validate-config --config $(SAMPLE_CONFIG)

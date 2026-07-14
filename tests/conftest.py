@@ -9,11 +9,11 @@ class BlockedSocketError(Exception):
 def guarded_connect(self, address):
     # address can be a tuple (host, port) or a string (for unix sockets)
     host = address[0] if isinstance(address, tuple) else address
-    
+
     # Allow local unix sockets and localhost
     if isinstance(host, str) and (
-        host == "127.0.0.1" 
-        or host == "localhost" 
+        host == "127.0.0.1"
+        or host == "localhost"
         or host == "::1"
         or host.startswith("/") # Unix domain socket
     ):
@@ -28,4 +28,3 @@ def block_network_access(monkeypatch):
     Allows loopback (127.0.0.1, localhost) for local database tests.
     """
     monkeypatch.setattr(socket.socket, "connect", guarded_connect)
-

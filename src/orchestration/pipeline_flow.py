@@ -29,24 +29,24 @@ def run_monthly_network_foundation_flow(
     Orchestrates the monthly network and community phase.
     """
     configure_prefect_results_dir()
-    
+
     pipeline_run_id = str(uuid.uuid4())
-    
+
     try:
         ctx = get_run_context()
         prefect_flow_run_id = str(ctx.flow_run.id)
     except Exception:
         prefect_flow_run_id = str(uuid.uuid4())
-        
+
     val_config = validate_run_configuration_task(config=config)
-    
+
     dataset_ident = resolve_dataset_identity_task(
         path=dataset_path,
         dataset_id=dataset_id,
         known_sha256=known_sha256,
         platform=platform
     )
-    
+
     context = PipelineRunContext.create(
         pipeline_run_id=pipeline_run_id,
         git_commit="unknown",
@@ -55,13 +55,13 @@ def run_monthly_network_foundation_flow(
         datasets=[dataset_ident],
         prefect_flow_run_id=prefect_flow_run_id
     )
-    
+
     artifacts = run_monthly_network_community_phase_task(
         dataset_identity=dataset_ident,
         config=val_config,
         context=context
     )
-    
+
     return PipelineRunResult(
         context=context,
         artifacts=artifacts

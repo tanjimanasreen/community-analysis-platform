@@ -22,19 +22,19 @@ def remove_urls(text):
 
 def detect_english(source_txt, index):
     """
-    This function 
+    This function
     """
     if len(source_txt.strip()) == 0:
         return False
     else:
-        try: 
+        try:
             result_lang = detect(source_txt)
-            
+
             if result_lang == target_lang:
-                return True 
+                return True
 
             else:
-                
+
                 return False
         except langdetect.lang_detect_exception.LangDetectException:
             # print(source_txt, index)
@@ -42,7 +42,7 @@ def detect_english(source_txt, index):
 
 def lang_detection(df_data):
     df_data['text_translated'] = df_data['text'].apply(remove_urls)
-    
+
     for ind, row in df_data.iterrows():
         df_data.at[ind, 'is_english'] = detect_english(row['text_translated'], ind)
 

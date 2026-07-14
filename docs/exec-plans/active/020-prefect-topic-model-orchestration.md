@@ -14,7 +14,7 @@ Design an implementation-ready architecture to introduce Prefect orchestration a
 - **Signature**:
   ```python
   def run_topic_phase(
-      abs_community_messages: pd.DataFrame, 
+      abs_community_messages: pd.DataFrame,
       per_community_messages: pd.DataFrame,
       matched_df: pd.DataFrame,
       partial_matched: pd.DataFrame,

@@ -98,4 +98,3 @@ pytest tests/unit
 |---|---|
 | 2026-06-23 | Created plan from inspected thesis code. |
 | 2026-06-24 | Completed all milestones. Extracted defaults to config, built CLI skeleton, updated Makefile, and created mock data fixture. |
-

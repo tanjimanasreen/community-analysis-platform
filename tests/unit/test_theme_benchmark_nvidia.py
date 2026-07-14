@@ -30,7 +30,7 @@ class MockCompletion:
 class MockCompletionsAPI:
     def __init__(self, response_content):
         self.response_content = response_content
-    
+
     def create(self, **kwargs):
         if "error" in self.response_content:
             raise Exception(self.response_content)

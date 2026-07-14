@@ -114,7 +114,7 @@ class GeminiBenchmarkProvider(BaseLLMProvider):
         # Enforce dynamic rate limit
         sleep_duration = 60.0 / max(1, self.rate_limit_rpm)
         self.sleep_fn(sleep_duration)
-        
+
         attempts = 0
         last_error: Exception | None = None
         while attempts <= self.config.max_retries:
@@ -147,7 +147,7 @@ class GeminiBenchmarkProvider(BaseLLMProvider):
     def generate_text(self, prompt: str) -> str:
         sleep_duration = 60.0 / max(1, self.rate_limit_rpm)
         self.sleep_fn(sleep_duration)
-        
+
         attempts = 0
         last_error = None
         while attempts <= self.config.max_retries:

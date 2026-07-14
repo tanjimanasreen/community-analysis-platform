@@ -13,7 +13,7 @@ def translate_english(source_txt, index):
     if len(source_txt.strip()) == 0:
         return source_txt, False
     else:
-        try: 
+        try:
             time.sleep(1)
             translated_text = google_translator.translate(source_txt)
             print("translated till", index)
@@ -27,10 +27,10 @@ def lang_translate(data):
 
     data['is_translated'] = False
     df_translate = data[data.is_english == False]
-    
+
     for ind, row in df_translate.iterrows():
         df_translate.at[ind, 'text_translated'], df_translate.at[ind, 'is_translated'] = translate_english(row['text_translated'], ind)
-    
+
     data.update(df_translate)
 
     return data
