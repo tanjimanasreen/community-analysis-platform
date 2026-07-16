@@ -24,11 +24,11 @@ def calculate_membership_changes(communities: dict) -> dict:
             reappearing_members = (current_members & seen_members) - prev_members
 
         results[month] = {
-            'members': list(current_members),
-            'existing_members': list(existing_members),
-            'new_members': list(new_members),
-            'lost_members': list(lost_members),
-            'reappearing_members': list(reappearing_members)
+            "members": list(current_members),
+            "existing_members": list(existing_members),
+            "new_members": list(new_members),
+            "lost_members": list(lost_members),
+            "reappearing_members": list(reappearing_members),
         }
 
         seen_members.update(current_members)

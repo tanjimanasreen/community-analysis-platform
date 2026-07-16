@@ -1,7 +1,7 @@
 import pandas as pd
 import networkx as nx
 
-from src.config.defaults import default_config
+from src.config.defaults import DEFAULT_CONFIG
 
 
 def get_network_graph(
@@ -18,13 +18,20 @@ def get_network_graph(
     """
     data = followee_follower_df.copy()
     if min_total_post is None:
-        min_total_post = default_config.graph.min_total_post
+        min_total_post = DEFAULT_CONFIG.graph.min_total_post
     if min_shared_post is None:
-        min_shared_post = default_config.graph.min_shared_post
+        min_shared_post = DEFAULT_CONFIG.graph.min_shared_post
 
-    data = data[(data['total_post'] >= min_total_post) & (data['shared_post'] >= min_shared_post)]
+    data = data[
+        (data["total_post"] >= min_total_post)
+        & (data["shared_post"] >= min_shared_post)
+    ]
 
-    G_absolute = nx.from_pandas_edgelist(data, "source", "target", ["shared_post"], create_using=nx.MultiDiGraph())
-    G_percentage = nx.from_pandas_edgelist(data, "source", "target", ["weighted_post"], create_using=nx.MultiDiGraph())
+    G_absolute = nx.from_pandas_edgelist(
+        data, "source", "target", ["shared_post"], create_using=nx.MultiDiGraph()
+    )
+    G_percentage = nx.from_pandas_edgelist(
+        data, "source", "target", ["weighted_post"], create_using=nx.MultiDiGraph()
+    )
 
     return G_absolute, G_percentage

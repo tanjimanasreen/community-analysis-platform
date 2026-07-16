@@ -6,11 +6,18 @@ from typing import Any, Mapping
 
 import pandas as pd
 
-from src.themes.benchmark.contracts import read_json, read_jsonl, stable_hash, write_json
+from src.themes.benchmark.contracts import (
+    read_json,
+    read_jsonl,
+    stable_hash,
+    write_json,
+)
 from src.themes.benchmark.dataset import benchmark_root, load_requests
 
 
-def compute_summary(results_by_provider: Mapping[str, list[dict[str, Any]]]) -> pd.DataFrame:
+def compute_summary(
+    results_by_provider: Mapping[str, list[dict[str, Any]]],
+) -> pd.DataFrame:
     rows = []
     for provider_id, results in results_by_provider.items():
         total = len(results)
@@ -26,15 +33,21 @@ def compute_summary(results_by_provider: Mapping[str, list[dict[str, Any]]]) -> 
                 "error_rate": len(errors) / total if total else 0.0,
                 "cache_hit_rate": len(cache_hits) / total if total else 0.0,
                 "avg_theme_count": sum(theme_counts) / total if total else 0.0,
-                "avg_duplicate_theme_count": sum(duplicate_counts) / total if total else 0.0,
+                "avg_duplicate_theme_count": (
+                    sum(duplicate_counts) / total if total else 0.0
+                ),
                 "avg_keyword_coverage": sum(coverage) / total if total else 0.0,
-                "total_retries": sum(int(result.get("retries", 0)) for result in results),
+                "total_retries": sum(
+                    int(result.get("retries", 0)) for result in results
+                ),
             }
         )
     return pd.DataFrame(rows)
 
 
-def write_summary(path: Path, results_by_provider: Mapping[str, list[dict[str, Any]]]) -> pd.DataFrame:
+def write_summary(
+    path: Path, results_by_provider: Mapping[str, list[dict[str, Any]]]
+) -> pd.DataFrame:
     summary = compute_summary(results_by_provider)
     path.parent.mkdir(parents=True, exist_ok=True)
     summary.to_csv(path, index=False)
@@ -61,7 +74,11 @@ def write_phase2_reports(
     splits = splits or ["development", "pilot", "heldout"]
 
     split_example_ids = {
-        split: {str(row["example_id"]) for row in dataset if row.get("split", "heldout") == split}
+        split: {
+            str(row["example_id"])
+            for row in dataset
+            if row.get("split", "heldout") == split
+        }
         for split in splits
     }
     request_rows = [
@@ -70,7 +87,9 @@ def write_phase2_reports(
         if request.keyword_mode == "general"
         and any(request.example_id in ids for ids in split_example_ids.values())
     ]
-    request_by_id = {stable_hash(request.to_dict()): request for request in request_rows}
+    request_by_id = {
+        stable_hash(request.to_dict()): request for request in request_rows
+    }
 
     rows = []
     report_providers: dict[str, Any] = {}
@@ -94,7 +113,11 @@ def write_phase2_reports(
 
     combined_rows = []
     for provider_id in providers:
-        combined_rows.append(_combine_provider_rows(provider_id, [row for row in rows if row["provider_id"] == provider_id]))
+        combined_rows.append(
+            _combine_provider_rows(
+                provider_id, [row for row in rows if row["provider_id"] == provider_id]
+            )
+        )
 
     scores_dir = root / "scores"
     scores_dir.mkdir(parents=True, exist_ok=True)
@@ -127,7 +150,11 @@ def write_phase2_reports(
     }
     report_path = scores_dir / "phase2_evaluation_report.json"
     write_json(report_path, report)
-    return {"scorecard_path": scorecard_path, "report_path": report_path, "report": report}
+    return {
+        "scorecard_path": scorecard_path,
+        "report_path": report_path,
+        "report": report,
+    }
 
 
 def _themes(result: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -176,12 +203,21 @@ def _provider_phase2_metrics(
     expected = len(request_ids)
     cached = len(cache_by_request)
     quota_failures = sum(1 for error in raw_errors.values() if _is_quota_error(error))
-    non_quota_failures = sum(1 for error in raw_errors.values() if error and not _is_quota_error(error))
-    observed_results = [_cache_record_to_metric_result(row, request_by_id[str(row["request_id"])]) for row in cache_by_request.values()]
+    non_quota_failures = sum(
+        1 for error in raw_errors.values() if error and not _is_quota_error(error)
+    )
+    observed_results = [
+        _cache_record_to_metric_result(row, request_by_id[str(row["request_id"])])
+        for row in cache_by_request.values()
+    ]
     coverages = [_keyword_coverage(result) for result in observed_results]
     duplicate_counts = [_duplicate_theme_count(result) for result in observed_results]
     theme_counts = [_theme_count(result) for result in observed_results]
-    latencies = sorted(float(row.get("latency_ms") or 0.0) for row in cache_by_request.values() if row.get("latency_ms") is not None)
+    latencies = sorted(
+        float(row.get("latency_ms") or 0.0)
+        for row in cache_by_request.values()
+        if row.get("latency_ms") is not None
+    )
     usage_totals = _usage_totals(cache_by_request.values())
     complete = cached == expected
     return {
@@ -197,7 +233,9 @@ def _provider_phase2_metrics(
         "non_quota_failure_count": non_quota_failures,
         "avg_keyword_coverage": sum(coverages) / len(coverages) if coverages else None,
         "unsupported_keyword_rate": 0.0 if observed_results else None,
-        "avg_duplicate_theme_count": sum(duplicate_counts) / len(duplicate_counts) if duplicate_counts else None,
+        "avg_duplicate_theme_count": (
+            sum(duplicate_counts) / len(duplicate_counts) if duplicate_counts else None
+        ),
         "theme_count_distribution": dict(Counter(theme_counts)),
         "latency_p50_ms": _percentile(latencies, 0.50),
         "latency_p95_ms": _percentile(latencies, 0.95),
@@ -212,7 +250,9 @@ def _provider_phase2_metrics(
     }
 
 
-def _cache_record_to_metric_result(cache_record: Mapping[str, Any], request) -> dict[str, Any]:
+def _cache_record_to_metric_result(
+    cache_record: Mapping[str, Any], request
+) -> dict[str, Any]:
     return {
         "normalized_theme_json": cache_record.get("normalized_theme_json") or {},
         "request_keywords": request.keywords,
@@ -221,7 +261,9 @@ def _cache_record_to_metric_result(cache_record: Mapping[str, Any], request) -> 
     }
 
 
-def _raw_errors(root: Path, split: str, provider_id: str, request_ids: set[str]) -> dict[str, str | None]:
+def _raw_errors(
+    root: Path, split: str, provider_id: str, request_ids: set[str]
+) -> dict[str, str | None]:
     raw_dir = root / "raw" / provider_id / split
     errors: dict[str, str | None] = {}
     for request_id in request_ids:
@@ -253,8 +295,12 @@ def _usage_totals(records) -> dict[str, int]:
     for record in records:
         metadata = record.get("benchmark_metadata") or {}
         usage = metadata.get("usage") or {}
-        totals["input_tokens"] += int(usage.get("total_input_tokens") or usage.get("input_tokens") or 0)
-        totals["output_tokens"] += int(usage.get("total_output_tokens") or usage.get("output_tokens") or 0)
+        totals["input_tokens"] += int(
+            usage.get("total_input_tokens") or usage.get("input_tokens") or 0
+        )
+        totals["output_tokens"] += int(
+            usage.get("total_output_tokens") or usage.get("output_tokens") or 0
+        )
         totals["total_tokens"] += int(usage.get("total_tokens") or 0)
     return totals
 
@@ -271,7 +317,9 @@ def _percentile(values: list[float], percentile: float) -> float | None:
     return values[lower] * (1 - weight) + values[upper] * weight
 
 
-def _combine_provider_rows(provider_id: str, rows: list[Mapping[str, Any]]) -> dict[str, Any]:
+def _combine_provider_rows(
+    provider_id: str, rows: list[Mapping[str, Any]]
+) -> dict[str, Any]:
     # Ensure we only combine the splits we have; if heldout is the only one, we use it.
     request_count = sum(int(row["request_count"]) for row in rows)
     successes = sum(int(row["successful_cached_results"]) for row in rows)
@@ -286,11 +334,21 @@ def _combine_provider_rows(provider_id: str, rows: list[Mapping[str, Any]]) -> d
         "schema_validity_rate": successes / request_count if request_count else 0.0,
         "provider_failure_rate": missing / request_count if request_count else 0.0,
         "quota_failure_count": sum(int(row["quota_failure_count"]) for row in rows),
-        "non_quota_failure_count": sum(int(row["non_quota_failure_count"]) for row in rows),
-        "avg_keyword_coverage": _weighted_mean(rows, "avg_keyword_coverage", "successful_cached_results"),
-        "unsupported_keyword_rate": _weighted_mean(rows, "unsupported_keyword_rate", "successful_cached_results"),
-        "avg_duplicate_theme_count": _weighted_mean(rows, "avg_duplicate_theme_count", "successful_cached_results"),
-        "theme_count_distribution": dict(_sum_counters(row["theme_count_distribution"] for row in rows)),
+        "non_quota_failure_count": sum(
+            int(row["non_quota_failure_count"]) for row in rows
+        ),
+        "avg_keyword_coverage": _weighted_mean(
+            rows, "avg_keyword_coverage", "successful_cached_results"
+        ),
+        "unsupported_keyword_rate": _weighted_mean(
+            rows, "unsupported_keyword_rate", "successful_cached_results"
+        ),
+        "avg_duplicate_theme_count": _weighted_mean(
+            rows, "avg_duplicate_theme_count", "successful_cached_results"
+        ),
+        "theme_count_distribution": dict(
+            _sum_counters(row["theme_count_distribution"] for row in rows)
+        ),
         "latency_p50_ms": None,
         "latency_p95_ms": None,
         "input_tokens": sum(int(row["input_tokens"]) for row in rows),
@@ -300,11 +358,15 @@ def _combine_provider_rows(provider_id: str, rows: list[Mapping[str, Any]]) -> d
         "complete": missing == 0,
         "comparison_eligible": missing == 0,
         "cache_replay_status": "complete_cached" if missing == 0 else "incomplete",
-        "unresolved_request_ids": [item for row in rows for item in row.get("unresolved_request_ids", [])],
+        "unresolved_request_ids": [
+            item for row in rows for item in row.get("unresolved_request_ids", [])
+        ],
     }
 
 
-def _weighted_mean(rows: list[Mapping[str, Any]], value_key: str, weight_key: str) -> float | None:
+def _weighted_mean(
+    rows: list[Mapping[str, Any]], value_key: str, weight_key: str
+) -> float | None:
     weighted_sum = 0.0
     total_weight = 0
     for row in rows:
@@ -317,7 +379,9 @@ def _weighted_mean(rows: list[Mapping[str, Any]], value_key: str, weight_key: st
     return weighted_sum / total_weight if total_weight else None
 
 
-def _completion_status(report_providers: Mapping[str, Mapping[str, Mapping[str, Any]]]) -> str:
+def _completion_status(
+    report_providers: Mapping[str, Mapping[str, Mapping[str, Any]]],
+) -> str:
     incomplete = [
         f"{split}:{provider_id}"
         for split, providers in report_providers.items()

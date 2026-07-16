@@ -19,7 +19,6 @@ from src.themes.benchmark.contracts import (
 from src.themes.benchmark.dataset import benchmark_root, load_requests
 from src.themes.benchmark.metrics import _keyword_coverage
 
-
 PHASE3_PROVIDERS = [
     "keyword_baseline",
     "gemini__gemini-3.1-flash-lite",
@@ -58,11 +57,18 @@ def prepare_phase3_review(
         for request in requests
         if request.keyword_mode == "general"
     }
-    cache_by_provider = {provider: _cache_by_example(root, provider, request_by_example) for provider in PHASE3_PROVIDERS}
+    cache_by_provider = {
+        provider: _cache_by_example(root, provider, request_by_example)
+        for provider in PHASE3_PROVIDERS
+    }
     complete_by_split = _shared_complete_examples(dataset, cache_by_provider)
-    development_examples = sorted(complete_by_split["development"], key=lambda row: row["example_id"])
+    development_examples = sorted(
+        complete_by_split["development"], key=lambda row: row["example_id"]
+    )
     pilot_candidates = complete_by_split["pilot"]
-    selected_pilot = _select_examples(pilot_candidates, target_pilot_examples, seed="phase3-paired-review-v1")
+    selected_pilot = _select_examples(
+        pilot_candidates, target_pilot_examples, seed="phase3-paired-review-v1"
+    )
     selected = development_examples + selected_pilot
     selected_ids = {row["example_id"] for row in selected}
 
@@ -73,7 +79,11 @@ def prepare_phase3_review(
         if split == "heldout":
             excluded.append({"example_id": example_id, "reason": "heldout_sealed"})
         elif split == "pilot" and example_id not in selected_ids:
-            reason = "not_shared_complete" if row not in pilot_candidates else "deterministic_pilot_downsample"
+            reason = (
+                "not_shared_complete"
+                if row not in pilot_candidates
+                else "deterministic_pilot_downsample"
+            )
             excluded.append({"example_id": example_id, "reason": reason})
 
     cohort_items = []
@@ -114,14 +124,21 @@ def prepare_phase3_review(
         "items": cohort_items,
         "excluded_examples": excluded,
     }
-    cohort["cohort_hash"] = stable_hash({key: value for key, value in cohort.items() if key != "cohort_hash"})
+    cohort["cohort_hash"] = stable_hash(
+        {key: value for key, value in cohort.items() if key != "cohort_hash"}
+    )
 
     review_dir = root / "review" / "phase3"
     review_dir.mkdir(parents=True, exist_ok=True)
     write_json(review_dir / "cohort_manifest.json", cohort)
-    review_rows, blinding_rows = _build_review_rows(cohort_items, dataset, request_by_example, cache_by_provider, cohort_id)
+    review_rows, blinding_rows = _build_review_rows(
+        cohort_items, dataset, request_by_example, cache_by_provider, cohort_id
+    )
     pd.DataFrame(review_rows).to_csv(review_dir / "review_items.csv", index=False)
-    write_json(review_dir / "blinding_key.json", {"schema_version": 1, "cohort_id": cohort_id, "items": blinding_rows})
+    write_json(
+        review_dir / "blinding_key.json",
+        {"schema_version": 1, "cohort_id": cohort_id, "items": blinding_rows},
+    )
     review_manifest = {
         "schema_version": 1,
         "cohort_id": cohort_id,
@@ -129,16 +146,26 @@ def prepare_phase3_review(
         "review_item_count": len(review_rows),
         "reviewer_facing_artifact": "review_items.csv",
         "private_mapping_artifact": "blinding_key.json",
-        "contains_provider_names_in_reviewer_file": _contains_provider_leakage(review_dir / "review_items.csv"),
+        "contains_provider_names_in_reviewer_file": _contains_provider_leakage(
+            review_dir / "review_items.csv"
+        ),
     }
     write_json(review_dir / "review_manifest.json", review_manifest)
     _write_review_instructions(review_dir / "review_instructions.md")
     if review_manifest["contains_provider_names_in_reviewer_file"]:
-        raise ThemeBenchmarkError("Reviewer-facing Phase 3 export contains provider identity leakage.")
-    return {"review_dir": review_dir, "cohort": cohort, "review_manifest": review_manifest}
+        raise ThemeBenchmarkError(
+            "Reviewer-facing Phase 3 export contains provider identity leakage."
+        )
+    return {
+        "review_dir": review_dir,
+        "cohort": cohort,
+        "review_manifest": review_manifest,
+    }
 
 
-def import_phase3_review(output_base_path: str | Path, run_id: str, scores_path: str | Path) -> dict[str, Any]:
+def import_phase3_review(
+    output_base_path: str | Path, run_id: str, scores_path: str | Path
+) -> dict[str, Any]:
     root = benchmark_root(output_base_path, run_id)
     review_dir = root / "review" / "phase3"
     items = pd.read_csv(review_dir / "review_items.csv")
@@ -162,7 +189,10 @@ def import_phase3_review(output_base_path: str | Path, run_id: str, scores_path:
                     "review_item_id": review_item_id,
                     "provider_id": provider,
                     "alias": alias,
-                    **{column: float(row[f"{alias}_{column}"]) for column in REVIEW_SCORE_COLUMNS},
+                    **{
+                        column: float(row[f"{alias}_{column}"])
+                        for column in REVIEW_SCORE_COLUMNS
+                    },
                     "preferred": str(row["preferred_output"]) == alias,
                 }
             )
@@ -172,7 +202,12 @@ def import_phase3_review(output_base_path: str | Path, run_id: str, scores_path:
     summary = _review_summary(unblinded, frame)
     summary_path = review_dir / "review_summary.json"
     write_json(summary_path, summary)
-    return {"summary_path": summary_path, "imported_path": imported_path, "row_count": len(frame), "summary": summary}
+    return {
+        "summary_path": summary_path,
+        "imported_path": imported_path,
+        "row_count": len(frame),
+        "summary": summary,
+    }
 
 
 def prepare_stability_subset(
@@ -186,12 +221,23 @@ def prepare_stability_subset(
     manifest = read_json(root / "manifest.json")
     dataset = read_jsonl(root / "dataset.jsonl")
     requests = load_requests(output_base_path, run_id)
-    request_by_example = {request.example_id: request for request in requests if request.keyword_mode == "general"}
-    cache_by_provider = {provider: _cache_by_example(root, provider, request_by_example) for provider in STABILITY_PROVIDERS}
+    request_by_example = {
+        request.example_id: request
+        for request in requests
+        if request.keyword_mode == "general"
+    }
+    cache_by_provider = {
+        provider: _cache_by_example(root, provider, request_by_example)
+        for provider in STABILITY_PROVIDERS
+    }
     candidates = [
-        row for row in dataset
+        row
+        for row in dataset
         if row.get("split") == "development"
-        and all(row["example_id"] in cache_by_provider[provider] for provider in STABILITY_PROVIDERS)
+        and all(
+            row["example_id"] in cache_by_provider[provider]
+            for provider in STABILITY_PROVIDERS
+        )
     ]
     selected = _select_examples(candidates, target_examples, seed=subset_id)
     subset = {
@@ -207,24 +253,34 @@ def prepare_stability_subset(
         "example_ids": [row["example_id"] for row in selected],
         "source_hashes": manifest.get("source_artifact_hashes", {}),
     }
-    subset["subset_hash"] = stable_hash({key: value for key, value in subset.items() if key != "subset_hash"})
+    subset["subset_hash"] = stable_hash(
+        {key: value for key, value in subset.items() if key != "subset_hash"}
+    )
     path = root / "scores" / "stability_subset.json"
     write_json(path, subset)
     return {"path": path, "subset": subset}
 
 
-def summarize_stability(output_base_path: str | Path, run_id: str, *, subset_id: str = "phase3-stability-v1") -> dict[str, Any]:
+def summarize_stability(
+    output_base_path: str | Path, run_id: str, *, subset_id: str = "phase3-stability-v1"
+) -> dict[str, Any]:
     root = benchmark_root(output_base_path, run_id)
     subset = read_json(root / "scores" / "stability_subset.json")
     requests = load_requests(output_base_path, run_id)
-    request_by_example = {request.example_id: request for request in requests if request.keyword_mode == "general"}
+    request_by_example = {
+        request.example_id: request
+        for request in requests
+        if request.keyword_mode == "general"
+    }
     rows = []
     summary_rows = []
     for provider in STABILITY_PROVIDERS:
         provider_rows = []
         for example_id in subset["example_ids"]:
             reps = {
-                rep: _cache_record_for(root, provider, request_by_example[example_id], rep)
+                rep: _cache_record_for(
+                    root, provider, request_by_example[example_id], rep
+                )
                 for rep in (0, 1, 2)
             }
             available = {rep: row for rep, row in reps.items() if row is not None}
@@ -232,7 +288,9 @@ def summarize_stability(output_base_path: str | Path, run_id: str, *, subset_id:
             row = {
                 "provider_id": provider,
                 "example_id": example_id,
-                "available_repetitions": ",".join(str(rep) for rep in sorted(available)),
+                "available_repetitions": ",".join(
+                    str(rep) for rep in sorted(available)
+                ),
                 **metrics,
             }
             rows.append(row)
@@ -243,9 +301,15 @@ def summarize_stability(output_base_path: str | Path, run_id: str, *, subset_id:
                 "provider_id": provider,
                 "examples": len(provider_rows),
                 "complete_examples": len(complete),
-                "mean_exact_json_agreement": _mean([row["exact_json_agreement"] for row in complete]),
-                "mean_keyword_jaccard": _mean([row["keyword_jaccard_agreement"] for row in complete]),
-                "completion_status": "complete" if len(complete) == len(provider_rows) else "partial",
+                "mean_exact_json_agreement": _mean(
+                    [row["exact_json_agreement"] for row in complete]
+                ),
+                "mean_keyword_jaccard": _mean(
+                    [row["keyword_jaccard_agreement"] for row in complete]
+                ),
+                "completion_status": (
+                    "complete" if len(complete) == len(provider_rows) else "partial"
+                ),
             }
         )
     scores_dir = root / "scores"
@@ -256,7 +320,11 @@ def summarize_stability(output_base_path: str | Path, run_id: str, *, subset_id:
         "subset_id": subset_id,
         "subset_hash": subset["subset_hash"],
         "providers": summary_rows,
-        "completion_status": "complete" if all(row["completion_status"] == "complete" for row in summary_rows) else "partial",
+        "completion_status": (
+            "complete"
+            if all(row["completion_status"] == "complete" for row in summary_rows)
+            else "partial"
+        ),
         "notes": "Phase 3 stability only; unequal coverage is labeled partial and no winner is selected.",
     }
     report_path = scores_dir / "phase3_stability_report.json"
@@ -264,8 +332,13 @@ def summarize_stability(output_base_path: str | Path, run_id: str, *, subset_id:
     return {"report_path": report_path, "report": report}
 
 
-def _cache_by_example(root: Path, provider: str, request_by_example: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
-    request_id_to_example = {stable_hash(request.to_dict()): example_id for example_id, request in request_by_example.items()}
+def _cache_by_example(
+    root: Path, provider: str, request_by_example: Mapping[str, Any]
+) -> dict[str, dict[str, Any]]:
+    request_id_to_example = {
+        stable_hash(request.to_dict()): example_id
+        for example_id, request in request_by_example.items()
+    }
     rows = {}
     for record in read_jsonl(root / "cache" / f"{provider}.jsonl"):
         example_id = request_id_to_example.get(record.get("request_id"))
@@ -274,24 +347,38 @@ def _cache_by_example(root: Path, provider: str, request_by_example: Mapping[str
     return rows
 
 
-def _shared_complete_examples(dataset: list[dict[str, Any]], cache_by_provider: Mapping[str, Mapping[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+def _shared_complete_examples(
+    dataset: list[dict[str, Any]], cache_by_provider: Mapping[str, Mapping[str, Any]]
+) -> dict[str, list[dict[str, Any]]]:
     by_split = {"development": [], "pilot": []}
     for row in dataset:
         split = row.get("split")
         if split not in by_split:
             continue
         example_id = str(row["example_id"])
-        if all(example_id in cache_by_provider[provider] for provider in PHASE3_PROVIDERS):
+        if all(
+            example_id in cache_by_provider[provider] for provider in PHASE3_PROVIDERS
+        ):
             by_split[str(split)].append(row)
     return by_split
 
 
-def _select_examples(candidates: list[Mapping[str, Any]], target: int, *, seed: str) -> list[Mapping[str, Any]]:
+def _select_examples(
+    candidates: list[Mapping[str, Any]], target: int, *, seed: str
+) -> list[Mapping[str, Any]]:
     strata: dict[tuple[str, str, str], list[Mapping[str, Any]]] = defaultdict(list)
     for row in candidates:
         strata[(_member_bin(row), _keyword_bin(row), str(row.get("month")))].append(row)
     for rows in strata.values():
-        rows.sort(key=lambda row: stable_hash({"seed": seed, "example_id": row["example_id"], "input_hash": row["input_hash"]}))
+        rows.sort(
+            key=lambda row: stable_hash(
+                {
+                    "seed": seed,
+                    "example_id": row["example_id"],
+                    "input_hash": row["input_hash"],
+                }
+            )
+        )
     selected = []
     keys = sorted(strata)
     while len(selected) < min(target, len(candidates)):
@@ -307,17 +394,23 @@ def _select_examples(candidates: list[Mapping[str, Any]], target: int, *, seed: 
     return sorted(selected, key=lambda row: str(row["example_id"]))
 
 
-def _build_review_rows(cohort_items, dataset, request_by_example, cache_by_provider, cohort_id):
+def _build_review_rows(
+    cohort_items, dataset, request_by_example, cache_by_provider, cohort_id
+):
     data_by_id = {row["example_id"]: row for row in dataset}
     review_rows = []
     key_rows = []
     permutations = list(itertools.permutations(PHASE3_PROVIDERS))
-    for index, item in enumerate(sorted(cohort_items, key=lambda row: row["example_id"])):
+    for index, item in enumerate(
+        sorted(cohort_items, key=lambda row: row["example_id"])
+    ):
         example_id = item["example_id"]
         aliases = ("A", "B", "C")
         provider_order = permutations[index % len(permutations)]
         alias_to_provider = dict(zip(aliases, provider_order))
-        review_item_id = stable_hash({"cohort_id": cohort_id, "example_id": example_id})[:16]
+        review_item_id = stable_hash(
+            {"cohort_id": cohort_id, "example_id": example_id}
+        )[:16]
         row = {
             "review_item_id": review_item_id,
             "example_id": example_id,
@@ -325,13 +418,29 @@ def _build_review_rows(cohort_items, dataset, request_by_example, cache_by_provi
             "ordered_lda_keywords": ", ".join(request_by_example[example_id].keywords),
         }
         for alias, provider in alias_to_provider.items():
-            row[f"output_{alias}"] = json.dumps(cache_by_provider[provider][example_id]["normalized_theme_json"], sort_keys=True)
+            row[f"output_{alias}"] = json.dumps(
+                cache_by_provider[provider][example_id]["normalized_theme_json"],
+                sort_keys=True,
+            )
         for alias in aliases:
             for column in REVIEW_SCORE_COLUMNS:
                 row[f"{alias}_{column}"] = ""
-        row.update({"preferred_output": "", "reviewer_confidence": "", "reviewer_id": "", "comments": ""})
+        row.update(
+            {
+                "preferred_output": "",
+                "reviewer_confidence": "",
+                "reviewer_id": "",
+                "comments": "",
+            }
+        )
         review_rows.append(row)
-        key_rows.append({"review_item_id": review_item_id, "example_id": example_id, "alias_to_provider": alias_to_provider})
+        key_rows.append(
+            {
+                "review_item_id": review_item_id,
+                "example_id": example_id,
+                "alias_to_provider": alias_to_provider,
+            }
+        )
     return review_rows, key_rows
 
 
@@ -348,22 +457,38 @@ medium, or high.
 
 
 def _validate_review_scores(frame: pd.DataFrame, known_items: set[str]) -> None:
-    required = {"reviewer_id", "review_item_id", "preferred_output", "reviewer_confidence"}
+    required = {
+        "reviewer_id",
+        "review_item_id",
+        "preferred_output",
+        "reviewer_confidence",
+    }
     for alias in ("A", "B", "C"):
         required.update(f"{alias}_{column}" for column in REVIEW_SCORE_COLUMNS)
     missing = sorted(required.difference(frame.columns))
     if missing:
-        raise ThemeBenchmarkError(f"Phase 3 review import missing required columns: {missing}")
+        raise ThemeBenchmarkError(
+            f"Phase 3 review import missing required columns: {missing}"
+        )
     if frame[["reviewer_id", "review_item_id"]].duplicated().any():
-        raise ThemeBenchmarkError("Duplicate Phase 3 review submission for reviewer/item.")
+        raise ThemeBenchmarkError(
+            "Duplicate Phase 3 review submission for reviewer/item."
+        )
     provider_tokens = ("keyword_baseline", "gemini", "llm7", "gpt4o", "gpt-4o", "mock")
-    if any(token in frame.astype(str).to_string(index=False).lower() for token in provider_tokens):
-        raise ThemeBenchmarkError("Phase 3 review import contains provider identity text.")
+    if any(
+        token in frame.astype(str).to_string(index=False).lower()
+        for token in provider_tokens
+    ):
+        raise ThemeBenchmarkError(
+            "Phase 3 review import contains provider identity text."
+        )
     for _, row in frame.iterrows():
         if not str(row["reviewer_id"]).strip():
             raise ThemeBenchmarkError("Phase 3 review import has missing reviewer_id.")
         if str(row["review_item_id"]) not in known_items:
-            raise ThemeBenchmarkError(f"Unknown Phase 3 review item: {row['review_item_id']}")
+            raise ThemeBenchmarkError(
+                f"Unknown Phase 3 review item: {row['review_item_id']}"
+            )
         if str(row["preferred_output"]) not in PREFERENCE_VALUES:
             raise ThemeBenchmarkError("Invalid preferred_output value.")
         if str(row["reviewer_confidence"]) not in CONFIDENCE_VALUES:
@@ -372,16 +497,23 @@ def _validate_review_scores(frame: pd.DataFrame, known_items: set[str]) -> None:
         for column in REVIEW_SCORE_COLUMNS:
             values = pd.to_numeric(frame[f"{alias}_{column}"], errors="coerce")
             if values.isna().any():
-                raise ThemeBenchmarkError("Partial Phase 3 reviews are not accepted by this importer.")
+                raise ThemeBenchmarkError(
+                    "Partial Phase 3 reviews are not accepted by this importer."
+                )
             if ((values < 1) | (values > 5)).any():
-                raise ThemeBenchmarkError(f"Phase 3 score column {alias}_{column} must contain values from 1 to 5.")
+                raise ThemeBenchmarkError(
+                    f"Phase 3 score column {alias}_{column} must contain values from 1 to 5."
+                )
 
 
 def _review_summary(unblinded: pd.DataFrame, raw: pd.DataFrame) -> dict[str, Any]:
     provider_summary = {}
     for provider, group in unblinded.groupby("provider_id"):
         provider_summary[provider] = {
-            column: {"mean": float(group[column].mean()), "median": float(group[column].median())}
+            column: {
+                "mean": float(group[column].mean()),
+                "median": float(group[column].median()),
+            }
             for column in REVIEW_SCORE_COLUMNS
         }
     reviewers = sorted(raw["reviewer_id"].astype(str).unique())
@@ -392,12 +524,18 @@ def _review_summary(unblinded: pd.DataFrame, raw: pd.DataFrame) -> dict[str, Any
         "reviewers": reviewers,
         "provider_summary": provider_summary,
         "preferred_provider_counts": dict(preferred),
-        "inter_rater_reliability": "unavailable_single_reviewer" if len(reviewers) == 1 else "not_implemented_for_phase3_closeout",
+        "inter_rater_reliability": (
+            "unavailable_single_reviewer"
+            if len(reviewers) == 1
+            else "not_implemented_for_phase3_closeout"
+        ),
         "bootstrap_95ci_method": "deterministic placeholder; compute after real complete reviews",
     }
 
 
-def _cache_record_for(root: Path, provider: str, request, repetition_index: int) -> dict[str, Any] | None:
+def _cache_record_for(
+    root: Path, provider: str, request, repetition_index: int
+) -> dict[str, Any] | None:
     request_id = stable_hash(request.to_dict())
     matches = []
     for record in read_jsonl(root / "cache" / f"{provider}.jsonl"):
@@ -412,14 +550,22 @@ def _cache_record_for(root: Path, provider: str, request, repetition_index: int)
 
 
 def _stability_metrics(reps: Mapping[int, Mapping[str, Any]]) -> dict[str, Any]:
-    values = [json.dumps(row.get("normalized_theme_json", {}), sort_keys=True) for row in reps.values()]
+    values = [
+        json.dumps(row.get("normalized_theme_json", {}), sort_keys=True)
+        for row in reps.values()
+    ]
     complete = set(reps) == {0, 1, 2}
     exact = 1.0 if complete and len(set(values)) == 1 else 0.0 if complete else None
-    keyword_sets = [_keywords(row.get("normalized_theme_json", {})) for row in reps.values()]
+    keyword_sets = [
+        _keywords(row.get("normalized_theme_json", {})) for row in reps.values()
+    ]
     jaccards = []
     for left, right in itertools.combinations(keyword_sets, 2):
         jaccards.append(len(left & right) / len(left | right) if left or right else 1.0)
-    counts = [len((row.get("normalized_theme_json", {}) or {}).get("themes", [])) for row in reps.values()]
+    counts = [
+        len((row.get("normalized_theme_json", {}) or {}).get("themes", []))
+        for row in reps.values()
+    ]
     return {
         "complete_repetitions": complete,
         "exact_json_agreement": exact,
@@ -459,4 +605,7 @@ def _variance(values):
 
 def _contains_provider_leakage(path: Path) -> bool:
     text = path.read_text(encoding="utf-8").lower()
-    return any(token in text for token in ("keyword_baseline", "gemini", "llm7", "gpt4o", "gpt-4o", "mock"))
+    return any(
+        token in text
+        for token in ("keyword_baseline", "gemini", "llm7", "gpt4o", "gpt-4o", "mock")
+    )

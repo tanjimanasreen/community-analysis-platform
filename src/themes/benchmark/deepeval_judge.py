@@ -39,7 +39,9 @@ def evaluate_with_deepeval(
     judge_provider_id: str,
 ) -> None:
     provider = get_provider(judge_provider_id, config=config, allow_live=True)
-    custom_model = DeepEvalProviderAdapter(provider=provider, model_name=judge_provider_id)
+    custom_model = DeepEvalProviderAdapter(
+        provider=provider, model_name=judge_provider_id
+    )
 
     fidelity_metric = GEval(
         name="Fidelity",
@@ -68,7 +70,7 @@ def evaluate_with_deepeval(
     results = []
     for _, row in df.iterrows():
         input_data = f"Keywords: {row['request_keywords']}"
-        actual_output = str(row['theme_json'])
+        actual_output = str(row["theme_json"])
 
         test_case = LLMTestCase(
             input=input_data,
@@ -96,6 +98,7 @@ def evaluate_with_deepeval(
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_df.to_csv(out_path, index=False)
     print(f"DeepEval judge evaluation completed. Results saved to {out_path}")
+
 
 def _scale_score(score: float | None) -> int:
     if score is None:

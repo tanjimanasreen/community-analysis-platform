@@ -44,6 +44,10 @@ class JsonlResponseCache:
         return self.records.get(cache_key)
 
     def put(self, cache_key: str, record: dict[str, Any]) -> None:
-        stored = {"schema_version": CACHE_SCHEMA_VERSION, "cache_key": cache_key, **record}
+        stored = {
+            "schema_version": CACHE_SCHEMA_VERSION,
+            "cache_key": cache_key,
+            **record,
+        }
         self.records[cache_key] = stored
         append_jsonl(self.path, stored)

@@ -22,8 +22,11 @@ from src.themes.benchmark.dataset import (
     build_requests,
     examples_from_theme_inputs,
 )
-from src.themes.theme_inputs import ThemeInputError, build_theme_input_dir, load_theme_inputs
-
+from src.themes.theme_inputs import (
+    ThemeInputError,
+    build_theme_input_dir,
+    load_theme_inputs,
+)
 
 INVENTORY_RUN_ID = "artifact-inventory"
 FROZEN_DATASET_SCHEMA_VERSION = 1
@@ -38,7 +41,9 @@ def inventory_artifacts(
     configs = list(source_configs or [config])
     sources = _load_unique_sources(configs)
     inventory = _build_inventory(config, sources)
-    root = benchmark_root(str(config.get("output_base_path", "results/")), INVENTORY_RUN_ID)
+    root = benchmark_root(
+        str(config.get("output_base_path", "results/")), INVENTORY_RUN_ID
+    )
     write_json(root / "inventory.json", inventory)
     return {"output_dir": root, "inventory": inventory}
 
@@ -59,9 +64,13 @@ def freeze_dataset(
     if min_examples < 1:
         raise ThemeBenchmarkError("min_examples must be at least 1.")
     if target_examples < min_examples:
-        raise ThemeBenchmarkError("target_examples must be greater than or equal to min_examples.")
+        raise ThemeBenchmarkError(
+            "target_examples must be greater than or equal to min_examples."
+        )
     if max_examples < target_examples:
-        raise ThemeBenchmarkError("max_examples must be greater than or equal to target_examples.")
+        raise ThemeBenchmarkError(
+            "max_examples must be greater than or equal to target_examples."
+        )
 
     output_dir = benchmark_root(str(config.get("output_base_path", "results/")), run_id)
     configs = list(source_configs or [config])
@@ -139,7 +148,9 @@ def freeze_dataset(
     }
     _guard_existing_frozen_run(output_dir, manifest, overwrite=overwrite)
     write_jsonl(output_dir / "dataset.jsonl", frozen_examples)
-    write_jsonl(output_dir / "requests.jsonl", [request.to_dict() for request in requests])
+    write_jsonl(
+        output_dir / "requests.jsonl", [request.to_dict() for request in requests]
+    )
     write_json(output_dir / "reference" / "gpt4o_config.json", prompt_reference)
     write_json(output_dir / "inventory.json", inventory)
     write_json(output_dir / "manifest.json", manifest)
@@ -254,7 +265,11 @@ def _build_inventory(
                 year=params["year"],
             )
             valid_count = len(examples)
-            filename = str(manifest.get("filenames", {}).get(str(month), f"{month}_{params['year']}.csv"))
+            filename = str(
+                manifest.get("filenames", {}).get(
+                    str(month), f"{month}_{params['year']}.csv"
+                )
+            )
             path = root / filename
             file_hash = _sha256_file(path)
             source_artifact_hashes[str(path)] = file_hash
@@ -283,8 +298,12 @@ def _build_inventory(
                 "theme_input_schema_version": manifest.get("schema_version"),
                 "months": months,
                 "row_count": sum(month["row_count"] for month in months),
-                "valid_example_count": sum(month["valid_example_count"] for month in months),
-                "rejected_row_count": sum(month["rejected_row_count"] for month in months),
+                "valid_example_count": sum(
+                    month["valid_example_count"] for month in months
+                ),
+                "rejected_row_count": sum(
+                    month["rejected_row_count"] for month in months
+                ),
             }
         )
 
@@ -300,11 +319,7 @@ def _build_inventory(
         "source_artifact_hashes": source_artifact_hashes,
     }
     inventory["inventory_hash"] = stable_hash(
-        {
-            key: value
-            for key, value in inventory.items()
-            if key != "inventory_hash"
-        }
+        {key: value for key, value in inventory.items() if key != "inventory_hash"}
     )
     return inventory
 
@@ -344,7 +359,9 @@ def _examples_from_sources(sources: Sequence[dict[str, Any]]) -> list[dict[str, 
     return rows
 
 
-def _select_stratified(examples: list[dict[str, Any]], target_count: int, seed: int) -> list[dict[str, Any]]:
+def _select_stratified(
+    examples: list[dict[str, Any]], target_count: int, seed: int
+) -> list[dict[str, Any]]:
     strata: dict[tuple[Any, ...], list[dict[str, Any]]] = {}
     for example in examples:
         strata.setdefault(_stratum_key(example), []).append(example)

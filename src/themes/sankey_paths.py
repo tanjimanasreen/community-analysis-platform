@@ -1,11 +1,14 @@
 from collections import defaultdict
 import pandas as pd
 
+
 def get_path_info(matched_df: pd.DataFrame):
     if matched_df.empty:
         return [], [], [], []
 
-    all_community = list(matched_df['start_month_community']) + list(matched_df['end_month_community'])
+    all_community = list(matched_df["start_month_community"]) + list(
+        matched_df["end_month_community"]
+    )
     all_community = list(set(all_community))
 
     source_ind = []
@@ -13,11 +16,12 @@ def get_path_info(matched_df: pd.DataFrame):
     score = []
 
     for _, row in matched_df.iterrows():
-        source_ind.append(all_community.index(row['start_month_community']))
-        target_ind.append(all_community.index(row['end_month_community']))
-        score.append(row['jaccard_score'])
+        source_ind.append(all_community.index(row["start_month_community"]))
+        target_ind.append(all_community.index(row["end_month_community"]))
+        score.append(row["jaccard_score"])
 
     return source_ind, target_ind, score, all_community
+
 
 def build_graph(source_ind, target_ind):
     graph = defaultdict(list)
@@ -37,6 +41,7 @@ def build_graph(source_ind, target_ind):
     end_nodes = [node for node in out_degrees if out_degrees[node] == 0]
     return graph, start_nodes, end_nodes
 
+
 def dfs_all_paths(graph, start, end, path=None):
     if path is None:
         path = []
@@ -54,6 +59,7 @@ def dfs_all_paths(graph, start, end, path=None):
             for new_path in new_paths:
                 paths.append(new_path)
     return paths
+
 
 def find_all_sankey_paths(source_ind, target_ind, all_community):
     graph, start_nodes, end_nodes = build_graph(source_ind, target_ind)

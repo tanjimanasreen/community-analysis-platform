@@ -8,8 +8,7 @@ from src.themes.benchmark.contracts import ProviderMetadata, ThemeBenchmarkReque
 class ThemeBenchmarkProvider(Protocol):
     metadata: ProviderMetadata
 
-    def generate(self, request: ThemeBenchmarkRequest) -> dict:
-        ...
+    def generate(self, request: ThemeBenchmarkRequest) -> dict: ...
 
 
 from src.providers.mock import BenchmarkMockProvider, KeywordBaselineProvider
@@ -26,7 +25,9 @@ def get_provider(
     request_budget=None,
     benchmark_run_dir=None,
 ) -> ThemeBenchmarkProvider:
-    provider_prefix = provider_id.split(":", 1)[0] if ":" in provider_id else provider_id
+    provider_prefix = (
+        provider_id.split(":", 1)[0] if ":" in provider_id else provider_id
+    )
     rate_limit_rpm = None
     if config and "providers" in config and provider_prefix in config["providers"]:
         rate_limit_rpm = config["providers"][provider_prefix].get("rate_limit_rpm")

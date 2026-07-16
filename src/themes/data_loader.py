@@ -6,7 +6,6 @@ from typing import Any
 
 import pandas as pd
 
-
 KEYWORD_COLUMNS = (
     "absolute_unigram_keywords",
     "absolute_bigram_keywords",

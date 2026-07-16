@@ -8,7 +8,6 @@ from typing import Any, Mapping
 
 import pandas as pd
 
-
 SCHEMA_VERSION = 1
 
 ABSOLUTE_COMMUNITY_MESSAGES_FILE = "absolute_community_messages.csv"
@@ -73,7 +72,12 @@ def build_topic_input_dir(
     year: str | int | None = None,
 ) -> Path:
     params = dict(config_or_params or {})
-    base = output_base_path or params.get("output_base_path") or params.get("output_dir") or "results/"
+    base = (
+        output_base_path
+        or params.get("output_base_path")
+        or params.get("output_dir")
+        or "results/"
+    )
     data = data_type or params.get("data_type", "twitter")
     content = content_type or params.get("content_type", "reply")
     month_value = str(month if month is not None else params.get("month", "march"))
@@ -144,7 +148,9 @@ def save_topic_inputs(
             "partial_matched_communities": PARTIAL_MATCHED_COMMUNITIES_FILE,
         },
     }
-    (output_dir / MANIFEST_FILE).write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    (output_dir / MANIFEST_FILE).write_text(
+        json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
+    )
     return output_dir
 
 
@@ -173,7 +179,9 @@ def load_topic_inputs(
         )
 
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    expected = _expected_metadata(config_or_params, output_base_path, data_type, content_type, month, year)
+    expected = _expected_metadata(
+        config_or_params, output_base_path, data_type, content_type, month, year
+    )
     _validate_manifest(manifest, expected, manifest_path)
 
     bundle = TopicInputBundle(
@@ -200,9 +208,19 @@ def load_topic_inputs(
 
 
 def validate_topic_inputs(bundle: TopicInputBundle) -> None:
-    _ensure_columns(bundle.absolute_community_messages, COMMUNITY_MESSAGE_COLUMNS, ABSOLUTE_COMMUNITY_MESSAGES_FILE)
-    _ensure_columns(bundle.weighted_community_messages, COMMUNITY_MESSAGE_COLUMNS, WEIGHTED_COMMUNITY_MESSAGES_FILE)
-    _ensure_columns(bundle.matched_communities, MATCHED_COMMUNITY_COLUMNS, MATCHED_COMMUNITIES_FILE)
+    _ensure_columns(
+        bundle.absolute_community_messages,
+        COMMUNITY_MESSAGE_COLUMNS,
+        ABSOLUTE_COMMUNITY_MESSAGES_FILE,
+    )
+    _ensure_columns(
+        bundle.weighted_community_messages,
+        COMMUNITY_MESSAGE_COLUMNS,
+        WEIGHTED_COMMUNITY_MESSAGES_FILE,
+    )
+    _ensure_columns(
+        bundle.matched_communities, MATCHED_COMMUNITY_COLUMNS, MATCHED_COMMUNITIES_FILE
+    )
     _ensure_columns(
         bundle.partial_matched_communities,
         PARTIAL_MATCHED_COMMUNITY_COLUMNS,
@@ -215,9 +233,13 @@ def validate_topic_inputs(bundle: TopicInputBundle) -> None:
         (PARTIAL_MATCHED_COMMUNITIES_FILE, bundle.partial_matched_communities),
     ]:
         for column in LIST_COLUMNS.intersection(df.columns):
-            invalid = [value for value in df[column].tolist() if not isinstance(value, list)]
+            invalid = [
+                value for value in df[column].tolist() if not isinstance(value, list)
+            ]
             if invalid:
-                raise TopicInputError(f"{name} column {column!r} must contain list values.")
+                raise TopicInputError(
+                    f"{name} column {column!r} must contain list values."
+                )
 
 
 def _write_dataframe(df: pd.DataFrame, path: Path, required_columns: list[str]) -> None:
@@ -225,7 +247,10 @@ def _write_dataframe(df: pd.DataFrame, path: Path, required_columns: list[str]) 
     for column in required_columns:
         if column not in frame.columns:
             frame[column] = pd.Series(dtype="object")
-    frame = frame[required_columns + [column for column in frame.columns if column not in required_columns]]
+    frame = frame[
+        required_columns
+        + [column for column in frame.columns if column not in required_columns]
+    ]
     for column in LIST_COLUMNS.intersection(frame.columns):
         frame[column] = frame[column].apply(_json_dumps)
     frame.to_csv(path, index=False)
@@ -308,7 +333,9 @@ def _expected_metadata(
     }
 
 
-def _validate_manifest(manifest: Mapping[str, Any], expected: Mapping[str, str], path: Path) -> None:
+def _validate_manifest(
+    manifest: Mapping[str, Any], expected: Mapping[str, str], path: Path
+) -> None:
     if manifest.get("schema_version") != SCHEMA_VERSION:
         raise TopicInputError(
             f"{path} has unsupported schema_version={manifest.get('schema_version')!r}; "
@@ -320,4 +347,6 @@ def _validate_manifest(manifest: Mapping[str, Any], expected: Mapping[str, str],
         if str(manifest.get(key)) != value
     }
     if mismatches:
-        raise TopicInputError(f"{path} metadata does not match requested run: {mismatches}")
+        raise TopicInputError(
+            f"{path} metadata does not match requested run: {mismatches}"
+        )

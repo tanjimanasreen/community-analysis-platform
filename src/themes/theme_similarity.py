@@ -9,7 +9,8 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 # Global model cache to avoid reloading for every path
 _GLOBAL_MODEL = None
 
-def get_similarity_model(model_name='paraphrase-MiniLM-L6-v2'):
+
+def get_similarity_model(model_name="paraphrase-MiniLM-L6-v2"):
     global _GLOBAL_MODEL
     if _GLOBAL_MODEL is None:
         from sentence_transformers import SentenceTransformer
@@ -17,7 +18,10 @@ def get_similarity_model(model_name='paraphrase-MiniLM-L6-v2'):
         _GLOBAL_MODEL = SentenceTransformer(model_name, local_files_only=True)
     return _GLOBAL_MODEL
 
-def calculate_sentence_similarity(sentences: list, model_name='paraphrase-MiniLM-L6-v2', model=None):
+
+def calculate_sentence_similarity(
+    sentences: list, model_name="paraphrase-MiniLM-L6-v2", model=None
+):
     """Calculates cosine similarity between sentences using SentenceTransformers."""
     try:
         model = model or get_similarity_model(model_name)
@@ -28,7 +32,10 @@ def calculate_sentence_similarity(sentences: list, model_name='paraphrase-MiniLM
     cosine_scores = cosine_similarity(embeddings)
     return cosine_scores
 
-def extract_themes(matched_df: pd.DataFrame, paths: list, start_month_theme: str, end_month_theme: str) -> dict:
+
+def extract_themes(
+    matched_df: pd.DataFrame, paths: list, start_month_theme: str, end_month_theme: str
+) -> dict:
     all_community_theme = {}
     count = 1
 

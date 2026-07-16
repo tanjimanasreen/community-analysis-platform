@@ -10,8 +10,7 @@ from typing import Any, Mapping
 
 import pandas as pd
 
-from src.config.defaults import default_config
-
+from src.config.defaults import DEFAULT_CONFIG
 
 SCHEMA_VERSION = 1
 MANIFEST_FILE = "manifest.json"
@@ -54,11 +53,23 @@ def build_theme_input_dir(
     year: str | int | None = None,
 ) -> Path:
     params = dict(config_or_params or {})
-    base = output_base_path or params.get("output_base_path") or params.get("output_dir") or "results/"
+    base = (
+        output_base_path
+        or params.get("output_base_path")
+        or params.get("output_dir")
+        or "results/"
+    )
     data = data_type or params.get("data_type", "twitter")
     content = content_type or params.get("content_type", "reply")
     year_value = str(year if year is not None else params.get("year", "2017"))
-    return Path(base) / str(data) / "_intermediate" / "theme_inputs" / str(content) / year_value
+    return (
+        Path(base)
+        / str(data)
+        / "_intermediate"
+        / "theme_inputs"
+        / str(content)
+        / year_value
+    )
 
 
 def save_theme_inputs(
@@ -107,11 +118,11 @@ def save_theme_inputs(
         "hashes": hashes,
         "created_by": "run-topics",
         "lda": {
-            "num_topics": default_config.lda.num_topics,
-            "random_state": default_config.lda.random_state,
-            "passes": default_config.lda.passes,
-            "iterations": default_config.lda.iterations,
-            "chunksize": default_config.lda.chunksize,
+            "num_topics": DEFAULT_CONFIG.lda.num_topics,
+            "random_state": DEFAULT_CONFIG.lda.random_state,
+            "passes": DEFAULT_CONFIG.lda.passes,
+            "iterations": DEFAULT_CONFIG.lda.iterations,
+            "chunksize": DEFAULT_CONFIG.lda.chunksize,
         },
     }
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
@@ -128,14 +139,20 @@ def load_theme_inputs(
     year: str | int | None = None,
     require_manifest: bool = True,
 ) -> ThemeInputBundle:
-    base = Path(input_dir) if input_dir is not None else build_theme_input_dir(
-        config_or_params,
-        output_base_path=output_base_path,
-        data_type=data_type,
-        content_type=content_type,
-        year=year,
+    base = (
+        Path(input_dir)
+        if input_dir is not None
+        else build_theme_input_dir(
+            config_or_params,
+            output_base_path=output_base_path,
+            data_type=data_type,
+            content_type=content_type,
+            year=year,
+        )
     )
-    expected = _expected_metadata(config_or_params, output_base_path, data_type, content_type, year)
+    expected = _expected_metadata(
+        config_or_params, output_base_path, data_type, content_type, year
+    )
     manifest_path = base / MANIFEST_FILE
 
     if not manifest_path.exists():
@@ -146,7 +163,9 @@ def load_theme_inputs(
                 "or use make run-pipeline-sample."
             )
         monthly_data = _load_csvs_without_manifest(base, expected["year"])
-        return ThemeInputBundle(monthly_data=monthly_data, manifest=None, input_dir=base)
+        return ThemeInputBundle(
+            monthly_data=monthly_data, manifest=None, input_dir=base
+        )
 
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     _validate_manifest(manifest, expected, manifest_path)
@@ -155,7 +174,9 @@ def load_theme_inputs(
         filename = manifest["filenames"][str(month)]
         path = base / filename
         if not path.exists():
-            raise ThemeInputError(f"Theme input file listed in manifest is missing: {path}")
+            raise ThemeInputError(
+                f"Theme input file listed in manifest is missing: {path}"
+            )
         expected_hash = manifest.get("hashes", {}).get(filename)
         actual_hash = _sha256_file(path)
         if expected_hash != actual_hash:
@@ -165,16 +186,22 @@ def load_theme_inputs(
         frame = pd.read_csv(path, low_memory=False)
         validate_theme_dataframe(frame, filename)
         monthly_data[str(month)] = _parse_list_columns(frame)
-    return ThemeInputBundle(monthly_data=monthly_data, manifest=manifest, input_dir=base)
+    return ThemeInputBundle(
+        monthly_data=monthly_data, manifest=manifest, input_dir=base
+    )
 
 
 def validate_theme_inputs(bundle: ThemeInputBundle) -> None:
     for month, frame in bundle.monthly_data.items():
         validate_theme_dataframe(frame, f"{month} theme input")
         for column in LIST_COLUMNS:
-            invalid = [value for value in frame[column].tolist() if not isinstance(value, list)]
+            invalid = [
+                value for value in frame[column].tolist() if not isinstance(value, list)
+            ]
             if invalid:
-                raise ThemeInputError(f"{month} column {column!r} must contain list values.")
+                raise ThemeInputError(
+                    f"{month} column {column!r} must contain list values."
+                )
 
 
 def validate_theme_dataframe(frame: pd.DataFrame, name: str) -> None:
@@ -187,7 +214,10 @@ def _load_csvs_without_manifest(base: Path, year: str) -> dict[str, pd.DataFrame
     if not base.exists():
         return {}
     monthly_data: dict[str, pd.DataFrame] = {}
-    for path in sorted(base.glob(f"*_{year}.csv"), key=lambda item: _month_sort_key(_month_from_filename(item, year))):
+    for path in sorted(
+        base.glob(f"*_{year}.csv"),
+        key=lambda item: _month_sort_key(_month_from_filename(item, year)),
+    ):
         frame = pd.read_csv(path, low_memory=False)
         validate_theme_dataframe(frame, path.name)
         monthly_data[_month_from_filename(path, year)] = _parse_list_columns(frame)
@@ -248,7 +278,9 @@ def _expected_metadata(
     }
 
 
-def _validate_manifest(manifest: Mapping[str, Any], expected: Mapping[str, str], path: Path) -> None:
+def _validate_manifest(
+    manifest: Mapping[str, Any], expected: Mapping[str, str], path: Path
+) -> None:
     if manifest.get("schema_version") != SCHEMA_VERSION:
         raise ThemeInputError(
             f"{path} has unsupported schema_version={manifest.get('schema_version')!r}; "
@@ -260,7 +292,9 @@ def _validate_manifest(manifest: Mapping[str, Any], expected: Mapping[str, str],
         if str(manifest.get(key)) != value
     }
     if mismatches:
-        raise ThemeInputError(f"{path} metadata does not match requested run: {mismatches}")
+        raise ThemeInputError(
+            f"{path} metadata does not match requested run: {mismatches}"
+        )
 
 
 def _month_from_filename(path: Path, year: str) -> str:

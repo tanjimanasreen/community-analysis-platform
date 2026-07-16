@@ -16,7 +16,10 @@ from src.themes.benchmark.contracts import (
     write_jsonl,
 )
 from src.themes.benchmark.dataset import benchmark_root, load_requests
-from src.themes.benchmark.integrity import filter_examples_by_split, validate_frozen_dataset
+from src.themes.benchmark.integrity import (
+    filter_examples_by_split,
+    validate_frozen_dataset,
+)
 from src.themes.benchmark.metrics import write_summary
 from src.themes.benchmark.providers import get_provider
 
@@ -45,7 +48,10 @@ def run_benchmark(
     if split is not None:
         validate_frozen_dataset(output_base_path, run_id, write_report=True)
         split_example_ids = filter_examples_by_split(
-            [str(request.example_id) for request in load_requests(output_base_path, run_id)],
+            [
+                str(request.example_id)
+                for request in load_requests(output_base_path, run_id)
+            ],
             dataset_rows,
             split,
         )
@@ -92,7 +98,10 @@ def run_benchmark(
             metadata = type(metadata)(
                 provider_id=metadata.provider_id,
                 model_id=metadata.model_id,
-                parameters={**metadata.parameters, "repetition_index": repetition_index},
+                parameters={
+                    **metadata.parameters,
+                    "repetition_index": repetition_index,
+                },
             )
         metadata_by_provider[metadata.provider_id] = {
             "provider_id": metadata.provider_id,
@@ -113,7 +122,11 @@ def run_benchmark(
                 metadata=metadata,
                 max_unresolved_examples=max_unresolved_examples,
             )
-        raw_dir = root / "raw" / metadata.provider_id / split if split else root / "raw" / metadata.provider_id
+        raw_dir = (
+            root / "raw" / metadata.provider_id / split
+            if split
+            else root / "raw" / metadata.provider_id
+        )
         raw_dir.mkdir(parents=True, exist_ok=True)
         generation_path.parent.mkdir(parents=True, exist_ok=True)
         provider_results: list[dict[str, Any]] = []
@@ -172,7 +185,9 @@ def run_benchmark(
                 },
             )
             if error is None:
-                normalized_for_cache, benchmark_metadata = _split_benchmark_metadata(normalized)
+                normalized_for_cache, benchmark_metadata = _split_benchmark_metadata(
+                    normalized
+                )
                 cache.put(
                     cache_key,
                     {
@@ -213,16 +228,32 @@ def run_benchmark(
             failures=failures,
         )
 
-    summary_path = root / "scores" / f"{split}_summary.csv" if split else root / "scores" / "summary.csv"
-    write_summary(summary_path, _collect_generation_results(root, split, results_by_provider))
-    _update_manifest(root, list(stats_by_provider), stats_by_provider, metadata_by_provider, split=split)
+    summary_path = (
+        root / "scores" / f"{split}_summary.csv"
+        if split
+        else root / "scores" / "summary.csv"
+    )
+    write_summary(
+        summary_path, _collect_generation_results(root, split, results_by_provider)
+    )
+    _update_manifest(
+        root,
+        list(stats_by_provider),
+        stats_by_provider,
+        metadata_by_provider,
+        split=split,
+    )
     return BenchmarkRunReport(
         request_count=sum(stats.request_count for stats in stats_by_provider.values()),
         result_count=sum(stats.result_count for stats in stats_by_provider.values()),
         cache_hits=sum(stats.cache_hits for stats in stats_by_provider.values()),
         cache_misses=sum(stats.cache_misses for stats in stats_by_provider.values()),
-        provider_executions=sum(stats.provider_executions for stats in stats_by_provider.values()),
-        outbound_requests=sum(stats.outbound_requests for stats in stats_by_provider.values()),
+        provider_executions=sum(
+            stats.provider_executions for stats in stats_by_provider.values()
+        ),
+        outbound_requests=sum(
+            stats.outbound_requests for stats in stats_by_provider.values()
+        ),
         failures=sum(stats.failures for stats in stats_by_provider.values()),
         providers=stats_by_provider,
         results_by_provider=results_by_provider,
@@ -272,23 +303,35 @@ def _result(
     return result
 
 
-def _split_benchmark_metadata(value: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+def _split_benchmark_metadata(
+    value: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
     if not isinstance(value, dict):
         return {"themes": []}, {}
     metadata = value.get("_benchmark_metadata", {})
-    normalized = {key: val for key, val in value.items() if key != "_benchmark_metadata"}
+    normalized = {
+        key: val for key, val in value.items() if key != "_benchmark_metadata"
+    }
     return normalized, metadata if isinstance(metadata, dict) else {}
 
 
-def _normalize_theme_json(value: Mapping[str, Any], allowed_keywords: list[str]) -> dict[str, Any]:
+def _normalize_theme_json(
+    value: Mapping[str, Any], allowed_keywords: list[str]
+) -> dict[str, Any]:
     themes = value.get("themes", []) if isinstance(value, Mapping) else []
     allowed = set(allowed_keywords)
     normalized = []
     for theme in themes if isinstance(themes, list) else []:
         if not isinstance(theme, Mapping):
             continue
-        keywords = [str(keyword) for keyword in theme.get("keywords", []) if str(keyword) in allowed]
-        normalized.append({"name": str(theme.get("name", "")).strip(), "keywords": keywords})
+        keywords = [
+            str(keyword)
+            for keyword in theme.get("keywords", [])
+            if str(keyword) in allowed
+        ]
+        normalized.append(
+            {"name": str(theme.get("name", "")).strip(), "keywords": keywords}
+        )
     return {"themes": normalized}
 
 
@@ -328,10 +371,12 @@ def _update_manifest(
     if split:
         by_split = dict(manifest.get(stats_key, {}))
         split_stats = dict(by_split.get(split, {}))
-        split_stats.update({
-            provider_id: stats.to_dict()
-            for provider_id, stats in stats_by_provider.items()
-        })
+        split_stats.update(
+            {
+                provider_id: stats.to_dict()
+                for provider_id, stats in stats_by_provider.items()
+            }
+        )
         by_split[split] = split_stats
         manifest[stats_key] = by_split
     else:
@@ -398,9 +443,13 @@ def _filter_requests(
         if not keyword_modes or request.keyword_mode in set(keyword_modes)
     ]
     if split_example_ids is not None:
-        filtered = [request for request in filtered if request.example_id in split_example_ids]
+        filtered = [
+            request for request in filtered if request.example_id in split_example_ids
+        ]
     if example_ids is not None:
-        filtered = [request for request in filtered if request.example_id in example_ids]
+        filtered = [
+            request for request in filtered if request.example_id in example_ids
+        ]
     if max_examples is None:
         return filtered
     example_order: list[str] = []

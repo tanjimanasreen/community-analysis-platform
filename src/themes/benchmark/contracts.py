@@ -6,7 +6,6 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Mapping
 
-
 BENCHMARK_SCHEMA_VERSION = 1
 DATASET_SCHEMA_VERSION = 1
 REQUEST_SCHEMA_VERSION = 1
@@ -186,7 +185,9 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
             try:
                 rows.append(json.loads(text))
             except json.JSONDecodeError as exc:
-                raise ThemeBenchmarkError(f"Invalid JSONL at {path}:{line_number}: {exc}") from exc
+                raise ThemeBenchmarkError(
+                    f"Invalid JSONL at {path}:{line_number}: {exc}"
+                ) from exc
     return rows
 
 

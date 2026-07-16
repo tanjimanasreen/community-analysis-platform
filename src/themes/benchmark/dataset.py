@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 from typing import Any, Mapping
 
-from src.config.defaults import default_config
+from src.config.defaults import DEFAULT_CONFIG
 from src.themes.benchmark.contracts import (
     BENCHMARK_SCHEMA_VERSION,
     DATASET_SCHEMA_VERSION,
@@ -20,7 +20,6 @@ from src.themes.benchmark.contracts import (
     write_jsonl,
 )
 from src.themes.theme_inputs import ThemeInputError, load_theme_inputs
-
 
 SYSTEM_PROMPT = (
     "You are an expert who can find meaningful themes from a list of keywords, "
@@ -50,7 +49,9 @@ def benchmark_root(output_base_path: str | Path, run_id: str) -> Path:
     try:
         resolved_path.relative_to(resolved_root)
     except ValueError as exc:
-        raise ThemeBenchmarkError(f"Benchmark path escapes experiment root: {path}") from exc
+        raise ThemeBenchmarkError(
+            f"Benchmark path escapes experiment root: {path}"
+        ) from exc
     return path
 
 
@@ -90,10 +91,14 @@ def build_dataset(
     prompt_reference = build_gpt4o_reference_metadata()
 
     write_jsonl(output_dir / "dataset.jsonl", examples)
-    write_jsonl(output_dir / "requests.jsonl", [request.to_dict() for request in requests])
+    write_jsonl(
+        output_dir / "requests.jsonl", [request.to_dict() for request in requests]
+    )
     write_json(output_dir / "reference" / "gpt4o_config.json", prompt_reference)
     if gpt4o_outputs is not None:
-        _import_reference_outputs(Path(gpt4o_outputs), output_dir / "reference" / "gpt4o_outputs.jsonl")
+        _import_reference_outputs(
+            Path(gpt4o_outputs), output_dir / "reference" / "gpt4o_outputs.jsonl"
+        )
 
     manifest = {
         "schema_version": MANIFEST_SCHEMA_VERSION,
@@ -137,13 +142,17 @@ def examples_from_theme_inputs(
     for month in sorted(monthly_data.keys(), key=_month_sort_key):
         frame = monthly_data[month]
         for row_index, row in frame.reset_index(drop=True).iterrows():
-            original = {field: _as_list(row.get(field, [])) for field in ORIGINAL_KEYWORD_FIELDS}
+            original = {
+                field: _as_list(row.get(field, [])) for field in ORIGINAL_KEYWORD_FIELDS
+            }
             keyword_lists = {
                 "absolute": _unique_preserve_order(
-                    original["absolute_unigram_keywords"] + original["absolute_bigram_keywords"]
+                    original["absolute_unigram_keywords"]
+                    + original["absolute_bigram_keywords"]
                 ),
                 "weighted": _unique_preserve_order(
-                    original["weighted_unigram_keywords"] + original["weighted_bigram_keywords"]
+                    original["weighted_unigram_keywords"]
+                    + original["weighted_bigram_keywords"]
                 ),
                 "general": _unique_preserve_order(
                     original["absolute_unigram_keywords"]
@@ -170,9 +179,15 @@ def examples_from_theme_inputs(
                 "absolute_keywords": keyword_lists["absolute"],
                 "weighted_keywords": keyword_lists["weighted"],
                 "general_keywords": keyword_lists["general"],
-                "absolute_keyword_text": format_keywords_for_production(keyword_lists["absolute"]),
-                "weighted_keyword_text": format_keywords_for_production(keyword_lists["weighted"]),
-                "general_keyword_text": format_keywords_for_production(keyword_lists["general"]),
+                "absolute_keyword_text": format_keywords_for_production(
+                    keyword_lists["absolute"]
+                ),
+                "weighted_keyword_text": format_keywords_for_production(
+                    keyword_lists["weighted"]
+                ),
+                "general_keyword_text": format_keywords_for_production(
+                    keyword_lists["general"]
+                ),
             }
             base["input_hash"] = stable_hash(base)
             examples.append(base)
@@ -248,13 +263,21 @@ def load_dataset(output_base_path: str | Path, run_id: str) -> list[dict[str, An
     return read_jsonl(benchmark_root(output_base_path, run_id) / "dataset.jsonl")
 
 
-def load_requests(output_base_path: str | Path, run_id: str) -> list[ThemeBenchmarkRequest]:
+def load_requests(
+    output_base_path: str | Path, run_id: str
+) -> list[ThemeBenchmarkRequest]:
     rows = read_jsonl(benchmark_root(output_base_path, run_id) / "requests.jsonl")
     return [ThemeBenchmarkRequest(**row) for row in rows]
 
 
 def format_keywords_for_production(keywords: list[Any]) -> str:
-    return str([str(keyword) for keyword in keywords]).replace("[", "").replace("]", "").replace(" ", "").replace("'", "")
+    return (
+        str([str(keyword) for keyword in keywords])
+        .replace("[", "")
+        .replace("]", "")
+        .replace(" ", "")
+        .replace("'", "")
+    )
 
 
 def _params(config: Mapping[str, Any]) -> dict[str, str]:
