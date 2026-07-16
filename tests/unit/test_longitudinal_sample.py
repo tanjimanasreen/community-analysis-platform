@@ -11,7 +11,6 @@ from src.providers.mock import MockProvider
 from src.themes.theme_inputs import load_theme_inputs, save_theme_inputs
 from src.topics.topic_inputs import load_topic_inputs, save_topic_inputs
 
-
 LONGITUDINAL_FIXTURES = [
     Path("tests/fixtures/longitudinal/twitter_reply_03_2017.csv"),
     Path("tests/fixtures/longitudinal/twitter_reply_04_2017.csv"),
@@ -111,10 +110,24 @@ def test_longitudinal_topic_inputs_save_load_two_months(tmp_path):
             year="2017",
         )
 
-    march = load_topic_inputs(output_base_path=str(tmp_path), data_type="twitter", content_type="reply", month="03", year="2017")
-    april = load_topic_inputs(output_base_path=str(tmp_path), data_type="twitter", content_type="reply", month="04", year="2017")
+    march = load_topic_inputs(
+        output_base_path=str(tmp_path),
+        data_type="twitter",
+        content_type="reply",
+        month="03",
+        year="2017",
+    )
+    april = load_topic_inputs(
+        output_base_path=str(tmp_path),
+        data_type="twitter",
+        content_type="reply",
+        month="04",
+        year="2017",
+    )
 
-    assert march.absolute_community_messages.loc[0, "messages"] == ["03 apple orange discussion"]
+    assert march.absolute_community_messages.loc[0, "messages"] == [
+        "03 apple orange discussion"
+    ]
     assert april.matched_communities.loc[0, "members"] == [1, 2, 3]
 
 
@@ -131,7 +144,12 @@ def test_longitudinal_theme_manifest_accumulates_two_months_with_hashes(tmp_path
             year="2017",
         )
 
-    bundle = load_theme_inputs(output_base_path=str(tmp_path), data_type="twitter", content_type="reply", year="2017")
+    bundle = load_theme_inputs(
+        output_base_path=str(tmp_path),
+        data_type="twitter",
+        content_type="reply",
+        year="2017",
+    )
 
     assert bundle.manifest["months"] == ["03", "04"]
     assert set(bundle.manifest["filenames"].values()) == {"03_2017.csv", "04_2017.csv"}
@@ -152,7 +170,12 @@ def test_longitudinal_theme_inputs_produce_transition(tmp_path):
             year="2017",
         )
 
-    bundle = load_theme_inputs(output_base_path=str(tmp_path), data_type="twitter", content_type="reply", year="2017")
+    bundle = load_theme_inputs(
+        output_base_path=str(tmp_path),
+        data_type="twitter",
+        content_type="reply",
+        year="2017",
+    )
     transitions = run_theme_pipeline_from_bundle(
         bundle,
         year="2017",
@@ -181,7 +204,13 @@ def test_longitudinal_fixtures_preserve_contract_and_self_spread_exclusion():
 
         assert ((network_df["from_id"] == 2) & (network_df["forwarder_id"] == 2)).any()
         assert not ((follower_df["source"] == 2) & (follower_df["target"] == 2)).any()
-        assert {"source", "target", "shared_post", "total_post", "weighted_post"}.issubset(follower_df.columns)
+        assert {
+            "source",
+            "target",
+            "shared_post",
+            "total_post",
+            "weighted_post",
+        }.issubset(follower_df.columns)
 
 
 def test_longitudinal_public_schema_columns_remain_stable():

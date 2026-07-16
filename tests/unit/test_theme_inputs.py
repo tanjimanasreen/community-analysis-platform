@@ -139,9 +139,12 @@ def test_theme_input_required_columns_are_validated(tmp_path):
 
 
 def test_build_theme_input_dir_uses_internal_path(tmp_path):
-    assert build_theme_input_dir(
-        output_base_path=str(tmp_path),
-        data_type="twitter",
-        content_type="reply",
-        year="2017",
-    ) == tmp_path / "twitter" / "_intermediate" / "theme_inputs" / "reply" / "2017"
+    assert (
+        build_theme_input_dir(
+            output_base_path=str(tmp_path),
+            data_type="twitter",
+            content_type="reply",
+            year="2017",
+        )
+        == tmp_path / "twitter" / "_intermediate" / "theme_inputs" / "reply" / "2017"
+    )

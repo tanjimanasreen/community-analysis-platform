@@ -5,6 +5,7 @@ import csv
 from src.graph_store.memgraph_client import MemgraphClient
 from src.graph_store.neo4j_exporter import Neo4jExporter
 
+
 @pytest.fixture(scope="module")
 def memgraph():
     # Assumes db-up was run before pytest
@@ -34,12 +35,13 @@ def memgraph():
     # Teardown
     client.execute_query("MATCH (n) DETACH DELETE n;")
 
+
 def test_memgraph_export_contract(memgraph, tmp_path):
     exporter = Neo4jExporter(uri="bolt://localhost:7687", user="", password="")
     output_file = tmp_path / "export.csv"
 
     # Run the telegram query which expects month 11 year 2019
-    exporter.export('telegram', year=2019, month=11, output_file=str(output_file))
+    exporter.export("telegram", year=2019, month=11, output_file=str(output_file))
 
     assert output_file.exists()
 

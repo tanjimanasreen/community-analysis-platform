@@ -2,6 +2,7 @@
 
 All tests use mock provider only — no live API calls.
 """
+
 import pytest
 
 from src.providers.cached import CachedProvider

@@ -58,7 +58,11 @@ def _write_cache(config, run_id, provider, repetition_index):
 
     root = benchmark_root(config["output_base_path"], run_id)
     cache = JsonlResponseCache(root / "cache" / f"{provider}.jsonl")
-    model_id = provider.removeprefix("gemini__").replace("_", "-") if provider.startswith("gemini__") else provider
+    model_id = (
+        provider.removeprefix("gemini__").replace("_", "-")
+        if provider.startswith("gemini__")
+        else provider
+    )
     parameters = {"temperature": 0}
     if repetition_index is not None:
         parameters["repetition_index"] = repetition_index
@@ -76,11 +80,18 @@ def _write_cache(config, run_id, provider, repetition_index):
             {
                 "provider_id": provider,
                 "model_id": model_id,
-                "request_id": __import__("src.themes.benchmark.contracts", fromlist=["stable_hash"]).stable_hash(request.to_dict()),
+                "request_id": __import__(
+                    "src.themes.benchmark.contracts", fromlist=["stable_hash"]
+                ).stable_hash(request.to_dict()),
                 "normalized_theme_json": {
-                    "themes": [{"name": "Shared civic theme", "keywords": request.keywords[:1]}]
+                    "themes": [
+                        {"name": "Shared civic theme", "keywords": request.keywords[:1]}
+                    ]
                 },
-                "benchmark_metadata": {"schema_valid": True, "parsed_successfully": True},
+                "benchmark_metadata": {
+                    "schema_valid": True,
+                    "parsed_successfully": True,
+                },
                 "latency_ms": 1.0,
                 "parameters": parameters,
             },
@@ -101,8 +112,12 @@ def test_phase3_review_cohort_is_deterministic_blinded_and_heldout_free(tmp_path
         for row in read_jsonl(frozen["output_dir"] / "dataset.jsonl")
         if row["split"] == "heldout"
     }
-    assert not heldout.intersection({item["example_id"] for item in first["cohort"]["items"]})
-    review_text = (first["review_dir"] / "review_items.csv").read_text(encoding="utf-8").lower()
+    assert not heldout.intersection(
+        {item["example_id"] for item in first["cohort"]["items"]}
+    )
+    review_text = (
+        (first["review_dir"] / "review_items.csv").read_text(encoding="utf-8").lower()
+    )
     for token in ("gemini", "keyword_baseline", "mock", "llm7"):
         assert token not in review_text
     key = read_json(first["review_dir"] / "blinding_key.json")
@@ -128,7 +143,9 @@ def test_phase3_review_import_validates_and_summarizes(tmp_path):
     imported = import_phase3_review(config["output_base_path"], "phase3", path)
 
     assert imported["row_count"] == len(items)
-    assert imported["summary"]["inter_rater_reliability"] == "unavailable_single_reviewer"
+    assert (
+        imported["summary"]["inter_rater_reliability"] == "unavailable_single_reviewer"
+    )
 
     bad = scored.copy()
     bad.loc[0, "preferred_output"] = "gemini"
@@ -142,7 +159,9 @@ def test_stability_subset_and_summary_are_repetition_aware(tmp_path):
     config = _config(tmp_path)
     _seed_phase3_run(config)
 
-    subset = prepare_stability_subset(config["output_base_path"], "phase3", target_examples=2)
+    subset = prepare_stability_subset(
+        config["output_base_path"], "phase3", target_examples=2
+    )
     summary = summarize_stability(config["output_base_path"], "phase3")
 
     assert subset["subset"]["example_count"] == 2

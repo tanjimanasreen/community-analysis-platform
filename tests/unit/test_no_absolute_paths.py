@@ -26,7 +26,9 @@ def test_no_absolute_paths_in_configs():
         text = yaml_path.read_text(encoding="utf-8")
         for line_no, line in enumerate(text.splitlines(), start=1):
             if ABSOLUTE_PATH_RE.search(line):
-                violations.append(f"{yaml_path.relative_to(CONFIGS_ROOT)}:{line_no}  →  {line.strip()}")
+                violations.append(
+                    f"{yaml_path.relative_to(CONFIGS_ROOT)}:{line_no}  →  {line.strip()}"
+                )
 
     if violations:
         report = "\n".join(violations)
@@ -49,7 +51,10 @@ def test_canonical_paths_used_for_dataset_paths():
             if not input_path:
                 continue
 
-            if not (input_path.startswith("${DATA_ROOT}") or input_path.startswith("data/raw/")):
+            if not (
+                input_path.startswith("${DATA_ROOT}")
+                or input_path.startswith("data/raw/")
+            ):
                 violations.append(
                     f"{yaml_path.relative_to(CONFIGS_ROOT)}: dataset '{ds.get('id', 'unknown')}' "
                     f"has non-canonical input_path '{input_path}'"
@@ -74,14 +79,14 @@ def test_runtime_data_root_override(monkeypatch):
     monkeypatch.setenv("DATA_ROOT", "data/raw")
     default_config = load_config(config_path)
     for ds in default_config.get("datasets", []):
-        assert str(ds.get("input_path")).startswith("data/raw/twitter/retweet_quote/2017/"), (
-            f"Default DATA_ROOT did not resolve correctly for {ds.get('id')}"
-        )
+        assert str(ds.get("input_path")).startswith(
+            "data/raw/twitter/retweet_quote/2017/"
+        ), f"Default DATA_ROOT did not resolve correctly for {ds.get('id')}"
 
     # Test override behavior (/mnt/research-data)
     monkeypatch.setenv("DATA_ROOT", "/mnt/research-data")
     override_config = load_config(config_path)
     for ds in override_config.get("datasets", []):
-        assert str(ds.get("input_path")).startswith("/mnt/research-data/twitter/retweet_quote/2017/"), (
-            f"Overridden DATA_ROOT did not resolve correctly for {ds.get('id')}"
-        )
+        assert str(ds.get("input_path")).startswith(
+            "/mnt/research-data/twitter/retweet_quote/2017/"
+        ), f"Overridden DATA_ROOT did not resolve correctly for {ds.get('id')}"

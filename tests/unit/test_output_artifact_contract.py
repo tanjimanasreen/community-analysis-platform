@@ -25,7 +25,9 @@ def _config(tmp_path, *, month="03", theme_output=None):
 
 def _write_csv(path, columns, rows=None):
     path.parent.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame(rows or [{column: _sample_value(column) for column in columns}], columns=columns).to_csv(
+    pd.DataFrame(
+        rows or [{column: _sample_value(column) for column in columns}], columns=columns
+    ).to_csv(
         path,
         index=False,
     )
@@ -46,11 +48,21 @@ def _sample_value(column):
         "uncommon_members",
     }:
         return "[1, 2]" if column in {"members", "messages_ids"} else "['alpha']"
-    if "community" in column or column in {"source", "target", "from_id", "forwarder_id"}:
+    if "community" in column or column in {
+        "source",
+        "target",
+        "from_id",
+        "forwarder_id",
+    }:
         return 1
     if column in {"weight", "jaccard_score"}:
         return 1.0
-    if column in {"total_messages", "total_matched", "total_absolute", "total_weighted"}:
+    if column in {
+        "total_messages",
+        "total_matched",
+        "total_absolute",
+        "total_weighted",
+    }:
         return 1
     return "value"
 
@@ -70,20 +82,36 @@ def _write_public_outputs(config, months):
     theme_dir = __import__("pathlib").Path(config["theme"]["output_dir"])
 
     for month in months:
-        _write_csv(base / "network_data" / content_type / f"{month}{year}.csv", contract.NETWORK_DATA_COLUMNS)
         _write_csv(
-            base / "communities" / "graphs" / "absolute" / content_type / f"{month}.csv",
+            base / "network_data" / content_type / f"{month}{year}.csv",
+            contract.NETWORK_DATA_COLUMNS,
+        )
+        _write_csv(
+            base
+            / "communities"
+            / "graphs"
+            / "absolute"
+            / content_type
+            / f"{month}.csv",
             contract.COMMUNITY_GRAPH_COLUMNS,
         )
         _write_csv(
-            base / "communities" / "graphs" / "weighted" / content_type / f"{month}.csv",
+            base
+            / "communities"
+            / "graphs"
+            / "weighted"
+            / content_type
+            / f"{month}.csv",
             contract.COMMUNITY_GRAPH_COLUMNS,
         )
         _write_csv(
             base / "communities" / "matched" / content_type / f"{month}.csv",
             contract.MATCHED_COMMUNITY_SUMMARY_COLUMNS,
         )
-        _write_csv(base / "user_centrality" / content_type / f"{month}.csv", contract.USER_CENTRALITY_COLUMNS)
+        _write_csv(
+            base / "user_centrality" / content_type / f"{month}.csv",
+            contract.USER_CENTRALITY_COLUMNS,
+        )
         _write_csv(
             base / "count_user_messages" / content_type / f"{month}.csv",
             contract.COUNT_USER_MESSAGES_COLUMNS,
@@ -92,7 +120,10 @@ def _write_public_outputs(config, months):
             base / "daily_messages_stat" / content_type / f"{month}.csv",
             contract.DAILY_MESSAGES_STAT_COLUMNS,
         )
-        _write_csv(base / "LDA" / "scores" / content_type / f"{month}.csv", contract.LDA_SCORES_COLUMNS)
+        _write_csv(
+            base / "LDA" / "scores" / content_type / f"{month}.csv",
+            contract.LDA_SCORES_COLUMNS,
+        )
 
         matched_lda = base / "LDA" / "matched" / content_type / f"{month}_{year}.csv"
         _write_csv(matched_lda, contract.MATCHED_LDA_COLUMNS)
@@ -104,18 +135,38 @@ def _write_public_outputs(config, months):
             month=month,
             year=year,
         )
-        _write_csv(theme_dir / f"{month}_{year}_with_themes.csv", contract.THEMED_OUTPUT_COLUMNS)
+        _write_csv(
+            theme_dir / f"{month}_{year}_with_themes.csv",
+            contract.THEMED_OUTPUT_COLUMNS,
+        )
         topic_inputs.save_topic_inputs(
             absolute_community_messages=pd.DataFrame(
-                {"community_number": [1], "messages": [["alpha"]], "messages_ids": [[1]], "total_messages": [1]}
+                {
+                    "community_number": [1],
+                    "messages": [["alpha"]],
+                    "messages_ids": [[1]],
+                    "total_messages": [1],
+                }
             ),
             weighted_community_messages=pd.DataFrame(
-                {"community_number": [1], "messages": [["alpha"]], "messages_ids": [[1]], "total_messages": [1]}
+                {
+                    "community_number": [1],
+                    "messages": [["alpha"]],
+                    "messages_ids": [[1]],
+                    "total_messages": [1],
+                }
             ),
             matched_communities=pd.DataFrame(
-                {"abs_community": [1], "per_community": [1], "jaccard_score": [1.0], "members": [[1, 2]]}
+                {
+                    "abs_community": [1],
+                    "per_community": [1],
+                    "jaccard_score": [1.0],
+                    "members": [[1, 2]],
+                }
             ),
-            partial_matched_communities=pd.DataFrame(columns=topic_inputs.PARTIAL_MATCHED_COMMUNITY_COLUMNS),
+            partial_matched_communities=pd.DataFrame(
+                columns=topic_inputs.PARTIAL_MATCHED_COMMUNITY_COLUMNS
+            ),
             output_base_path=output_base_path,
             data_type=data_type,
             content_type=content_type,
@@ -124,9 +175,16 @@ def _write_public_outputs(config, months):
         )
 
     transition_rows = [
-        {column: _sample_value(column) for column in contract.COMMUNITY_TRANSITION_COLUMNS}
+        {
+            column: _sample_value(column)
+            for column in contract.COMMUNITY_TRANSITION_COLUMNS
+        }
     ]
-    _write_csv(theme_dir / "community_transition.csv", contract.COMMUNITY_TRANSITION_COLUMNS, transition_rows)
+    _write_csv(
+        theme_dir / "community_transition.csv",
+        contract.COMMUNITY_TRANSITION_COLUMNS,
+        transition_rows,
+    )
 
 
 def test_output_contract_column_constants_match_internal_contract_modules():
@@ -165,7 +223,9 @@ def test_verify_output_contract_passes_for_one_month_outputs(tmp_path):
 def test_missing_required_artifact_fails_clearly(tmp_path):
     config = _config(tmp_path)
 
-    with pytest.raises(OutputContractError, match="Missing required artifact network_data"):
+    with pytest.raises(
+        OutputContractError, match="Missing required artifact network_data"
+    ):
         verify_output_contract(config)
 
 
@@ -210,7 +270,9 @@ def test_public_matched_lda_schema_matches_internal_theme_copy(tmp_path):
     config = _config(tmp_path)
     _write_public_outputs(config, ["03"])
 
-    public_csv = tmp_path / "outputs" / "twitter" / "LDA" / "matched" / "reply" / "03_2017.csv"
+    public_csv = (
+        tmp_path / "outputs" / "twitter" / "LDA" / "matched" / "reply" / "03_2017.csv"
+    )
     internal_csv = (
         tmp_path
         / "outputs"
@@ -222,20 +284,32 @@ def test_public_matched_lda_schema_matches_internal_theme_copy(tmp_path):
         / "03_2017.csv"
     )
 
-    assert list(pd.read_csv(public_csv, nrows=0).columns) == list(pd.read_csv(internal_csv, nrows=0).columns)
+    assert list(pd.read_csv(public_csv, nrows=0).columns) == list(
+        pd.read_csv(internal_csv, nrows=0).columns
+    )
 
 
 def test_optional_partial_outputs_are_checked_when_present(tmp_path):
     config = _config(tmp_path)
     _write_public_outputs(config, ["03"])
-    partial = tmp_path / "outputs" / "twitter" / "communities" / "partially_matched" / "reply" / "03.csv"
+    partial = (
+        tmp_path
+        / "outputs"
+        / "twitter"
+        / "communities"
+        / "partially_matched"
+        / "reply"
+        / "03.csv"
+    )
     _write_csv(partial, ["month"])
 
     with pytest.raises(OutputContractError, match="partial_matched_communities"):
         verify_output_contract(config)
 
 
-def test_longitudinal_contract_requires_two_month_manifest_and_non_empty_transition(tmp_path):
+def test_longitudinal_contract_requires_two_month_manifest_and_non_empty_transition(
+    tmp_path,
+):
     config = _config(tmp_path, month="04")
     _write_public_outputs(config, ["03", "04"])
 

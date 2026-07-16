@@ -2,7 +2,6 @@ import socket
 
 import pytest
 
-
 _orig_connect = socket.socket.connect
 _orig_connect_ex = socket.socket.connect_ex
 
@@ -21,8 +20,7 @@ def _is_allowed_host(host):
     if isinstance(host, bytes):
         host = host.decode("utf-8", errors="ignore")
     return isinstance(host, str) and (
-        host in {"127.0.0.1", "localhost", "::1"}
-        or host.startswith("/")
+        host in {"127.0.0.1", "localhost", "::1"} or host.startswith("/")
     )
 
 

@@ -1,6 +1,6 @@
 import pandas as pd
 
-from src.config.defaults import default_config
+from src.config.defaults import DEFAULT_CONFIG
 from src.config.loader import normalize_month
 from src.ingestion.network_data_extractor import (
     convert_neo4j_datetime_strings,
@@ -118,15 +118,18 @@ def test_follower_followee_metrics_and_self_spread_exclusion_from_normalized_df(
 
 
 def test_defaults_are_preserved_for_ingestion_phase():
-    assert default_config.graph.min_total_post == 10
-    assert default_config.graph.min_shared_post == 5
-    assert default_config.graph.min_members == 3
-    assert default_config.louvain.resolution == 1.0
-    assert default_config.louvain.seed == 123
-    assert default_config.lda.num_topics == 15
-    assert default_config.theme_provider.primary == "mock"
-    assert default_config.theme_provider.fallback is True
-    assert default_config.theme_provider.fallback_chain == ["llm7:fast", "nvidia:meta/llama3-70b-instruct"]
+    assert DEFAULT_CONFIG.graph.min_total_post == 10
+    assert DEFAULT_CONFIG.graph.min_shared_post == 5
+    assert DEFAULT_CONFIG.graph.min_members == 3
+    assert DEFAULT_CONFIG.louvain.resolution == 1.0
+    assert DEFAULT_CONFIG.louvain.seed == 123
+    assert DEFAULT_CONFIG.lda.num_topics == 15
+    assert DEFAULT_CONFIG.theme_provider.primary == "mock"
+    assert DEFAULT_CONFIG.theme_provider.fallback is True
+    assert DEFAULT_CONFIG.theme_provider.fallback_chain == [
+        "llm7:fast",
+        "nvidia:meta/llama3-70b-instruct",
+    ]
     assert normalize_month("03") == 3
     assert normalize_month("october") == 10
 

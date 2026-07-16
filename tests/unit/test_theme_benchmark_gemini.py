@@ -26,15 +26,25 @@ from src.providers.gemini import (
 from src.themes.benchmark.runner import run_benchmark
 from src.themes.theme_inputs import save_theme_inputs
 
-
-FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "theme_benchmark" / "matched_lda.csv"
+FIXTURE = (
+    Path(__file__).resolve().parents[1]
+    / "fixtures"
+    / "theme_benchmark"
+    / "matched_lda.csv"
+)
 
 
 class FakeInteraction:
-    output_text = json.dumps({"themes": [{"name": "Fruit", "keywords": ["apple", "banana"]}]})
+    output_text = json.dumps(
+        {"themes": [{"name": "Fruit", "keywords": ["apple", "banana"]}]}
+    )
     id = "interaction-1"
     status = "completed"
-    usage_metadata = {"input_token_count": 10, "output_token_count": 5, "total_token_count": 15}
+    usage_metadata = {
+        "input_token_count": 10,
+        "output_token_count": 5,
+        "total_token_count": 15,
+    }
     finish_reason = "STOP"
     safety_metadata = {"blocked": False}
 
@@ -109,7 +119,9 @@ def _request(tmp_path):
 
 def test_gemini_provider_requires_allow_live_before_client_creation():
     with pytest.raises(ThemeBenchmarkError, match="--allow-live"):
-        GeminiBenchmarkProvider(model_id="gemini-3.5-flash", allow_live=False, client=FakeClient())
+        GeminiBenchmarkProvider(
+            model_id="gemini-3.5-flash", allow_live=False, client=FakeClient()
+        )
 
 
 def test_gemini_provider_missing_key_fails_clearly(monkeypatch):
@@ -151,7 +163,9 @@ def test_gemini_request_construction_preserves_roles_and_settings(tmp_path):
     call = client.interactions.calls[0]
     assert call["model"] == "gemini-3.5-flash"
     assert call["system_instruction"] == SYSTEM_PROMPT
-    assert call["input"] == USER_PROMPT_TEMPLATE.format(keywords=request_row["keyword_text"])
+    assert call["input"] == USER_PROMPT_TEMPLATE.format(
+        keywords=request_row["keyword_text"]
+    )
     assert call["generation_config"] == {"temperature": 0.0}
     assert call["store"] is False
     assert call["response_format"] == {
@@ -205,20 +219,33 @@ def test_gemini_model_discovery_normalizes_and_classifies_without_secrets(tmp_pa
         "gemini-3.1-flash-lite",
         "gemini-3.5-flash",
     }
-    latest = next(model for model in catalog["models"] if model["model_id"] == "gemini-3.5-flash-latest")
+    latest = next(
+        model
+        for model in catalog["models"]
+        if model["model_id"] == "gemini-3.5-flash-latest"
+    )
     assert latest["is_latest_alias"] is True
-    preview = next(model for model in catalog["models"] if model["model_id"] == "gemini-3.5-pro-preview")
+    preview = next(
+        model
+        for model in catalog["models"]
+        if model["model_id"] == "gemini-3.5-pro-preview"
+    )
     assert preview["is_preview"] is True
-    embedding = next(model for model in catalog["models"] if model["model_id"] == "text-embedding-001")
+    embedding = next(
+        model
+        for model in catalog["models"]
+        if model["model_id"] == "text-embedding-001"
+    )
     assert embedding["generate_content_capable"] is False
     assert "not-persisted" not in json.dumps(catalog)
 
 
 def test_gemini_catalog_records_ambiguous_candidates(monkeypatch):
     from src.providers.gemini import DOCUMENTED_INTERACTIONS_MODELS
+
     monkeypatch.setattr(
         "src.providers.gemini.DOCUMENTED_INTERACTIONS_MODELS",
-        DOCUMENTED_INTERACTIONS_MODELS | {"gemini-3-flash", "gemini-3.5-flash"}
+        DOCUMENTED_INTERACTIONS_MODELS | {"gemini-3-flash", "gemini-3.5-flash"},
     )
     catalog = build_gemini_model_catalog(
         [
@@ -369,7 +396,15 @@ def test_gemini_runner_cache_reuse_with_fake_client(monkeypatch, tmp_path):
     assert second.outbound_requests == 0
     assert second.cache_hits == 1
     assert len(client.interactions.calls) == 1
-    assert "2.3.0" in json.dumps((Path(config["output_base_path"]) / "_experiments" / "theme_model_benchmark" / "gemini-cache" / "manifest.json").read_text())
+    assert "2.3.0" in json.dumps(
+        (
+            Path(config["output_base_path"])
+            / "_experiments"
+            / "theme_model_benchmark"
+            / "gemini-cache"
+            / "manifest.json"
+        ).read_text()
+    )
 
 
 def test_live_preflight_prints_safe_gemini_fields(tmp_path, capsys):
@@ -427,7 +462,9 @@ def test_gemini_model_change_invalidates_cache(monkeypatch, tmp_path):
             sdk_version="2.3.0",
         ),
     ]
-    monkeypatch.setattr(runner, "get_provider", lambda *args, **kwargs: providers.pop(0))
+    monkeypatch.setattr(
+        runner, "get_provider", lambda *args, **kwargs: providers.pop(0)
+    )
 
     first = run_benchmark(
         config,

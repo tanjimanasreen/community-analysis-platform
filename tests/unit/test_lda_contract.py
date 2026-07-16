@@ -1,7 +1,7 @@
 import pandas as pd
 
 import src.topics.lda as lda
-from src.config.defaults import default_config
+from src.config.defaults import DEFAULT_CONFIG
 from src.topics.topic_matching import get_matched_topic_df
 
 
@@ -41,13 +41,13 @@ def test_lda_defaults_are_passed_to_model(monkeypatch):
 
     assert isinstance(model, FakeLdaModel)
     call = FakeLdaModel.calls[0]
-    assert call["num_topics"] == default_config.lda.num_topics
-    assert call["random_state"] == default_config.lda.random_state
-    assert call["iterations"] == default_config.lda.iterations
-    assert call["chunksize"] == default_config.lda.chunksize
-    assert call["passes"] == default_config.lda.passes
-    assert call["alpha"] == default_config.lda.alpha
-    assert call["eta"] == default_config.lda.eta
+    assert call["num_topics"] == DEFAULT_CONFIG.lda.num_topics
+    assert call["random_state"] == DEFAULT_CONFIG.lda.random_state
+    assert call["iterations"] == DEFAULT_CONFIG.lda.iterations
+    assert call["chunksize"] == DEFAULT_CONFIG.lda.chunksize
+    assert call["passes"] == DEFAULT_CONFIG.lda.passes
+    assert call["alpha"] == DEFAULT_CONFIG.lda.alpha
+    assert call["eta"] == DEFAULT_CONFIG.lda.eta
 
 
 def test_unigram_and_bigram_tokenizers_do_not_require_nltk():
@@ -99,7 +99,12 @@ def test_matched_topic_df_outputs_expected_columns():
     ]
 
     result = get_matched_topic_df(
-        lda_models=[FakeTopicModel(), FakeTopicModel(), FakeTopicModel(), FakeTopicModel()],
+        lda_models=[
+            FakeTopicModel(),
+            FakeTopicModel(),
+            FakeTopicModel(),
+            FakeTopicModel(),
+        ],
         dfs=dfs,
         community_id_pairs=[(0, 2)],
     )

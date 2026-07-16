@@ -32,8 +32,12 @@ def test_run_theme_pipeline_offline_without_rendering(tmp_path):
     input_dir = tmp_path / "lda"
     output_dir = tmp_path / "theme"
     input_dir.mkdir()
-    pd.DataFrame([_matched_row([1, 2, 3])]).to_csv(input_dir / "january_2017.csv", index=False)
-    pd.DataFrame([_matched_row([1, 2, 3, 4])]).to_csv(input_dir / "february_2017.csv", index=False)
+    pd.DataFrame([_matched_row([1, 2, 3])]).to_csv(
+        input_dir / "january_2017.csv", index=False
+    )
+    pd.DataFrame([_matched_row([1, 2, 3, 4])]).to_csv(
+        input_dir / "february_2017.csv", index=False
+    )
 
     transitions = run_theme_pipeline(
         input_dir=str(input_dir),

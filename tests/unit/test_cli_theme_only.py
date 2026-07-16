@@ -45,7 +45,9 @@ def _write_matched_lda(path):
     ).to_csv(path, index=False)
 
 
-def test_run_theme_analysis_loads_saved_inputs_without_network_topic(monkeypatch, tmp_path):
+def test_run_theme_analysis_loads_saved_inputs_without_network_topic(
+    monkeypatch, tmp_path
+):
     matched_csv = tmp_path / "03_2017.csv"
     _write_matched_lda(matched_csv)
     save_theme_inputs(
@@ -61,7 +63,9 @@ def test_run_theme_analysis_loads_saved_inputs_without_network_topic(monkeypatch
     social_pipeline = __import__("src.pipelines.social_network_pipeline", fromlist=[""])
 
     def fail(*args, **kwargs):
-        raise AssertionError("theme-only execution must not call network/community/topic stages")
+        raise AssertionError(
+            "theme-only execution must not call network/community/topic stages"
+        )
 
     monkeypatch.setattr(social_pipeline, "run_network_phase", fail)
     monkeypatch.setattr(social_pipeline, "run_community_phase", fail)
@@ -83,7 +87,9 @@ def test_run_theme_analysis_loads_saved_inputs_without_network_topic(monkeypatch
     assert calls[0][1]["content_type"] == "reply"
 
 
-def test_run_theme_analysis_explicit_input_dir_keeps_legacy_fixture_mode(monkeypatch, tmp_path):
+def test_run_theme_analysis_explicit_input_dir_keeps_legacy_fixture_mode(
+    monkeypatch, tmp_path
+):
     fixture_dir = tmp_path / "fixture-lda"
     fixture_dir.mkdir()
     _write_matched_lda(fixture_dir / "january_2017.csv")

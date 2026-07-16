@@ -5,7 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from src.themes.benchmark.dataset import SYSTEM_PROMPT, USER_PROMPT_TEMPLATE, build_dataset
+from src.themes.benchmark.dataset import (
+    SYSTEM_PROMPT,
+    USER_PROMPT_TEMPLATE,
+    build_dataset,
+)
 from src.providers.llm7 import (
     LLM7_BASE_URL,
     LLM7BenchmarkProvider,
@@ -14,12 +18,21 @@ from src.providers.llm7 import (
     estimate_llm7_cost,
     load_approved_llm7_selection,
 )
-from src.themes.benchmark.contracts import ThemeBenchmarkError, read_jsonl, stable_hash, write_json
+from src.themes.benchmark.contracts import (
+    ThemeBenchmarkError,
+    read_jsonl,
+    stable_hash,
+    write_json,
+)
 from src.themes.benchmark.runner import run_benchmark
 from src.themes.theme_inputs import save_theme_inputs
 
-
-FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "theme_benchmark" / "matched_lda.csv"
+FIXTURE = (
+    Path(__file__).resolve().parents[1]
+    / "fixtures"
+    / "theme_benchmark"
+    / "matched_lda.csv"
+)
 
 
 class FakeMessage:
@@ -40,18 +53,35 @@ class FakeCompletion:
         self.created = 1782277907
         self.object = "chat.completion"
         self.system_fingerprint = "fp-test"
-        self.usage = usage or {"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150}
+        self.usage = usage or {
+            "prompt_tokens": 100,
+            "completion_tokens": 50,
+            "total_tokens": 150,
+        }
         self.choices = [] if content is None else [FakeChoice(content)]
 
 
 class FakeCompletions:
     def __init__(self, responses=None):
         self.calls = []
-        self.responses = list(responses or [FakeCompletion(json.dumps({"themes": [{"name": "Fruit", "keywords": ["apple", "banana"]}]}))])
+        self.responses = list(
+            responses
+            or [
+                FakeCompletion(
+                    json.dumps(
+                        {"themes": [{"name": "Fruit", "keywords": ["apple", "banana"]}]}
+                    )
+                )
+            ]
+        )
 
     def create(self, **kwargs):
         self.calls.append(kwargs)
-        response = self.responses.pop(0) if self.responses else FakeCompletion(json.dumps({"themes": []}))
+        response = (
+            self.responses.pop(0)
+            if self.responses
+            else FakeCompletion(json.dumps({"themes": []}))
+        )
         if isinstance(response, Exception):
             raise response
         return response
@@ -119,7 +149,9 @@ def _request(tmp_path):
 
 def test_llm7_provider_requires_allow_live_before_client_creation():
     with pytest.raises(ThemeBenchmarkError, match="--allow-live"):
-        LLM7BenchmarkProvider(model_id="llm7-turbo-json", allow_live=False, client=FakeClient())
+        LLM7BenchmarkProvider(
+            model_id="llm7-turbo-json", allow_live=False, client=FakeClient()
+        )
 
 
 def test_llm7_provider_requires_key_without_client(monkeypatch):
@@ -129,7 +161,9 @@ def test_llm7_provider_requires_key_without_client(monkeypatch):
         LLM7BenchmarkProvider(model_id="llm7-turbo-json", allow_live=True)
 
 
-@pytest.mark.parametrize("selector", ["default", "fast", "turbo", "pro", "codestral-latest"])
+@pytest.mark.parametrize(
+    "selector", ["default", "fast", "turbo", "pro", "codestral-latest"]
+)
 def test_llm7_provider_rejects_selector_model_ids(selector):
     with pytest.raises(ThemeBenchmarkError, match="exact model ID"):
         LLM7BenchmarkProvider(model_id=selector, allow_live=True, client=FakeClient())
@@ -151,7 +185,12 @@ def test_llm7_request_construction_preserves_roles_and_settings(tmp_path):
     assert call["model"] == "llm7-turbo-json"
     assert call["messages"] == [
         {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": USER_PROMPT_TEMPLATE.format(keywords=request_row["keyword_text"])},
+        {
+            "role": "user",
+            "content": USER_PROMPT_TEMPLATE.format(
+                keywords=request_row["keyword_text"]
+            ),
+        },
     ]
     assert call["temperature"] == 0.0
     assert call["stream"] is False
@@ -165,7 +204,12 @@ def test_llm7_model_discovery_normalizes_filters_and_hides_secrets(tmp_path):
             "id": "llm7-turbo-json",
             "object": "model",
             "tier": "turbo",
-            "pricing": {"input": 0.1, "output": 0.2, "currency": "USD", "unit": "1M tokens"},
+            "pricing": {
+                "input": 0.1,
+                "output": 0.2,
+                "currency": "USD",
+                "unit": "1M tokens",
+            },
             "modalities": {"input": ["text"], "output": ["text"]},
             "context_window": {"tokens": 8000, "chars": None},
             "stream": True,
@@ -176,7 +220,12 @@ def test_llm7_model_discovery_normalizes_filters_and_hides_secrets(tmp_path):
         {
             "id": "llm7-pro-json",
             "tier": "pro",
-            "pricing": {"input": 0.5, "output": 4.5, "currency": "USD", "unit": "1M tokens"},
+            "pricing": {
+                "input": 0.5,
+                "output": 4.5,
+                "currency": "USD",
+                "unit": "1M tokens",
+            },
             "modalities": {"input": ["text"], "output": ["text"]},
             "json_mode": True,
         },
@@ -208,7 +257,9 @@ def test_llm7_model_discovery_normalizes_filters_and_hides_secrets(tmp_path):
         "llm7-turbo-json",
         "llm7-pro-json",
     }
-    rejected = {item["model_id"]: item["reason"] for item in catalog["rejected_candidates"]}
+    rejected = {
+        item["model_id"]: item["reason"] for item in catalog["rejected_candidates"]
+    }
     assert "json_mode" in rejected["llm7-no-json"]
     assert "selector" in rejected["default"]
     assert "not-persisted" not in json.dumps(catalog)
@@ -245,7 +296,13 @@ def test_llm7_response_normalization_usage_and_cost(tmp_path):
         allow_live=True,
         client=FakeClient(),
         sdk_version="2.44.0",
-        model_catalog_record={"pricing": {"input": 0.1, "output": 0.2, "minimum_request_price_usd": 0.0001}},
+        model_catalog_record={
+            "pricing": {
+                "input": 0.1,
+                "output": 0.2,
+                "minimum_request_price_usd": 0.0001,
+            }
+        },
     )
 
     result = provider.generate(type("Request", (), request_row)())
@@ -283,7 +340,12 @@ def test_llm7_invalid_responses_fail_clearly(tmp_path, completion, error):
 
 def test_llm7_retries_rate_limit_and_enforces_request_cap(tmp_path):
     request_row = _request(tmp_path)
-    client = FakeClient([FakeStatusError("rate limited", 429), FakeCompletion(json.dumps({"themes": []}))])
+    client = FakeClient(
+        [
+            FakeStatusError("rate limited", 429),
+            FakeCompletion(json.dumps({"themes": []})),
+        ]
+    )
     provider = LLM7BenchmarkProvider(
         model_id="llm7-turbo-json",
         allow_live=True,
@@ -300,7 +362,12 @@ def test_llm7_retries_rate_limit_and_enforces_request_cap(tmp_path):
     capped = LLM7BenchmarkProvider(
         model_id="llm7-turbo-json",
         allow_live=True,
-        client=FakeClient([FakeStatusError("rate limited", 429), FakeCompletion(json.dumps({"themes": []}))]),
+        client=FakeClient(
+            [
+                FakeStatusError("rate limited", 429),
+                FakeCompletion(json.dumps({"themes": []})),
+            ]
+        ),
         sdk_version="2.44.0",
         max_outbound_requests=1,
         sleep_fn=lambda seconds: None,
@@ -311,7 +378,9 @@ def test_llm7_retries_rate_limit_and_enforces_request_cap(tmp_path):
 
 def test_llm7_non_retryable_auth_error_is_not_retried(tmp_path):
     request_row = _request(tmp_path)
-    client = FakeClient([FakeStatusError("bad key", 401), FakeCompletion(json.dumps({"themes": []}))])
+    client = FakeClient(
+        [FakeStatusError("bad key", 401), FakeCompletion(json.dumps({"themes": []}))]
+    )
     provider = LLM7BenchmarkProvider(
         model_id="llm7-turbo-json",
         allow_live=True,
@@ -408,7 +477,10 @@ def test_llm7_runner_defaults_live_provider_to_general_mode(monkeypatch, tmp_pat
     )
 
     assert report.request_count == 1
-    assert report.results_by_provider["llm7__llm7-turbo-json"][0]["keyword_mode"] == "general"
+    assert (
+        report.results_by_provider["llm7__llm7-turbo-json"][0]["keyword_mode"]
+        == "general"
+    )
 
 
 def test_llm7_run_requires_saved_approved_selection_artifact(tmp_path):

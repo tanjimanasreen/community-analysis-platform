@@ -122,9 +122,7 @@ def test_tracked_full_flow_creates_parent_children_and_safe_summaries(
     client = MlflowClient(tracking_uri=result.tracking.tracking_uri)
     runs = _all_runs(client, result.tracking.experiment_id)
     assert len(runs) == 4
-    by_stage = {
-        run.data.tags.get("stage_name", "parent"): run for run in runs
-    }
+    by_stage = {run.data.tags.get("stage_name", "parent"): run for run in runs}
     assert set(by_stage) == {
         "parent",
         "network_community",
@@ -145,8 +143,7 @@ def test_tracked_full_flow_creates_parent_children_and_safe_summaries(
     _assert_no_secrets_in_runs(runs)
 
     summary_paths = {
-        item.path
-        for item in client.list_artifacts(parent.info.run_id, "summaries")
+        item.path for item in client.list_artifacts(parent.info.run_id, "summaries")
     }
     assert summary_paths == {
         "summaries/artifact_reference_manifest.json",
@@ -196,9 +193,7 @@ def test_tracking_disabled_creates_no_mlflow_state(monkeypatch, tmp_path):
     assert not (project_root / ".mlflow-test").exists()
 
 
-def test_analytical_failure_marks_parent_and_stage_failed(
-    monkeypatch, tmp_path
-):
+def test_analytical_failure_marks_parent_and_stage_failed(monkeypatch, tmp_path):
     project_root = tmp_path / "project"
     project_root.mkdir()
     dataset = project_root / "dataset.csv"
@@ -214,9 +209,12 @@ def test_analytical_failure_marks_parent_and_stage_failed(
         "safe analytical failure",
         ErrorCategory.SCHEMA_VIOLATION,
     )
-    with prefect_test_harness(), patch(
-        "src.pipelines.social_network_pipeline.run_network_community_pipeline",
-        side_effect=failure,
+    with (
+        prefect_test_harness(),
+        patch(
+            "src.pipelines.social_network_pipeline.run_network_community_pipeline",
+            side_effect=failure,
+        ),
     ):
         with pytest.raises(PipelineError, match="safe analytical failure"):
             run_monthly_analysis_flow(
@@ -227,9 +225,7 @@ def test_analytical_failure_marks_parent_and_stage_failed(
 
     tracking_uri = f"sqlite:///{project_root / '.mlflow-test' / 'mlflow.db'}"
     client = MlflowClient(tracking_uri=tracking_uri)
-    experiment = client.get_experiment_by_name(
-        "community-analysis-integration"
-    )
+    experiment = client.get_experiment_by_name("community-analysis-integration")
     assert experiment is not None
     runs = _all_runs(client, experiment.experiment_id)
     assert len(runs) == 2
@@ -255,9 +251,12 @@ def test_mlflow_write_failure_does_not_change_analytical_success(
         lambda: str(project_root),
     )
 
-    with prefect_test_harness(), patch(
-        "mlflow.tracking.MlflowClient.log_metric",
-        side_effect=RuntimeError("must-not-persist"),
+    with (
+        prefect_test_harness(),
+        patch(
+            "mlflow.tracking.MlflowClient.log_metric",
+            side_effect=RuntimeError("must-not-persist"),
+        ),
     ):
         result = _run_full_flow(
             _tracked_config(dataset, output_root),

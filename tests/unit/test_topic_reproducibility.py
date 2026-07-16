@@ -6,7 +6,13 @@ import json
 
 from prefect.testing.utilities import prefect_test_harness
 from src.orchestration.tasks import run_monthly_topic_phase_task
-from src.orchestration.models import TopicInputBundle, ArtifactReference, ValidatedRunConfiguration, PipelineRunContext
+from src.orchestration.models import (
+    TopicInputBundle,
+    ArtifactReference,
+    ValidatedRunConfiguration,
+    PipelineRunContext,
+)
+
 
 @pytest.fixture
 def run_config():
@@ -22,8 +28,9 @@ def run_config():
             "month": "march",
             "year": "2017",
             "output_base_path": "/tmp/dummy",
-        }
+        },
     )
+
 
 def test_topic_reproducibility(tmp_path, run_config):
     """
@@ -36,39 +43,41 @@ def test_topic_reproducibility(tmp_path, run_config):
     input_dir.mkdir()
 
     abs_csv = input_dir / "abs.csv"
-    pd.DataFrame({
-        "community_number": [1, 1, 2, 2],
-        "messages": [
-            ["apple", "orange", "banana", "apple", "orange", "banana"],
-            ["apple", "orange", "apple", "orange", "apple", "orange"],
-            ["car", "truck", "bus", "car", "truck", "bus"],
-            ["car", "truck", "car", "truck", "car", "truck"]
-        ],
-        "messages_ids": [["m1"], ["m2"], ["m3"], ["m4"]],
-        "total_messages": [6, 6, 6, 6],
-        "user_id": [10, 11, 20, 21],
-        "created_at": ["2017-03-01", "2017-03-01", "2017-03-01", "2017-03-01"],
-    }).to_csv(abs_csv, index=False)
+    pd.DataFrame(
+        {
+            "community_number": [1, 1, 2, 2],
+            "messages": [
+                ["apple", "orange", "banana", "apple", "orange", "banana"],
+                ["apple", "orange", "apple", "orange", "apple", "orange"],
+                ["car", "truck", "bus", "car", "truck", "bus"],
+                ["car", "truck", "car", "truck", "car", "truck"],
+            ],
+            "messages_ids": [["m1"], ["m2"], ["m3"], ["m4"]],
+            "total_messages": [6, 6, 6, 6],
+            "user_id": [10, 11, 20, 21],
+            "created_at": ["2017-03-01", "2017-03-01", "2017-03-01", "2017-03-01"],
+        }
+    ).to_csv(abs_csv, index=False)
 
     wgt_csv = input_dir / "wgt.csv"
     shutil.copy(abs_csv, wgt_csv)
 
     match_csv = input_dir / "match.csv"
-    pd.DataFrame({
-        "abs_community": [1, 2],
-        "per_community": [1, 2],
-        "members": ["user1,user2", "user3,user4"],
-        "jaccard_score": [1.0, 1.0]
-    }).to_csv(match_csv, index=False)
+    pd.DataFrame(
+        {
+            "abs_community": [1, 2],
+            "per_community": [1, 2],
+            "members": ["user1,user2", "user3,user4"],
+            "jaccard_score": [1.0, 1.0],
+        }
+    ).to_csv(match_csv, index=False)
 
     def make_ref(p):
         import hashlib
+
         h = hashlib.sha256(p.read_bytes()).hexdigest()
         return ArtifactReference(
-            path=str(p),
-            sha256=h,
-            media_type="text/csv",
-            byte_size=p.stat().st_size
+            path=str(p), sha256=h, media_type="text/csv", byte_size=p.stat().st_size
         )
 
     bundle = TopicInputBundle(
@@ -76,21 +85,23 @@ def test_topic_reproducibility(tmp_path, run_config):
         weighted_community_messages=make_ref(wgt_csv),
         matched_communities=make_ref(match_csv),
         partial_matched_communities=None,
-        allowed_input_roots=(str(input_dir),)
+        allowed_input_roots=(str(input_dir),),
     )
 
     with prefect_test_harness():
         # Override output_root for run 1
         out_dir_1 = tmp_path / "run_1"
         out_dir_1.mkdir()
-        rc1 = ValidatedRunConfiguration(run_config.config_digest, str(out_dir_1), run_config.raw_config)
+        rc1 = ValidatedRunConfiguration(
+            run_config.config_digest, str(out_dir_1), run_config.raw_config
+        )
 
         ctx1 = PipelineRunContext.create(
             pipeline_run_id="repro_1",
             git_commit="HEAD",
             config_digest=run_config.config_digest,
             output_root=str(out_dir_1),
-            datasets=[]
+            datasets=[],
         )
 
         res_1 = run_monthly_topic_phase_task.fn(bundle, rc1, ctx1)
@@ -98,13 +109,15 @@ def test_topic_reproducibility(tmp_path, run_config):
         # Run 2
         out_dir_2 = tmp_path / "run_2"
         out_dir_2.mkdir()
-        rc2 = ValidatedRunConfiguration(run_config.config_digest, str(out_dir_2), run_config.raw_config)
+        rc2 = ValidatedRunConfiguration(
+            run_config.config_digest, str(out_dir_2), run_config.raw_config
+        )
         ctx2 = PipelineRunContext.create(
             pipeline_run_id="repro_2",
             git_commit="HEAD",
             config_digest=run_config.config_digest,
             output_root=str(out_dir_2),
-            datasets=[]
+            datasets=[],
         )
 
         res_2 = run_monthly_topic_phase_task.fn(bundle, rc2, ctx2)
@@ -129,7 +142,7 @@ def test_topic_reproducibility(tmp_path, run_config):
 
     # Compare all theme_inputs (manifest)
     for t1, t2 in zip(res_1.theme_inputs, res_2.theme_inputs):
-        if t1.path.endswith('.json'):
+        if t1.path.endswith(".json"):
             with open(t1.path) as f1, open(t2.path) as f2:
                 assert json.load(f1) == json.load(f2)
         else:

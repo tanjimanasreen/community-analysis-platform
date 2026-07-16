@@ -12,8 +12,12 @@ from src.themes.benchmark.review import REVIEW_SCORE_COLUMNS, validate_review_im
 from src.themes.benchmark.runner import run_benchmark
 from src.themes.theme_inputs import save_theme_inputs
 
-
-FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "theme_benchmark" / "matched_lda.csv"
+FIXTURE = (
+    Path(__file__).resolve().parents[1]
+    / "fixtures"
+    / "theme_benchmark"
+    / "matched_lda.csv"
+)
 
 
 def _config(tmp_path):
@@ -112,7 +116,9 @@ def test_freeze_dataset_is_deterministic_and_preserves_keyword_fields(tmp_path):
     assert (first["output_dir"] / "reference" / "gpt4o_config.json").exists()
 
 
-def test_freeze_dataset_fails_when_saved_artifacts_have_too_few_valid_examples(tmp_path):
+def test_freeze_dataset_fails_when_saved_artifacts_have_too_few_valid_examples(
+    tmp_path,
+):
     config = _config(tmp_path)
     save_theme_inputs(
         matched_lda_csv=FIXTURE,
@@ -237,8 +243,7 @@ def test_split_aware_benchmark_run_executes_only_requested_split(tmp_path):
     assert second.cache_hits == 2
     assert second.provider_executions == 0
     result_ids = {
-        row["example_id"]
-        for row in second.results_by_provider["keyword_baseline"]
+        row["example_id"] for row in second.results_by_provider["keyword_baseline"]
     }
     development_ids = {
         row["example_id"]
@@ -246,7 +251,9 @@ def test_split_aware_benchmark_run_executes_only_requested_split(tmp_path):
         if row["split"] == "development"
     }
     assert result_ids == development_ids
-    assert (frozen["output_dir"] / "generations" / "development" / "keyword_baseline.jsonl").exists()
+    assert (
+        frozen["output_dir"] / "generations" / "development" / "keyword_baseline.jsonl"
+    ).exists()
     assert (frozen["output_dir"] / "scores" / "development_summary.csv").exists()
 
 
@@ -292,7 +299,9 @@ def test_resume_unresolved_runs_only_uncached_failed_requests(monkeypatch, tmp_p
         development_count=2,
         pilot_count=1,
     )
-    monkeypatch.setattr(runner, "get_provider", lambda *args, **kwargs: PartiallyFailingProvider())
+    monkeypatch.setattr(
+        runner, "get_provider", lambda *args, **kwargs: PartiallyFailingProvider()
+    )
     first = runner.run_benchmark(
         config,
         run_id="resume-unresolved",
@@ -305,7 +314,9 @@ def test_resume_unresolved_runs_only_uncached_failed_requests(monkeypatch, tmp_p
 
     PartiallyFailingProvider.calls = 0
     SuccessfulProvider.calls = 0
-    monkeypatch.setattr(runner, "get_provider", lambda *args, **kwargs: SuccessfulProvider())
+    monkeypatch.setattr(
+        runner, "get_provider", lambda *args, **kwargs: SuccessfulProvider()
+    )
     second = runner.run_benchmark(
         config,
         run_id="resume-unresolved",
@@ -340,12 +351,16 @@ def test_review_import_validation_rejects_duplicate_ids_and_provider_leaks(tmp_p
         **{column: [1, 5] for column in REVIEW_SCORE_COLUMNS},
     }
     duplicate_path = tmp_path / "duplicate.csv"
-    pd.DataFrame({**valid, "review_id": ["r1", "r1"]}).to_csv(duplicate_path, index=False)
+    pd.DataFrame({**valid, "review_id": ["r1", "r1"]}).to_csv(
+        duplicate_path, index=False
+    )
     with pytest.raises(ThemeBenchmarkError, match="duplicate review_id"):
         validate_review_import(duplicate_path)
 
     leaked_path = tmp_path / "leaked.csv"
-    pd.DataFrame({**valid, "provider_id": ["gemini", "mock"]}).to_csv(leaked_path, index=False)
+    pd.DataFrame({**valid, "provider_id": ["gemini", "mock"]}).to_csv(
+        leaked_path, index=False
+    )
     with pytest.raises(ThemeBenchmarkError, match="provider identity"):
         validate_review_import(leaked_path)
 

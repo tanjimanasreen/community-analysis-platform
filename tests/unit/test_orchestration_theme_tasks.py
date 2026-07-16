@@ -32,10 +32,10 @@ from src.orchestration.models import (
 from src.orchestration.tasks import run_monthly_themes_task
 from src.orchestration.retry_policy import ErrorCategory, PipelineError
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _sha256(content: bytes) -> str:
     return hashlib.sha256(content).hexdigest()
@@ -44,6 +44,7 @@ def _sha256(content: bytes) -> str:
 THEME_INPUT_CONTENT = b"""members,absolute_community,weighted_community,absolute_unigram_keywords,absolute_bigram_keywords,weighted_unigram_keywords,weighted_bigram_keywords
 "['u1']",1,2,"['a']","['b']","['c']","['d']"
 """
+
 
 def _write(path: Path, content: bytes = THEME_INPUT_CONTENT) -> ArtifactReference:
     path.write_bytes(content)
@@ -88,14 +89,13 @@ def _make_theme_outputs(out_dir: str, months=("march",), year="2017"):
         Path(os.path.join(out_dir, f"{month}_{year}_with_themes.csv")).write_text(
             "community,theme\n1,Technology"
         )
-    Path(os.path.join(out_dir, "community_transition.csv")).write_text(
-        "from,to\nA,B"
-    )
+    Path(os.path.join(out_dir, "community_transition.csv")).write_text("from,to\nA,B")
 
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(autouse=True)
 def prefect_test_fixture():
@@ -107,6 +107,7 @@ def prefect_test_fixture():
 # 1. retries=0 confirmed
 # ---------------------------------------------------------------------------
 
+
 def test_theme_task_retries_zero():
     assert run_monthly_themes_task.retries == 0
 
@@ -114,6 +115,7 @@ def test_theme_task_retries_zero():
 # ---------------------------------------------------------------------------
 # 2. Empty bundle fails before provider construction
 # ---------------------------------------------------------------------------
+
 
 @patch("src.providers.factory.build_theme_provider")
 def test_empty_bundle_fails_before_provider(mock_build, tmp_path):
@@ -127,6 +129,7 @@ def test_empty_bundle_fails_before_provider(mock_build, tmp_path):
 # ---------------------------------------------------------------------------
 # 3. Missing input file fails before provider construction
 # ---------------------------------------------------------------------------
+
 
 @patch("src.providers.factory.build_theme_provider")
 def test_missing_input_fails_before_provider(mock_build, tmp_path):
@@ -148,6 +151,7 @@ def test_missing_input_fails_before_provider(mock_build, tmp_path):
 # ---------------------------------------------------------------------------
 # 4. Hash mismatch fails before provider construction
 # ---------------------------------------------------------------------------
+
 
 @patch("src.providers.factory.build_theme_provider")
 def test_hash_mismatch_fails_before_provider(mock_build, tmp_path):
@@ -175,6 +179,7 @@ def test_hash_mismatch_fails_before_provider(mock_build, tmp_path):
 # 5. Size mismatch fails before provider construction
 # ---------------------------------------------------------------------------
 
+
 @patch("src.providers.factory.build_theme_provider")
 def test_size_mismatch_fails_before_provider(mock_build, tmp_path):
     content = THEME_INPUT_CONTENT
@@ -200,6 +205,7 @@ def test_size_mismatch_fails_before_provider(mock_build, tmp_path):
 # ---------------------------------------------------------------------------
 # 6. Path escape fails before provider construction
 # ---------------------------------------------------------------------------
+
 
 @patch("src.providers.factory.build_theme_provider")
 def test_path_escape_fails_before_provider(mock_build, tmp_path):
@@ -234,6 +240,7 @@ def test_path_escape_fails_before_provider(mock_build, tmp_path):
 # 6b. Standalone input root accepted
 # ---------------------------------------------------------------------------
 
+
 @patch("src.pipelines.theme_pipeline.run_theme_pipeline_from_monthly_data")
 def test_explicit_standalone_input_root_accepted(mock_run, tmp_path):
     import tempfile
@@ -253,22 +260,23 @@ def test_explicit_standalone_input_root_accepted(mock_run, tmp_path):
                     byte_size=len(content),
                 )
             },
-            allowed_input_roots=(str(other),)
+            allowed_input_roots=(str(other),),
         )
         mock_run.side_effect = lambda **kw: _make_theme_outputs(kw["output_dir"])
 
         # This should NOT raise an error about being outside allowed_root
-        result = run_monthly_themes_task.fn(bundle, _config(tmp_path), _context(tmp_path))
+        result = run_monthly_themes_task.fn(
+            bundle, _config(tmp_path), _context(tmp_path)
+        )
         assert isinstance(result, ThemeOutputBundle)
     finally:
         shutil.rmtree(str(other), ignore_errors=True)
 
 
-
-
 # ---------------------------------------------------------------------------
 # 7. Provider factory called exactly once (domain ownership)
 # ---------------------------------------------------------------------------
+
 
 @patch("src.pipelines.theme_pipeline.run_theme_pipeline_from_monthly_data")
 @patch("src.providers.factory.build_theme_provider")
@@ -309,6 +317,7 @@ def test_provider_factory_called_exactly_once(mock_build, mock_run, tmp_path):
 # ---------------------------------------------------------------------------
 # 8. Provider not in task results
 # ---------------------------------------------------------------------------
+
 
 @patch("src.pipelines.theme_pipeline.run_theme_pipeline_from_monthly_data")
 def test_no_provider_object_in_results(mock_run, tmp_path):
@@ -351,9 +360,11 @@ def test_no_provider_object_in_results(mock_run, tmp_path):
 # 9. Provider summary — required fields, secrets excluded
 # ---------------------------------------------------------------------------
 
+
 @patch("src.pipelines.theme_pipeline.run_theme_pipeline_from_monthly_data")
 def test_provider_summary_schema(mock_run, tmp_path, caplog):
     import json
+
     content = THEME_INPUT_CONTENT
     p = tmp_path / "march.csv"
     p.write_bytes(content)
@@ -421,12 +432,22 @@ def test_provider_summary_schema(mock_run, tmp_path, caplog):
 
     # None of the injected secret keys or values appears anywhere in the JSON
     json_str = json.dumps(data).lower()
-    injected_secrets = ["secret-a", "secret-b", "secret-c", "secret-d", "secret-e", "secret-f", "secret-g", "secret-h"]
+    injected_secrets = [
+        "secret-a",
+        "secret-b",
+        "secret-c",
+        "secret-d",
+        "secret-e",
+        "secret-f",
+        "secret-g",
+        "secret-h",
+    ]
     for secret in injected_secrets:
         assert secret not in json_str, f"Secret {secret} leaked into JSON"
 
     # None appears in the returned task result
     import dataclasses
+
     result_str = str(dataclasses.asdict(result)).lower()
     for secret in injected_secrets:
         assert secret not in result_str, f"Secret {secret} leaked into Task Result"
@@ -440,6 +461,7 @@ def test_provider_summary_schema(mock_run, tmp_path, caplog):
 # ---------------------------------------------------------------------------
 # 10. Provider summary digest is deterministic
 # ---------------------------------------------------------------------------
+
 
 @patch("src.pipelines.theme_pipeline.run_theme_pipeline_from_monthly_data")
 def test_provider_summary_digest_deterministic(mock_run, tmp_path):
@@ -464,8 +486,12 @@ def test_provider_summary_digest_deterministic(mock_run, tmp_path):
 
     mock_run.side_effect = lambda **kw: _make_theme_outputs(kw["output_dir"])
 
-    r1 = run_monthly_themes_task.fn(make_bundle(p1), _config(tmp_path), _context(tmp_path))
-    r2 = run_monthly_themes_task.fn(make_bundle(p2), _config(tmp_path), _context(tmp_path))
+    r1 = run_monthly_themes_task.fn(
+        make_bundle(p1), _config(tmp_path), _context(tmp_path)
+    )
+    r2 = run_monthly_themes_task.fn(
+        make_bundle(p2), _config(tmp_path), _context(tmp_path)
+    )
 
     with open(r1.provider_run_summary.path) as f:
         d1 = json.load(f)
@@ -478,6 +504,7 @@ def test_provider_summary_digest_deterministic(mock_run, tmp_path):
 # ---------------------------------------------------------------------------
 # 11. Stale files excluded from visualization output
 # ---------------------------------------------------------------------------
+
 
 @patch("src.pipelines.theme_pipeline.run_theme_pipeline_from_monthly_data")
 def test_stale_files_excluded_from_visualizations(mock_run, tmp_path):
@@ -536,6 +563,7 @@ def test_stale_files_excluded_from_visualizations(mock_run, tmp_path):
 # 12. Required configuration and schema validation
 # ---------------------------------------------------------------------------
 
+
 def test_missing_required_theme_config_fails_before_domain(tmp_path):
     input_ref = _write(tmp_path / "march.csv")
     bundle = ThemeInputBundle(
@@ -547,7 +575,9 @@ def test_missing_required_theme_config_fails_before_domain(tmp_path):
         output_root=str(tmp_path),
         raw_config={"content_type": "reply"},
     )
-    with patch("src.pipelines.theme_pipeline.run_theme_pipeline_from_monthly_data") as mock_run:
+    with patch(
+        "src.pipelines.theme_pipeline.run_theme_pipeline_from_monthly_data"
+    ) as mock_run:
         with pytest.raises(PipelineError) as exc_info:
             run_monthly_themes_task.fn(bundle, config, _context(tmp_path))
     assert exc_info.value.category == ErrorCategory.INVALID_CONFIGURATION
@@ -560,7 +590,9 @@ def test_invalid_theme_csv_schema_fails_before_domain(tmp_path):
         monthly_topic_outputs={"march": invalid},
         allowed_input_roots=(str(tmp_path),),
     )
-    with patch("src.pipelines.theme_pipeline.run_theme_pipeline_from_monthly_data") as mock_run:
+    with patch(
+        "src.pipelines.theme_pipeline.run_theme_pipeline_from_monthly_data"
+    ) as mock_run:
         with pytest.raises(PipelineError) as exc_info:
             run_monthly_themes_task.fn(bundle, _config(tmp_path), _context(tmp_path))
     assert exc_info.value.category == ErrorCategory.SCHEMA_VIOLATION
@@ -570,6 +602,7 @@ def test_invalid_theme_csv_schema_fails_before_domain(tmp_path):
 # ---------------------------------------------------------------------------
 # 13. Output uses OUTPUT_NOT_FOUND (not MISSING_REQUIRED_INPUT) for missing post-exec output
 # ---------------------------------------------------------------------------
+
 
 @patch("src.pipelines.theme_pipeline.run_theme_pipeline_from_monthly_data")
 def test_missing_post_exec_output_uses_correct_category(mock_run, tmp_path):
@@ -601,6 +634,7 @@ def test_missing_post_exec_output_uses_correct_category(mock_run, tmp_path):
 # 13. Theme artifacts remain under run-specific directory
 # ---------------------------------------------------------------------------
 
+
 @patch("src.pipelines.theme_pipeline.run_theme_pipeline_from_monthly_data")
 def test_artifacts_under_run_directory(mock_run, tmp_path):
     content = THEME_INPUT_CONTENT
@@ -623,9 +657,15 @@ def test_artifacts_under_run_directory(mock_run, tmp_path):
 
     expected_root = (tmp_path / "run-test").resolve()
     for art in result.themes:
-        assert Path(art.path).resolve().is_relative_to(expected_root), (
-            f"{art.path} is outside run directory"
-        )
+        assert (
+            Path(art.path).resolve().is_relative_to(expected_root)
+        ), f"{art.path} is outside run directory"
     if result.community_transitions:
-        assert Path(result.community_transitions.path).resolve().is_relative_to(expected_root)
-    assert Path(result.provider_run_summary.path).resolve().is_relative_to(expected_root)
+        assert (
+            Path(result.community_transitions.path)
+            .resolve()
+            .is_relative_to(expected_root)
+        )
+    assert (
+        Path(result.provider_run_summary.path).resolve().is_relative_to(expected_root)
+    )

@@ -39,9 +39,7 @@ def test_summaries_use_artifact_references_not_file_contents(tmp_path):
         path.write_text("x\n1\n", encoding="utf-8")
     topic = TopicOutputBundle(
         lda_scores=_ref(lda, "lda_scores"),
-        matched_communities_topics=_ref(
-            matched, "matched_communities_topics"
-        ),
+        matched_communities_topics=_ref(matched, "matched_communities_topics"),
         partial_matched_communities_topics=None,
         theme_inputs=(),
     )
@@ -82,8 +80,7 @@ def test_summaries_use_artifact_references_not_file_contents(tmp_path):
         "theme",
     }
     assert all(
-        not item["relative_path"].startswith("/")
-        for item in manifest["artifacts"]
+        not item["relative_path"].startswith("/") for item in manifest["artifacts"]
     )
 
 

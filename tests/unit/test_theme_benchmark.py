@@ -18,8 +18,12 @@ from src.themes.benchmark.review import export_blinded_review, validate_review_i
 from src.themes.benchmark.runner import run_benchmark
 from src.themes.theme_inputs import save_theme_inputs
 
-
-FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "theme_benchmark" / "matched_lda.csv"
+FIXTURE = (
+    Path(__file__).resolve().parents[1]
+    / "fixtures"
+    / "theme_benchmark"
+    / "matched_lda.csv"
+)
 
 
 def _config(tmp_path):
@@ -100,7 +104,9 @@ def test_requests_match_current_production_theme_task(tmp_path):
         keywords="apple,banana,bigapple,orange,bigorange"
     )
 
-    reference = json.loads((result["output_dir"] / "reference" / "gpt4o_config.json").read_text())
+    reference = json.loads(
+        (result["output_dir"] / "reference" / "gpt4o_config.json").read_text()
+    )
     assert reference["model_id"] == "gpt-4o"
     assert reference["temperature"] == 0.0
     assert reference["seed"] == 42
@@ -128,21 +134,29 @@ def test_benchmark_run_uses_persistent_jsonl_cache(tmp_path):
     _save_theme_fixture(config)
     result = build_dataset(config, run_id="cache-test", limit=1)
 
-    first = run_benchmark(config, run_id="cache-test", provider_ids=["keyword_baseline"])
+    first = run_benchmark(
+        config, run_id="cache-test", provider_ids=["keyword_baseline"]
+    )
     generation_path = result["output_dir"] / "generations" / "keyword_baseline.jsonl"
     generation_path.unlink()
-    second = run_benchmark(config, run_id="cache-test", provider_ids=["keyword_baseline"])
+    second = run_benchmark(
+        config, run_id="cache-test", provider_ids=["keyword_baseline"]
+    )
 
     assert len(first.results_by_provider["keyword_baseline"]) == 3
     assert first.cache_hits == 0
     assert first.cache_misses == 3
     assert first.provider_executions == 3
-    assert all(not row["cache_hit"] for row in first.results_by_provider["keyword_baseline"])
+    assert all(
+        not row["cache_hit"] for row in first.results_by_provider["keyword_baseline"]
+    )
     assert len(second.results_by_provider["keyword_baseline"]) == 3
     assert second.cache_hits == 3
     assert second.cache_misses == 0
     assert second.provider_executions == 0
-    assert all(row["cache_hit"] for row in second.results_by_provider["keyword_baseline"])
+    assert all(
+        row["cache_hit"] for row in second.results_by_provider["keyword_baseline"]
+    )
     assert (result["output_dir"] / "cache" / "keyword_baseline.jsonl").exists()
 
 
@@ -151,8 +165,12 @@ def test_benchmark_run_reports_mixed_provider_cache_stats(tmp_path):
     _save_theme_fixture(config)
     build_dataset(config, run_id="mixed-cache-test", limit=1)
 
-    first = run_benchmark(config, run_id="mixed-cache-test", provider_ids=["keyword_baseline", "mock"])
-    second = run_benchmark(config, run_id="mixed-cache-test", provider_ids=["keyword_baseline", "mock"])
+    first = run_benchmark(
+        config, run_id="mixed-cache-test", provider_ids=["keyword_baseline", "mock"]
+    )
+    second = run_benchmark(
+        config, run_id="mixed-cache-test", provider_ids=["keyword_baseline", "mock"]
+    )
 
     assert first.request_count == 6
     assert first.result_count == 6
@@ -187,10 +205,16 @@ def test_benchmark_run_does_not_cache_failed_results(monkeypatch, tmp_path):
     config = _config(tmp_path)
     _save_theme_fixture(config)
     build_dataset(config, run_id="failure-cache-test", limit=1)
-    monkeypatch.setattr(runner, "get_provider", lambda *args, **kwargs: FailingProvider())
+    monkeypatch.setattr(
+        runner, "get_provider", lambda *args, **kwargs: FailingProvider()
+    )
 
-    first = runner.run_benchmark(config, run_id="failure-cache-test", provider_ids=["failing"])
-    second = runner.run_benchmark(config, run_id="failure-cache-test", provider_ids=["failing"])
+    first = runner.run_benchmark(
+        config, run_id="failure-cache-test", provider_ids=["failing"]
+    )
+    second = runner.run_benchmark(
+        config, run_id="failure-cache-test", provider_ids=["failing"]
+    )
 
     assert first.failures == 3
     assert first.provider_executions == 3
@@ -205,7 +229,9 @@ def test_blinded_review_export_hides_provider_identities(tmp_path):
     config = _config(tmp_path)
     _save_theme_fixture(config)
     build_dataset(config, run_id="review-test", limit=1)
-    run_benchmark(config, run_id="review-test", provider_ids=["keyword_baseline", "mock"])
+    run_benchmark(
+        config, run_id="review-test", provider_ids=["keyword_baseline", "mock"]
+    )
 
     review_path = export_blinded_review(config["output_base_path"], "review-test")
 

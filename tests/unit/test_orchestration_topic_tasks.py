@@ -34,10 +34,10 @@ from src.orchestration.tasks import run_monthly_topic_phase_task
 from src.orchestration.retry_policy import ErrorCategory, PipelineError
 from src.orchestration.hashing import topic_cache_key_fn, build_stage_cache_key
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _sha256(content: bytes) -> str:
     return hashlib.sha256(content).hexdigest()
@@ -52,6 +52,7 @@ MATCHED_COMMUNITY_CSV = b"""abs_community,per_community,jaccard_score,members
 PARTIAL_MATCHED_COMMUNITY_CSV = b"""abs_community,absolute_members,per_community,weighted_members,jaccard_score,common_members,uncommon_members
 1,"['u1']",2,"['u1']",1.0,"['u1']","[]"
 """
+
 
 def _write(path: Path, content: bytes) -> ArtifactReference:
     path.write_bytes(content)
@@ -121,6 +122,7 @@ def _make_topic_outputs(out_dir: str, data_type="twitter", content_type="reply")
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(autouse=True)
 def prefect_test_fixture():
     with prefect_test_harness():
@@ -131,8 +133,10 @@ def prefect_test_fixture():
 # 1. Domain isolation — no Prefect imports in domain modules
 # ---------------------------------------------------------------------------
 
+
 def test_no_prefect_import_in_topic_domain():
     import subprocess
+
     result = subprocess.run(
         ["grep", "-rn", "from prefect", "src/topics", "src/pipelines"],
         capture_output=True,
@@ -148,6 +152,7 @@ def test_no_prefect_import_in_topic_domain():
 # 2. retries=0 confirmed in task decoration
 # ---------------------------------------------------------------------------
 
+
 def test_topic_task_retries_zero():
     assert run_monthly_topic_phase_task.retries == 0
 
@@ -155,6 +160,7 @@ def test_topic_task_retries_zero():
 # ---------------------------------------------------------------------------
 # 3. Input validation — missing required artifact
 # ---------------------------------------------------------------------------
+
 
 def test_missing_abs_input_raises(tmp_path):
     bundle = TopicInputBundle(
@@ -177,6 +183,7 @@ def test_missing_abs_input_raises(tmp_path):
 # ---------------------------------------------------------------------------
 # 4. Input validation — directory instead of file
 # ---------------------------------------------------------------------------
+
 
 def test_directory_instead_of_file_raises(tmp_path):
     a_dir = tmp_path / "abs_dir"
@@ -201,6 +208,7 @@ def test_directory_instead_of_file_raises(tmp_path):
 # ---------------------------------------------------------------------------
 # 5. Input validation — path outside allowed root
 # ---------------------------------------------------------------------------
+
 
 def test_path_outside_allowed_root_raises(tmp_path):
     import tempfile
@@ -231,10 +239,13 @@ def test_path_outside_allowed_root_raises(tmp_path):
             partial_matched_communities=None,
         )
         with pytest.raises(PipelineError) as exc_info:
-            run_monthly_topic_phase_task.fn(bundle, _config(tmp_path), _context(tmp_path))
+            run_monthly_topic_phase_task.fn(
+                bundle, _config(tmp_path), _context(tmp_path)
+            )
         assert exc_info.value.category == ErrorCategory.SCHEMA_VIOLATION
     finally:
         import shutil
+
         shutil.rmtree(str(other_dir), ignore_errors=True)
 
 
@@ -242,9 +253,11 @@ def test_path_outside_allowed_root_raises(tmp_path):
 # 5b. Input validation — standalone input root accepted
 # ---------------------------------------------------------------------------
 
+
 @patch("src.pipelines.social_network_pipeline.run_topic_phase")
 def test_explicit_standalone_input_root_accepted(mock_run, tmp_path):
     import tempfile
+
     other_dir = Path(tempfile.mkdtemp())
     try:
         abs_path = other_dir / "abs.csv"
@@ -264,7 +277,9 @@ def test_explicit_standalone_input_root_accepted(mock_run, tmp_path):
         cfg = _config(tmp_path)
 
         mock_run.side_effect = lambda **kw: _make_topic_outputs(
-            kw["output_dir"], kw.get("data_type", "twitter"), kw.get("content_type", "reply")
+            kw["output_dir"],
+            kw.get("data_type", "twitter"),
+            kw.get("content_type", "reply"),
         )
 
         # This should NOT raise an error about being outside allowed_root
@@ -272,14 +287,14 @@ def test_explicit_standalone_input_root_accepted(mock_run, tmp_path):
         assert isinstance(result, TopicOutputBundle)
     finally:
         import shutil
+
         shutil.rmtree(str(other_dir), ignore_errors=True)
-
-
 
 
 # ---------------------------------------------------------------------------
 # 6. Input validation — byte size mismatch
 # ---------------------------------------------------------------------------
+
 
 def test_size_mismatch_raises(tmp_path):
     content = b"col\nval"
@@ -307,6 +322,7 @@ def test_size_mismatch_raises(tmp_path):
 # 7. Input validation — SHA-256 mismatch
 # ---------------------------------------------------------------------------
 
+
 def test_hash_mismatch_raises(tmp_path):
     content = b"col\nval"
     p = tmp_path / "abs.csv"
@@ -333,6 +349,7 @@ def test_hash_mismatch_raises(tmp_path):
 # 8. Optional partial-matched absent is accepted
 # ---------------------------------------------------------------------------
 
+
 @patch("src.pipelines.social_network_pipeline.run_topic_phase")
 def test_optional_partial_absent_succeeds(mock_run, tmp_path):
     bundle = _bundle(tmp_path, partial=None)
@@ -340,7 +357,9 @@ def test_optional_partial_absent_succeeds(mock_run, tmp_path):
     cfg = _config(tmp_path)
 
     mock_run.side_effect = lambda **kw: _make_topic_outputs(
-        kw["output_dir"], kw.get("data_type", "twitter"), kw.get("content_type", "reply")
+        kw["output_dir"],
+        kw.get("data_type", "twitter"),
+        kw.get("content_type", "reply"),
     )
 
     result = run_monthly_topic_phase_task.fn(bundle, cfg, ctx)
@@ -352,6 +371,7 @@ def test_optional_partial_absent_succeeds(mock_run, tmp_path):
 # 9. Delegation — domain function called exactly once
 # ---------------------------------------------------------------------------
 
+
 @patch("src.pipelines.social_network_pipeline.run_topic_phase")
 def test_domain_called_exactly_once(mock_run, tmp_path):
     bundle = _bundle(tmp_path)
@@ -359,7 +379,9 @@ def test_domain_called_exactly_once(mock_run, tmp_path):
     cfg = _config(tmp_path)
 
     mock_run.side_effect = lambda **kw: _make_topic_outputs(
-        kw["output_dir"], kw.get("data_type", "twitter"), kw.get("content_type", "reply")
+        kw["output_dir"],
+        kw.get("data_type", "twitter"),
+        kw.get("content_type", "reply"),
     )
 
     run_monthly_topic_phase_task.fn(bundle, cfg, ctx)
@@ -370,6 +392,7 @@ def test_domain_called_exactly_once(mock_run, tmp_path):
 # 10. Outputs — correct types and keys, no large objects
 # ---------------------------------------------------------------------------
 
+
 @patch("src.pipelines.social_network_pipeline.run_topic_phase")
 def test_output_bundle_contains_only_artifact_references(mock_run, tmp_path):
     bundle = _bundle(tmp_path)
@@ -377,7 +400,9 @@ def test_output_bundle_contains_only_artifact_references(mock_run, tmp_path):
     cfg = _config(tmp_path)
 
     mock_run.side_effect = lambda **kw: _make_topic_outputs(
-        kw["output_dir"], kw.get("data_type", "twitter"), kw.get("content_type", "reply")
+        kw["output_dir"],
+        kw.get("data_type", "twitter"),
+        kw.get("content_type", "reply"),
     )
 
     result = run_monthly_topic_phase_task.fn(bundle, cfg, ctx)
@@ -407,6 +432,7 @@ def test_output_bundle_contains_only_artifact_references(mock_run, tmp_path):
 # 11. Outputs — stale / debug files are NOT included
 # ---------------------------------------------------------------------------
 
+
 @patch("src.pipelines.social_network_pipeline.run_topic_phase")
 def test_stale_files_excluded_from_output(mock_run, tmp_path):
     bundle = _bundle(tmp_path)
@@ -423,10 +449,18 @@ def test_stale_files_excluded_from_output(mock_run, tmp_path):
 
     result = run_monthly_topic_phase_task.fn(bundle, cfg, ctx)
 
-    all_paths = [result.lda_scores.path] + [
-        r.path for r in [result.matched_communities_topics, result.partial_matched_communities_topics]
-        if r
-    ] + [r.path for r in result.theme_inputs]
+    all_paths = (
+        [result.lda_scores.path]
+        + [
+            r.path
+            for r in [
+                result.matched_communities_topics,
+                result.partial_matched_communities_topics,
+            ]
+            if r
+        ]
+        + [r.path for r in result.theme_inputs]
+    )
 
     assert not any("debug_leftover" in p for p in all_paths)
 
@@ -434,6 +468,7 @@ def test_stale_files_excluded_from_output(mock_run, tmp_path):
 # ---------------------------------------------------------------------------
 # 12. Required configuration and schema validation
 # ---------------------------------------------------------------------------
+
 
 def test_missing_required_topic_config_fails_before_domain(tmp_path):
     bundle = _bundle(tmp_path)
@@ -460,7 +495,9 @@ def test_invalid_topic_csv_schema_fails_before_domain(tmp_path):
     )
     with patch("src.pipelines.social_network_pipeline.run_topic_phase") as mock_run:
         with pytest.raises(PipelineError) as exc_info:
-            run_monthly_topic_phase_task.fn(bundle, _config(tmp_path), _context(tmp_path))
+            run_monthly_topic_phase_task.fn(
+                bundle, _config(tmp_path), _context(tmp_path)
+            )
     assert exc_info.value.category == ErrorCategory.SCHEMA_VIOLATION
     mock_run.assert_not_called()
 
@@ -469,12 +506,16 @@ def test_invalid_topic_csv_schema_fails_before_domain(tmp_path):
 # 13. Cache key helper tests
 # ---------------------------------------------------------------------------
 
+
 def _make_cache_params(tmp_path, lda_config=None, provider_config=None):
     content = b"col\nval"
     p = tmp_path / "f.csv"
     p.write_bytes(content)
     ref = ArtifactReference(
-        path=str(p), sha256=_sha256(content), media_type="text/csv", byte_size=len(content)
+        path=str(p),
+        sha256=_sha256(content),
+        media_type="text/csv",
+        byte_size=len(content),
     )
     bundle = TopicInputBundle(
         absolute_community_messages=ref,
@@ -509,7 +550,10 @@ def test_cache_key_stable_across_dict_order(tmp_path):
     p = tmp_path / "f.csv"
     p.write_bytes(content)
     ref = ArtifactReference(
-        path=str(p), sha256=_sha256(content), media_type="text/csv", byte_size=len(content)
+        path=str(p),
+        sha256=_sha256(content),
+        media_type="text/csv",
+        byte_size=len(content),
     )
     bundle = TopicInputBundle(
         absolute_community_messages=ref,
@@ -517,10 +561,16 @@ def test_cache_key_stable_across_dict_order(tmp_path):
         matched_communities=ref,
         partial_matched_communities=None,
     )
-    base_raw = {"lda": {"num_topics": 15, "random_state": 100}, "preprocessing": {}, "matching": {}}
+    base_raw = {
+        "lda": {"num_topics": 15, "random_state": 100},
+        "preprocessing": {},
+        "matching": {},
+    }
     # dict ordering differs — key must be the same
     cfg1 = ValidatedRunConfiguration("d", str(tmp_path), base_raw)
-    cfg2 = ValidatedRunConfiguration("d", str(tmp_path), dict(reversed(list(base_raw.items()))))
+    cfg2 = ValidatedRunConfiguration(
+        "d", str(tmp_path), dict(reversed(list(base_raw.items())))
+    )
     k1 = topic_cache_key_fn(None, {"input_bundle": bundle, "config": cfg1})
     k2 = topic_cache_key_fn(None, {"input_bundle": bundle, "config": cfg2})
     assert k1 == k2
@@ -538,7 +588,10 @@ def test_cache_key_changes_on_input_hash_change(tmp_path):
     p_b = tmp_path / "b.csv"
     p_b.write_bytes(content_b)
     ref_b = ArtifactReference(
-        path=str(p_b), sha256=_sha256(content_b), media_type="text/csv", byte_size=len(content_b)
+        path=str(p_b),
+        sha256=_sha256(content_b),
+        media_type="text/csv",
+        byte_size=len(content_b),
     )
     params_b_bundle = TopicInputBundle(
         absolute_community_messages=ref_b,

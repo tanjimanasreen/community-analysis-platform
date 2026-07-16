@@ -119,9 +119,7 @@ def test_mlflow_parent_child_lifecycle_and_artifact(tmp_path):
     assert stored_child.data.tags["mlflow.parentRunId"] == parent.parent_run_id
     assert stored_child.data.metrics["stage_duration_seconds"] == 0.5
     artifacts = client.list_artifacts(parent.parent_run_id, "summaries")
-    assert [item.path for item in artifacts] == [
-        "summaries/lineage_summary.json"
-    ]
+    assert [item.path for item in artifacts] == ["summaries/lineage_summary.json"]
     assert mlflow.active_run() is None
 
 
@@ -131,9 +129,7 @@ def test_experiment_is_reused_by_name(tmp_path):
     assert first._experiment_id == second._experiment_id
 
 
-def test_tracking_operation_failures_warn_without_raising(
-    tmp_path, caplog
-):
+def test_tracking_operation_failures_warn_without_raising(tmp_path, caplog):
     tracker = MlflowExperimentTracker(_settings(tmp_path))
     parent = tracker.start_parent_run(
         run_name="test-parent",

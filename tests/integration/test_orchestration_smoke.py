@@ -36,7 +36,6 @@ from src.orchestration.tasks import (
 )
 from src.providers.base import BaseLLMProvider
 
-
 COMMUNITY_MESSAGE_CSV = pd.DataFrame(
     {
         "community_number": [1],
@@ -167,14 +166,7 @@ def _fake_topic_domain(**kwargs) -> None:
     year = kwargs["year"]
 
     scores = out / data_type / "LDA" / "scores" / content_type / f"{month}.csv"
-    matched = (
-        out
-        / data_type
-        / "LDA"
-        / "matched"
-        / content_type
-        / f"{month}_{year}.csv"
-    )
+    matched = out / data_type / "LDA" / "matched" / content_type / f"{month}_{year}.csv"
     manifest = (
         out
         / data_type

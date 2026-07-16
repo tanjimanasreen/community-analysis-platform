@@ -3,6 +3,7 @@ from pathlib import Path
 from src.config.loader import load_config, validate_run_config
 from src.tracking.factory import parse_tracking_settings
 
+
 def test_sample_config_remains_valid():
     """
     Proves that the primary sample configuration remains valid

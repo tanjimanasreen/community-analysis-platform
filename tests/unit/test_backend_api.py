@@ -5,7 +5,11 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from backend.artifact_service import ArtifactNotFoundError, ArtifactService, normalize_value
+from backend.artifact_service import (
+    ArtifactNotFoundError,
+    ArtifactService,
+    normalize_value,
+)
 from src.reporting import output_contract as contract
 from src.themes import theme_inputs
 from src.topics import topic_inputs
@@ -40,11 +44,21 @@ def _sample_value(column, row_index=0):
         "uncommon_members",
     }:
         return "['alpha']"
-    if column in {"members", "messages_ids", "start_month_members", "end_month_members"}:
+    if column in {
+        "members",
+        "messages_ids",
+        "start_month_members",
+        "end_month_members",
+    }:
         return "[1, 2]"
     if column in {"all_keywords", "absolute_keywords", "weighted_keywords"}:
         return float("nan") if row_index == 0 else "alpha,beta"
-    if "community" in column or column in {"source", "target", "from_id", "forwarder_id"}:
+    if "community" in column or column in {
+        "source",
+        "target",
+        "from_id",
+        "forwarder_id",
+    }:
         return row_index + 1
     if column in {"weight", "jaccard_score"}:
         return 1.0
@@ -73,17 +87,55 @@ def _write_outputs(config, months, *, row_count=3):
     theme_dir = Path(config["theme"]["output_dir"])
 
     for month in months:
-        _write_csv(base / "network_data" / content_type / f"{month}{year}.csv", contract.NETWORK_DATA_COLUMNS)
-        _write_csv(base / "communities" / "graphs" / "absolute" / content_type / f"{month}.csv", contract.COMMUNITY_GRAPH_COLUMNS)
-        _write_csv(base / "communities" / "graphs" / "weighted" / content_type / f"{month}.csv", contract.COMMUNITY_GRAPH_COLUMNS)
-        _write_csv(base / "communities" / "matched" / content_type / f"{month}.csv", contract.MATCHED_COMMUNITY_SUMMARY_COLUMNS)
-        _write_csv(base / "user_centrality" / content_type / f"{month}.csv", contract.USER_CENTRALITY_COLUMNS)
-        _write_csv(base / "count_user_messages" / content_type / f"{month}.csv", contract.COUNT_USER_MESSAGES_COLUMNS)
-        _write_csv(base / "daily_messages_stat" / content_type / f"{month}.csv", contract.DAILY_MESSAGES_STAT_COLUMNS)
-        _write_csv(base / "LDA" / "scores" / content_type / f"{month}.csv", contract.LDA_SCORES_COLUMNS)
+        _write_csv(
+            base / "network_data" / content_type / f"{month}{year}.csv",
+            contract.NETWORK_DATA_COLUMNS,
+        )
+        _write_csv(
+            base
+            / "communities"
+            / "graphs"
+            / "absolute"
+            / content_type
+            / f"{month}.csv",
+            contract.COMMUNITY_GRAPH_COLUMNS,
+        )
+        _write_csv(
+            base
+            / "communities"
+            / "graphs"
+            / "weighted"
+            / content_type
+            / f"{month}.csv",
+            contract.COMMUNITY_GRAPH_COLUMNS,
+        )
+        _write_csv(
+            base / "communities" / "matched" / content_type / f"{month}.csv",
+            contract.MATCHED_COMMUNITY_SUMMARY_COLUMNS,
+        )
+        _write_csv(
+            base / "user_centrality" / content_type / f"{month}.csv",
+            contract.USER_CENTRALITY_COLUMNS,
+        )
+        _write_csv(
+            base / "count_user_messages" / content_type / f"{month}.csv",
+            contract.COUNT_USER_MESSAGES_COLUMNS,
+        )
+        _write_csv(
+            base / "daily_messages_stat" / content_type / f"{month}.csv",
+            contract.DAILY_MESSAGES_STAT_COLUMNS,
+        )
+        _write_csv(
+            base / "LDA" / "scores" / content_type / f"{month}.csv",
+            contract.LDA_SCORES_COLUMNS,
+        )
         matched_lda = base / "LDA" / "matched" / content_type / f"{month}_{year}.csv"
         _write_csv(matched_lda, contract.MATCHED_LDA_COLUMNS, row_count=row_count)
-        _write_csv(theme_dir / f"{month}_{year}_with_themes.csv", contract.THEMED_OUTPUT_COLUMNS, row_count=row_count)
+        _write_csv(
+            theme_dir / f"{month}_{year}_with_themes.csv",
+            contract.THEMED_OUTPUT_COLUMNS,
+            row_count=row_count,
+        )
         theme_inputs.save_theme_inputs(
             matched_lda_csv=matched_lda,
             output_base_path=str(output_base),
@@ -94,15 +146,32 @@ def _write_outputs(config, months, *, row_count=3):
         )
         topic_inputs.save_topic_inputs(
             absolute_community_messages=pd.DataFrame(
-                {"community_number": [1], "messages": [["alpha"]], "messages_ids": [[1]], "total_messages": [1]}
+                {
+                    "community_number": [1],
+                    "messages": [["alpha"]],
+                    "messages_ids": [[1]],
+                    "total_messages": [1],
+                }
             ),
             weighted_community_messages=pd.DataFrame(
-                {"community_number": [1], "messages": [["alpha"]], "messages_ids": [[1]], "total_messages": [1]}
+                {
+                    "community_number": [1],
+                    "messages": [["alpha"]],
+                    "messages_ids": [[1]],
+                    "total_messages": [1],
+                }
             ),
             matched_communities=pd.DataFrame(
-                {"abs_community": [1], "per_community": [1], "jaccard_score": [1.0], "members": [[1, 2]]}
+                {
+                    "abs_community": [1],
+                    "per_community": [1],
+                    "jaccard_score": [1.0],
+                    "members": [[1, 2]],
+                }
             ),
-            partial_matched_communities=pd.DataFrame(columns=topic_inputs.PARTIAL_MATCHED_COMMUNITY_COLUMNS),
+            partial_matched_communities=pd.DataFrame(
+                columns=topic_inputs.PARTIAL_MATCHED_COMMUNITY_COLUMNS
+            ),
             output_base_path=str(output_base),
             data_type=data_type,
             content_type=content_type,
@@ -110,7 +179,9 @@ def _write_outputs(config, months, *, row_count=3):
             year=year,
         )
 
-    _write_csv(theme_dir / "community_transition.csv", contract.COMMUNITY_TRANSITION_COLUMNS)
+    _write_csv(
+        theme_dir / "community_transition.csv", contract.COMMUNITY_TRANSITION_COLUMNS
+    )
 
 
 def _client(config):
@@ -159,7 +230,14 @@ def test_service_optional_missing_and_required_missing(tmp_path):
     assert optional["missing"] is True
     assert optional["records"] == []
 
-    required = Path(config["output_base_path"]) / "twitter" / "communities" / "matched" / "reply" / "03.csv"
+    required = (
+        Path(config["output_base_path"])
+        / "twitter"
+        / "communities"
+        / "matched"
+        / "reply"
+        / "03.csv"
+    )
     required.unlink()
     with pytest.raises(ArtifactNotFoundError):
         service.communities("sample", "03", "matched", limit=100, offset=0)
@@ -196,7 +274,9 @@ def test_fastapi_metadata_hides_absolute_paths(tmp_path):
 
     assert str(tmp_path) not in str(runs)
     assert str(tmp_path) not in str(artifacts)
-    assert all(item["relative_path"].startswith(("output/", "theme/")) for item in artifacts)
+    assert all(
+        item["relative_path"].startswith(("output/", "theme/")) for item in artifacts
+    )
 
 
 def test_fastapi_longitudinal_facets_discover_manifest_months(tmp_path):
@@ -228,7 +308,14 @@ def test_fastapi_table_pagination_and_json_normalization(tmp_path):
 def test_fastapi_missing_required_artifact_returns_404(tmp_path):
     config = _config(tmp_path)
     _write_outputs(config, ["03"])
-    missing = Path(config["output_base_path"]) / "twitter" / "LDA" / "matched" / "reply" / "03_2017.csv"
+    missing = (
+        Path(config["output_base_path"])
+        / "twitter"
+        / "LDA"
+        / "matched"
+        / "reply"
+        / "03_2017.csv"
+    )
     missing.unlink()
     client = _client(config)
 
@@ -247,14 +334,24 @@ def test_fastapi_optional_files_are_reported_missing(tmp_path):
 
     assert response.status_code == 200
     files = response.json()["files"]
-    assert {item["category"] for item in files} == {"sankey", "membership_changes", "theme_similarity"}
+    assert {item["category"] for item in files} == {
+        "sankey",
+        "membership_changes",
+        "theme_similarity",
+    }
     assert all(item["exists"] is False for item in files)
 
 
 def test_verification_endpoint_reports_contract_failure_without_500(tmp_path):
     config = _config(tmp_path)
     _write_outputs(config, ["03"])
-    broken = Path(config["output_base_path"]) / "twitter" / "network_data" / "reply" / "032017.csv"
+    broken = (
+        Path(config["output_base_path"])
+        / "twitter"
+        / "network_data"
+        / "reply"
+        / "032017.csv"
+    )
     broken.unlink()
     client = _client(config)
 
@@ -278,7 +375,9 @@ def test_api_does_not_import_or_call_pipeline_modules(tmp_path):
     _write_outputs(config, ["03"])
     client = _client(config)
 
-    assert client.get("/api/v1/runs/sample/community-summary?month=03").status_code == 200
+    assert (
+        client.get("/api/v1/runs/sample/community-summary?month=03").status_code == 200
+    )
     assert "src.pipelines.social_network_pipeline" not in sys.modules
     assert "src.pipelines.theme_pipeline" not in sys.modules
     assert "src.topics.lda" not in sys.modules

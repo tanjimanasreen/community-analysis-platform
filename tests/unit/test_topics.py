@@ -1,7 +1,13 @@
 import pytest
 import pandas as pd
-from src.topics.text_preprocessor import clean_text, replace_emojis, remove_emojis, message_preprocess
+from src.topics.text_preprocessor import (
+    clean_text,
+    replace_emojis,
+    remove_emojis,
+    message_preprocess,
+)
 from src.topics.topic_matching import get_cutoff_probability
+
 
 def test_clean_text():
     text = "Dog @username https://example.com #hashtag www.test.com ahaha jajaja. How are you?"
@@ -14,12 +20,15 @@ def test_clean_text():
     assert "jajaja" not in cleaned
     assert "dog" in cleaned
 
+
 def test_message_preprocess():
-    df = pd.DataFrame({
-        'messages': [
-            ["This is a test message 😊.", "Another message https://link.com @user"]
-        ]
-    })
+    df = pd.DataFrame(
+        {
+            "messages": [
+                ["This is a test message 😊.", "Another message https://link.com @user"]
+            ]
+        }
+    )
 
     processed = message_preprocess(df)
     assert len(processed) == 1
@@ -30,6 +39,7 @@ def test_message_preprocess():
     assert "user" not in processed_text
     assert "test" in processed_text
     assert "message" in processed_text
+
 
 def test_get_cutoff_probability():
     # If we have a smooth decrease, elbow should be found

@@ -5,7 +5,6 @@ import os
 import re
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -46,7 +45,9 @@ def test_sample_theme_targets_force_mock_provider_without_global_export():
     )
 
 
-def test_theme_benchmark_dotenv_loader_uses_cwd_env_without_overwrite(monkeypatch, tmp_path):
+def test_theme_benchmark_dotenv_loader_uses_cwd_env_without_overwrite(
+    monkeypatch, tmp_path
+):
     from src.cli import _load_benchmark_dotenv
 
     (tmp_path / ".env").write_text(

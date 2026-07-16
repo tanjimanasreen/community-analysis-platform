@@ -4,6 +4,7 @@ from src.themes.benchmark.contracts import ThemeBenchmarkError, ThemeBenchmarkRe
 from src.providers.mock import BenchmarkMockProvider
 from src.providers.routing import RoutingBenchmarkProvider
 
+
 class FailingMockProvider(BenchmarkMockProvider):
     def __init__(self, error_message="Simulated rate limit"):
         self.error_message = error_message
@@ -28,7 +29,9 @@ def test_routing_provider_success():
         input_hash="456",
     )
     result = routing.generate(req)
-    assert result["themes"] == [{"name": "Benchmark General Theme", "keywords": ["apple", "banana"]}]
+    assert result["themes"] == [
+        {"name": "Benchmark General Theme", "keywords": ["apple", "banana"]}
+    ]
 
 
 def test_routing_provider_fallback():
@@ -50,6 +53,7 @@ def test_routing_provider_fallback():
 
     # We add a fake benchmark metadata so the fallback metadata is captured
     orig_generate = success.generate
+
     def patched_generate(request):
         res = orig_generate(request)
         res["_benchmark_metadata"] = {}
@@ -58,7 +62,9 @@ def test_routing_provider_fallback():
     success.generate = patched_generate
 
     result = routing.generate(req)
-    assert result["themes"] == [{"name": "Benchmark General Theme", "keywords": ["apple", "banana"]}]
+    assert result["themes"] == [
+        {"name": "Benchmark General Theme", "keywords": ["apple", "banana"]}
+    ]
 
     fallback_attempts = result["_benchmark_metadata"]["fallback_attempts"]
     assert len(fallback_attempts) == 1

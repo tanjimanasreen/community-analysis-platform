@@ -66,22 +66,16 @@ def test_tracking_enabled_paths_resolve_under_project_root(tmp_path):
             "Unknown tracking keys",
         ),
         (
-            lambda cfg: cfg["tracking"].update(
-                {"artifact_root": "/tmp/absolute"}
-            ),
+            lambda cfg: cfg["tracking"].update({"artifact_root": "/tmp/absolute"}),
             "repository-relative",
         ),
         (
-            lambda cfg: cfg["tracking"].update(
-                {"backend_store_path": "../escape.db"}
-            ),
+            lambda cfg: cfg["tracking"].update({"backend_store_path": "../escape.db"}),
             "escapes",
         ),
     ],
 )
-def test_invalid_tracking_configuration_fails(
-    tmp_path, mutation, message
-):
+def test_invalid_tracking_configuration_fails(tmp_path, mutation, message):
     config = _enabled_config()
     mutation(config)
     with pytest.raises(ValueError, match=message):

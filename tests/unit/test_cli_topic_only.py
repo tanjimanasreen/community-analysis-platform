@@ -56,7 +56,9 @@ def _save_topic_inputs(tmp_path):
                 "members": [[1, 2]],
             }
         ),
-        partial_matched_communities=pd.DataFrame(columns=PARTIAL_MATCHED_COMMUNITY_COLUMNS),
+        partial_matched_communities=pd.DataFrame(
+            columns=PARTIAL_MATCHED_COMMUNITY_COLUMNS
+        ),
         output_base_path=str(tmp_path),
         data_type="twitter",
         content_type="reply",
@@ -65,7 +67,9 @@ def _save_topic_inputs(tmp_path):
     )
 
 
-def test_run_topics_loads_saved_inputs_without_network_or_raw_csv(monkeypatch, tmp_path):
+def test_run_topics_loads_saved_inputs_without_network_or_raw_csv(
+    monkeypatch, tmp_path
+):
     config_path = _write_config(tmp_path)
     _save_topic_inputs(tmp_path)
 
@@ -77,7 +81,9 @@ def test_run_topics_loads_saved_inputs_without_network_or_raw_csv(monkeypatch, t
     calls = []
     monkeypatch.setattr(pipeline, "run_network_phase", fail_network)
     monkeypatch.setattr(pipeline, "run_community_phase", fail_network)
-    monkeypatch.setattr(pipeline, "run_topic_phase", lambda **kwargs: calls.append(kwargs))
+    monkeypatch.setattr(
+        pipeline, "run_topic_phase", lambda **kwargs: calls.append(kwargs)
+    )
 
     _run_social_pipeline_command("run-topics", str(config_path))
 

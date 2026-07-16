@@ -1,7 +1,9 @@
 from src.visualization.theme_similarity import draw_theme_similarity_heatmap
 
 
-def test_draw_theme_similarity_heatmap_writes_html_without_kaleido_requirement(tmp_path):
+def test_draw_theme_similarity_heatmap_writes_html_without_kaleido_requirement(
+    tmp_path,
+):
     draw_theme_similarity_heatmap(
         {
             1: {

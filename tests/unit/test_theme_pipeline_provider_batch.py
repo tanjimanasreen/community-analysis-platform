@@ -64,7 +64,4 @@ def test_one_provider_instance_handles_batch(monkeypatch, tmp_path):
 
     build_provider.assert_called_once()
     assert len(recorded_providers) == len(monthly_data)
-    assert all(
-        provider is constructed_provider
-        for provider in recorded_providers
-    )
+    assert all(provider is constructed_provider for provider in recorded_providers)
