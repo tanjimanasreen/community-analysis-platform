@@ -1,0 +1,62 @@
+# Live Integration Test Config
+# This uses tiny test datasets, activates MLflow tracking, and hits TEI.
+
+data_type: twitter
+content_type: reply
+month: "03"
+year: "2017"
+input_path: tests/fixtures/sample_relationships.csv
+output_base_path: /tmp/community-analysis-live-integration/
+creator_relation: REPLIED_TO
+spreader_relation: REPLIED_BY
+creator_node_column: target
+spreader_node_column: target
+text_node_column: source
+date_column: created_at
+
+graph_thresholds:
+  min_total_post: 1
+  min_shared_post: 1
+  min_members: 2
+
+database:
+  engine: memgraph
+  uri: bolt://localhost:7687
+  user: ""
+  password: ""
+
+louvain:
+  resolution: 1.0
+  seed: 123
+
+lda:
+  num_topics: 15
+  top_n_keywords: 50
+
+theme:
+  enable_gpt: false
+  model: gpt-4o
+  sleep_seconds: 2
+  transition_threshold: 0.0
+  output_dir: /tmp/community-analysis-live-integration/
+  year: "2017"
+  render_visuals: false
+
+similarity:
+  provider: "tei"
+  reply_transition_threshold: 0.0
+  default_transition_threshold: 0.5
+
+tracking:
+  enabled: true
+  experiment_name: "live-integration-test"
+  backend: "mlflow"
+  backend_store_path: ".mlflow/mlflow.db"
+  artifact_root: ".mlflow/artifacts"
+  nested_stage_runs: true
+  failure_policy: "warn"
+  log_artifact_references: true
+
+theme_provider:
+  primary: "mock" # Prevents LLM cost during automated integration tests, change to "llm7:fast" for live LLM tests.
+  fallback: false

@@ -62,3 +62,7 @@ Thumbs.db
 .mlflow/
 mlruns/
 mlflow.db
+
+
+*.patch
+modern-web-guidance.md
