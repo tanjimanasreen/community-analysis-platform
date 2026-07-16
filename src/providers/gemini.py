@@ -10,7 +10,7 @@ from importlib import metadata
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
-from src.config.defaults import default_config
+from src.config.defaults import DEFAULT_CONFIG
 from src.themes.benchmark.contracts import (
     THEME_OUTPUT_JSON_SCHEMA,
     ProviderMetadata,
@@ -19,7 +19,6 @@ from src.themes.benchmark.contracts import (
     write_json,
 )
 from src.themes.benchmark.live import LiveRequestBudget
-
 
 GEMINI_PROVIDER_PREFIX = "gemini"
 GEMINI_INSTALL_MESSAGE = (
@@ -62,7 +61,9 @@ class GeminiGenerationConfig:
 
 class GeminiRequestBudget(LiveRequestBudget):
     def __init__(self, max_outbound_requests: int):
-        super().__init__(provider_name="Gemini", max_outbound_requests=max_outbound_requests)
+        super().__init__(
+            provider_name="Gemini", max_outbound_requests=max_outbound_requests
+        )
 
 
 from src.providers.base import BaseLLMProvider
@@ -85,9 +86,13 @@ class GeminiBenchmarkProvider(BaseLLMProvider):
         sleep_fn: Callable[[float], None] | None = None,
     ):
         if not model_id or model_id.startswith("models/") or "latest" in model_id:
-            raise ThemeBenchmarkError("Gemini benchmark provider requires an exact non-latest model ID.")
+            raise ThemeBenchmarkError(
+                "Gemini benchmark provider requires an exact non-latest model ID."
+            )
         if not allow_live:
-            raise ThemeBenchmarkError("Gemini benchmark provider requires --allow-live.")
+            raise ThemeBenchmarkError(
+                "Gemini benchmark provider requires --allow-live."
+            )
 
         super().__init__()
         self.rate_limit_rpm = rate_limit_rpm
@@ -100,9 +105,17 @@ class GeminiBenchmarkProvider(BaseLLMProvider):
             timeout=timeout,
             max_outbound_requests=max_outbound_requests,
         )
-        self.sdk_version = sdk_version if sdk_version is not None else _installed_sdk_version_optional(client)
-        self.client = client if client is not None else _create_gemini_client(api_key=api_key)
-        self.request_budget = request_budget or GeminiRequestBudget(max_outbound_requests)
+        self.sdk_version = (
+            sdk_version
+            if sdk_version is not None
+            else _installed_sdk_version_optional(client)
+        )
+        self.client = (
+            client if client is not None else _create_gemini_client(api_key=api_key)
+        )
+        self.request_budget = request_budget or GeminiRequestBudget(
+            max_outbound_requests
+        )
         self.sleep_fn = sleep_fn or time.sleep
         self.metadata = ProviderMetadata(
             provider_id=self.provider_id,
@@ -134,15 +147,23 @@ class GeminiBenchmarkProvider(BaseLLMProvider):
                     generation_config={"temperature": self.config.temperature},
                     timeout=self.config.timeout,
                 )
-                return _normalize_interaction(interaction, request, retries=attempts - 1)
+                return _normalize_interaction(
+                    interaction, request, retries=attempts - 1
+                )
             except Exception as exc:
                 last_error = exc
                 error_type = classify_gemini_error(exc)
-                if error_type not in RETRYABLE_ERROR_TYPES or attempts > self.config.max_retries:
-                    raise ThemeBenchmarkError(f"Gemini {error_type}: {_safe_error_message(exc)}") from exc
+                if (
+                    error_type not in RETRYABLE_ERROR_TYPES
+                    or attempts > self.config.max_retries
+                ):
+                    raise ThemeBenchmarkError(
+                        f"Gemini {error_type}: {_safe_error_message(exc)}"
+                    ) from exc
                 self.sleep_fn(min(2 ** (attempts - 1), 8))
-        raise ThemeBenchmarkError(f"Gemini request failed: {_safe_error_message(last_error)}")
-
+        raise ThemeBenchmarkError(
+            f"Gemini request failed: {_safe_error_message(last_error)}"
+        )
 
     def generate_text(self, prompt: str) -> str:
         sleep_duration = 60.0 / max(1, self.rate_limit_rpm)
@@ -164,10 +185,18 @@ class GeminiBenchmarkProvider(BaseLLMProvider):
             except Exception as exc:
                 last_error = exc
                 error_type = classify_gemini_error(exc)
-                if error_type not in RETRYABLE_ERROR_TYPES or attempts > self.config.max_retries:
-                    raise ThemeBenchmarkError(f"Gemini {error_type}: {_safe_error_message(exc)}") from exc
+                if (
+                    error_type not in RETRYABLE_ERROR_TYPES
+                    or attempts > self.config.max_retries
+                ):
+                    raise ThemeBenchmarkError(
+                        f"Gemini {error_type}: {_safe_error_message(exc)}"
+                    ) from exc
                 self.sleep_fn(min(2 ** (attempts - 1), 8))
-        raise ThemeBenchmarkError(f"Gemini text request failed: {_safe_error_message(last_error)}")
+        raise ThemeBenchmarkError(
+            f"Gemini text request failed: {_safe_error_message(last_error)}"
+        )
+
 
 def discover_gemini_models(
     benchmark_run_dir: str | Path,
@@ -179,7 +208,11 @@ def discover_gemini_models(
 ) -> Path:
     if not allow_live:
         raise ThemeBenchmarkError("Gemini model discovery requires --allow-live.")
-    sdk_version = sdk_version if sdk_version is not None else _installed_sdk_version_optional(client)
+    sdk_version = (
+        sdk_version
+        if sdk_version is not None
+        else _installed_sdk_version_optional(client)
+    )
     client = client if client is not None else _create_gemini_client(api_key=api_key)
     try:
         listed_models = client.models.list()
@@ -207,7 +240,10 @@ def build_gemini_model_catalog(
     for model in normalized_models:
         item = _classify_model(model)
         enriched.append(item)
-        if item["candidate_class"] in {"flash_lite", "flash"} and item["selection_allowed"]:
+        if (
+            item["candidate_class"] in {"flash_lite", "flash"}
+            and item["selection_allowed"]
+        ):
             selected.append(
                 {
                     "model_id": item["model_id"],
@@ -274,7 +310,9 @@ def classify_gemini_error(exc: Exception) -> str:
 def _create_gemini_client(*, api_key: str | None):
     api_key = api_key or os.environ.get("GEMINI_API_KEY")
     if not api_key:
-        raise ThemeBenchmarkError("GEMINI_API_KEY must be set for live Gemini benchmark commands.")
+        raise ThemeBenchmarkError(
+            "GEMINI_API_KEY must be set for live Gemini benchmark commands."
+        )
     try:
         from google import genai
     except ModuleNotFoundError as exc:
@@ -299,13 +337,17 @@ def _normalize_interaction(
 ) -> dict[str, Any]:
     output_text = getattr(interaction, "output_text", None)
     if not output_text:
-        raise ThemeBenchmarkError("Gemini empty_response: response did not include output_text")
+        raise ThemeBenchmarkError(
+            "Gemini empty_response: response did not include output_text"
+        )
     try:
         parsed = json.loads(output_text)
     except json.JSONDecodeError as exc:
         raise ThemeBenchmarkError(f"Gemini invalid_json: {exc}") from exc
     if not _schema_valid(parsed):
-        raise ThemeBenchmarkError("Gemini schema_invalid: response did not match normalized theme schema")
+        raise ThemeBenchmarkError(
+            "Gemini schema_invalid: response did not match normalized theme schema"
+        )
     allowed = set(request.keywords)
     normalized_themes = []
     for theme in parsed.get("themes", []):
@@ -335,9 +377,15 @@ def _normalize_interaction(
 
 
 def _raw_metadata(interaction: Any) -> dict[str, Any]:
-    usage = _jsonable(getattr(interaction, "usage_metadata", None) or getattr(interaction, "usage", None))
+    usage = _jsonable(
+        getattr(interaction, "usage_metadata", None)
+        or getattr(interaction, "usage", None)
+    )
     finish_reason = _jsonable(getattr(interaction, "finish_reason", None))
-    safety = _jsonable(getattr(interaction, "safety_metadata", None) or getattr(interaction, "safety_ratings", None))
+    safety = _jsonable(
+        getattr(interaction, "safety_metadata", None)
+        or getattr(interaction, "safety_ratings", None)
+    )
     return {
         "interaction_id": getattr(interaction, "id", None),
         "status": getattr(interaction, "status", None),
@@ -378,8 +426,12 @@ def _normalize_model(model: Any) -> dict[str, Any]:
         "description": _attr(model, "description", ""),
         "version": _attr(model, "version", ""),
         "base_model_id": _attr(model, "base_model_id", _attr(model, "baseModelId", "")),
-        "input_token_limit": _attr(model, "input_token_limit", _attr(model, "inputTokenLimit", None)),
-        "output_token_limit": _attr(model, "output_token_limit", _attr(model, "outputTokenLimit", None)),
+        "input_token_limit": _attr(
+            model, "input_token_limit", _attr(model, "inputTokenLimit", None)
+        ),
+        "output_token_limit": _attr(
+            model, "output_token_limit", _attr(model, "outputTokenLimit", None)
+        ),
         "supported_actions": list(supported or []),
     }
 
@@ -389,14 +441,18 @@ def _classify_model(model: Mapping[str, Any]) -> dict[str, Any]:
     lower = model_id.lower()
     generate_content = "generateContent" in model.get("supported_actions", [])
     is_latest = "latest" in lower
-    is_preview = "preview" in lower or "preview" in str(model.get("description", "")).lower()
+    is_preview = (
+        "preview" in lower or "preview" in str(model.get("description", "")).lower()
+    )
     is_experimental = "experimental" in lower or "exp" in lower
     is_flash_lite = "flash-lite" in lower
     is_flash = "flash" in lower and not is_flash_lite
     interactions_status = (
         "documented" if model_id in DOCUMENTED_INTERACTIONS_MODELS else "unknown"
     )
-    candidate_class = "flash_lite" if is_flash_lite else "flash" if is_flash else "other"
+    candidate_class = (
+        "flash_lite" if is_flash_lite else "flash" if is_flash else "other"
+    )
     selection_allowed = (
         generate_content
         and interactions_status == "documented"
@@ -428,7 +484,11 @@ def _classify_model(model: Mapping[str, Any]) -> dict[str, Any]:
         "is_experimental": is_experimental,
         "candidate_class": candidate_class,
         "selection_allowed": selection_allowed,
-        "selection_reason": "stable documented Interactions-capable candidate" if selection_allowed else None,
+        "selection_reason": (
+            "stable documented Interactions-capable candidate"
+            if selection_allowed
+            else None
+        ),
         "rejection_reason": rejection_reason,
     }
 
@@ -449,7 +509,11 @@ def _jsonable(value: Any) -> Any:
     if isinstance(value, (str, int, float, bool)):
         return value
     if isinstance(value, Mapping):
-        return {str(key): _jsonable(val) for key, val in value.items() if "key" not in str(key).lower()}
+        return {
+            str(key): _jsonable(val)
+            for key, val in value.items()
+            if "key" not in str(key).lower()
+        }
     if isinstance(value, list):
         return [_jsonable(item) for item in value]
     if hasattr(value, "model_dump"):
@@ -463,4 +527,9 @@ def _safe_error_message(exc: Exception | None) -> str:
     if exc is None:
         return "unknown error"
     text = str(exc)
-    return re.sub(r"(key=|api[_-]?key[=:]\s*)[A-Za-z0-9._-]+", r"\1<redacted>", text, flags=re.IGNORECASE)
+    return re.sub(
+        r"(key=|api[_-]?key[=:]\s*)[A-Za-z0-9._-]+",
+        r"\1<redacted>",
+        text,
+        flags=re.IGNORECASE,
+    )

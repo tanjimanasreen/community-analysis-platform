@@ -23,7 +23,9 @@ class CachedProvider(BaseLLMProvider):
     responses by text key to avoid duplicate API calls within a single run.
     """
 
-    def __init__(self, provider: BaseLLMProvider, cache: dict[str, dict] | None = None) -> None:
+    def __init__(
+        self, provider: BaseLLMProvider, cache: dict[str, dict] | None = None
+    ) -> None:
         self._provider = provider
         self._cache: dict[str, dict] = cache if cache is not None else {}
         self.rate_limit_rpm = getattr(provider, "rate_limit_rpm", 0)

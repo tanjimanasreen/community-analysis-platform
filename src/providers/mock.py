@@ -48,8 +48,13 @@ class MockProvider(BaseLLMProvider):
 
     def generate_text(self, prompt: str) -> str:
         import json
+
         return json.dumps(
-            {"reason": "Mock evaluation from deterministic provider", "score": 5, "verdict": "yes"}
+            {
+                "reason": "Mock evaluation from deterministic provider",
+                "score": 5,
+                "verdict": "yes",
+            }
         )
 
 
@@ -70,7 +75,12 @@ class KeywordBaselineProvider(BaseLLMProvider):
         for index in range(0, len(keywords), group_size):
             group = keywords[index : index + group_size]
             name = " / ".join(group[:2])
-            themes.append({"name": f"{request.keyword_mode.title()} Theme: {name}", "keywords": group})
+            themes.append(
+                {
+                    "name": f"{request.keyword_mode.title()} Theme: {name}",
+                    "keywords": group,
+                }
+            )
         return {"themes": themes}
 
 
@@ -90,4 +100,11 @@ class BenchmarkMockProvider(BaseLLMProvider):
     def generate_text(self, prompt: str) -> str:
         # Provide a generic valid JSON that most DeepEval GEval metrics can parse
         import json
-        return json.dumps({"reason": "Mock evaluation from deterministic provider", "score": 5, "verdict": "yes"})
+
+        return json.dumps(
+            {
+                "reason": "Mock evaluation from deterministic provider",
+                "score": 5,
+                "verdict": "yes",
+            }
+        )

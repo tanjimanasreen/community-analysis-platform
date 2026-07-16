@@ -29,6 +29,7 @@ class OllamaProvider(BaseLLMProvider):
 
     def __init__(self, *, base_url: str, model: str, rate_limit_rpm: int = 600) -> None:
         import requests  # optional dep; only checked at construction
+
         self._requests = requests
         self.base_url = base_url.rstrip("/")
         self.model = model

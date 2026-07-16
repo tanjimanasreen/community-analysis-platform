@@ -75,7 +75,9 @@ class RoutingBenchmarkProvider:
                     )
                 result = provider.generate(request)
                 if "_benchmark_metadata" in result:
-                    result["_benchmark_metadata"]["fallback_attempts"] = fallback_attempts
+                    result["_benchmark_metadata"][
+                        "fallback_attempts"
+                    ] = fallback_attempts
                 return result
 
             except Exception as exc:
@@ -112,7 +114,10 @@ class RoutingBenchmarkProvider:
         for i, provider in enumerate(self.providers):
             try:
                 if i > 0:
-                    logger.info("Fallback theme generation via %s", provider.metadata.provider_id)
+                    logger.info(
+                        "Fallback theme generation via %s",
+                        provider.metadata.provider_id,
+                    )
                 return provider.generate_theme(text)
             except Exception as exc:
                 last_error = exc
@@ -132,7 +137,9 @@ class RoutingBenchmarkProvider:
         for i, provider in enumerate(self.providers):
             try:
                 if i > 0:
-                    logger.info("Fallback generate_text() via %s", provider.metadata.provider_id)
+                    logger.info(
+                        "Fallback generate_text() via %s", provider.metadata.provider_id
+                    )
                 return provider.generate_text(prompt)
             except NotImplementedError:
                 continue

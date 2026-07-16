@@ -37,6 +37,7 @@ class BaseLLMProvider(ABC):
         Providers that have a more efficient code path may override this.
         """
         from src.themes.benchmark.dataset import SYSTEM_PROMPT, USER_PROMPT_TEMPLATE
+
         request = ThemeBenchmarkRequest(
             example_id="pipeline_run",
             keyword_mode="pipeline",

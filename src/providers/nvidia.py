@@ -5,14 +5,13 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable, Mapping
 
-from src.config.defaults import default_config
+from src.config.defaults import DEFAULT_CONFIG
 from src.themes.benchmark.contracts import (
     ProviderMetadata,
     ThemeBenchmarkError,
     ThemeBenchmarkRequest,
 )
 from src.themes.benchmark.live import LiveRequestBudget
-
 
 NVIDIA_PROVIDER_PREFIX = "nvidia"
 NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
@@ -52,7 +51,9 @@ class NvidiaGenerationConfig:
 
 class NvidiaRequestBudget(LiveRequestBudget):
     def __init__(self, max_outbound_requests: int):
-        super().__init__(provider_name="NVIDIA", max_outbound_requests=max_outbound_requests)
+        super().__init__(
+            provider_name="NVIDIA", max_outbound_requests=max_outbound_requests
+        )
 
 
 from src.providers.base import BaseLLMProvider
@@ -74,7 +75,9 @@ class NvidiaBenchmarkProvider(BaseLLMProvider):
         sleep_fn: Callable[[float], None] | None = None,
     ):
         if not allow_live:
-            raise ThemeBenchmarkError("NVIDIA benchmark provider requires --allow-live.")
+            raise ThemeBenchmarkError(
+                "NVIDIA benchmark provider requires --allow-live."
+            )
 
         super().__init__()
         self.rate_limit_rpm = rate_limit_rpm
@@ -87,8 +90,12 @@ class NvidiaBenchmarkProvider(BaseLLMProvider):
             timeout=timeout,
             max_outbound_requests=max_outbound_requests,
         )
-        self.client = client if client is not None else _create_nvidia_client(api_key=api_key)
-        self.request_budget = request_budget or NvidiaRequestBudget(max_outbound_requests)
+        self.client = (
+            client if client is not None else _create_nvidia_client(api_key=api_key)
+        )
+        self.request_budget = request_budget or NvidiaRequestBudget(
+            max_outbound_requests
+        )
         self.sleep_fn = sleep_fn or time.sleep
 
         parameters = self.config.to_cache_parameters()
@@ -127,12 +134,18 @@ class NvidiaBenchmarkProvider(BaseLLMProvider):
             except Exception as exc:
                 last_error = exc
                 error_type = classify_nvidia_error(exc)
-                if error_type not in RETRYABLE_ERROR_TYPES or attempts > self.config.max_retries:
-                    raise ThemeBenchmarkError(f"NVIDIA {error_type}: {_safe_error_message(exc)}") from exc
+                if (
+                    error_type not in RETRYABLE_ERROR_TYPES
+                    or attempts > self.config.max_retries
+                ):
+                    raise ThemeBenchmarkError(
+                        f"NVIDIA {error_type}: {_safe_error_message(exc)}"
+                    ) from exc
                 self.sleep_fn(min(2 ** (attempts - 1), 8))
 
-        raise ThemeBenchmarkError(f"NVIDIA request failed: {_safe_error_message(last_error)}")
-
+        raise ThemeBenchmarkError(
+            f"NVIDIA request failed: {_safe_error_message(last_error)}"
+        )
 
     def generate_text(self, prompt: str) -> str:
         sleep_duration = 60.0 / max(1, self.rate_limit_rpm)
@@ -158,10 +171,18 @@ class NvidiaBenchmarkProvider(BaseLLMProvider):
             except Exception as exc:
                 last_error = exc
                 error_type = classify_nvidia_error(exc)
-                if error_type not in RETRYABLE_ERROR_TYPES or attempts > self.config.max_retries:
-                    raise ThemeBenchmarkError(f"NVIDIA {error_type}: {_safe_error_message(exc)}") from exc
+                if (
+                    error_type not in RETRYABLE_ERROR_TYPES
+                    or attempts > self.config.max_retries
+                ):
+                    raise ThemeBenchmarkError(
+                        f"NVIDIA {error_type}: {_safe_error_message(exc)}"
+                    ) from exc
                 self.sleep_fn(min(2 ** (attempts - 1), 8))
-        raise ThemeBenchmarkError(f"NVIDIA text request failed: {_safe_error_message(last_error)}")
+        raise ThemeBenchmarkError(
+            f"NVIDIA text request failed: {_safe_error_message(last_error)}"
+        )
+
 
 def classify_nvidia_error(exc: Exception) -> str:
     text = _safe_error_message(exc).lower()
@@ -188,11 +209,15 @@ def classify_nvidia_error(exc: Exception) -> str:
 def _create_nvidia_client(*, api_key: str | None):
     api_key = api_key or os.environ.get("NVIDIA_API_KEY")
     if not api_key:
-        raise ThemeBenchmarkError("NVIDIA_API_KEY must be set for live NVIDIA benchmark commands.")
+        raise ThemeBenchmarkError(
+            "NVIDIA_API_KEY must be set for live NVIDIA benchmark commands."
+        )
     try:
         import openai
     except ModuleNotFoundError as exc:
-        raise ThemeBenchmarkError("NVIDIA benchmark support requires the openai dependency.") from exc
+        raise ThemeBenchmarkError(
+            "NVIDIA benchmark support requires the openai dependency."
+        ) from exc
     return openai.OpenAI(base_url=NVIDIA_BASE_URL, api_key=api_key)
 
 
@@ -205,7 +230,9 @@ def _normalize_completion(
     choice = _first_choice(completion)
     content = _message_content(choice)
     if not content:
-        raise ThemeBenchmarkError("NVIDIA empty_response: response did not include message content")
+        raise ThemeBenchmarkError(
+            "NVIDIA empty_response: response did not include message content"
+        )
     try:
         parsed = json.loads(content)
     except json.JSONDecodeError as exc:
@@ -229,21 +256,29 @@ def _normalize_completion(
     }
 
 
-def _normalize_theme_payload(parsed: Any, request: ThemeBenchmarkRequest) -> list[dict[str, Any]]:
+def _normalize_theme_payload(
+    parsed: Any, request: ThemeBenchmarkRequest
+) -> list[dict[str, Any]]:
     if isinstance(parsed, Mapping) and isinstance(parsed.get("themes"), list):
         source_themes = parsed["themes"]
         allowed = set(request.keywords)
         normalized = []
         for theme in source_themes:
             if not isinstance(theme, Mapping) or not isinstance(theme.get("name"), str):
-                raise ThemeBenchmarkError("NVIDIA schema_invalid: response did not match normalized theme schema")
+                raise ThemeBenchmarkError(
+                    "NVIDIA schema_invalid: response did not match normalized theme schema"
+                )
             keywords = theme.get("keywords")
             if not isinstance(keywords, list):
-                raise ThemeBenchmarkError("NVIDIA schema_invalid: response did not match normalized theme schema")
+                raise ThemeBenchmarkError(
+                    "NVIDIA schema_invalid: response did not match normalized theme schema"
+                )
             normalized.append(
                 {
                     "name": str(theme["name"]),
-                    "keywords": [str(keyword) for keyword in keywords if str(keyword) in allowed],
+                    "keywords": [
+                        str(keyword) for keyword in keywords if str(keyword) in allowed
+                    ],
                 }
             )
         return normalized
@@ -254,15 +289,21 @@ def _normalize_theme_payload(parsed: Any, request: ThemeBenchmarkRequest) -> lis
         normalized = []
         for name, keywords in parsed.items():
             if not isinstance(keywords, list):
-                raise ThemeBenchmarkError("NVIDIA schema_invalid: response did not match normalized theme schema")
+                raise ThemeBenchmarkError(
+                    "NVIDIA schema_invalid: response did not match normalized theme schema"
+                )
             normalized.append(
                 {
                     "name": str(name),
-                    "keywords": [str(keyword) for keyword in keywords if str(keyword) in allowed],
+                    "keywords": [
+                        str(keyword) for keyword in keywords if str(keyword) in allowed
+                    ],
                 }
             )
         return normalized
-    raise ThemeBenchmarkError("NVIDIA schema_invalid: response did not match normalized theme schema")
+    raise ThemeBenchmarkError(
+        "NVIDIA schema_invalid: response did not match normalized theme schema"
+    )
 
 
 def _raw_metadata(completion: Any, choice: Any) -> dict[str, Any]:
@@ -282,7 +323,9 @@ def _raw_metadata(completion: Any, choice: Any) -> dict[str, Any]:
 def _first_choice(completion: Any) -> Any:
     choices = _attr(completion, "choices", [])
     if not choices:
-        raise ThemeBenchmarkError("NVIDIA empty_response: response did not include choices")
+        raise ThemeBenchmarkError(
+            "NVIDIA empty_response: response did not include choices"
+        )
     return choices[0]
 
 
@@ -290,7 +333,10 @@ def _message_content(choice: Any) -> str | None:
     message = _attr(choice, "message", None)
     content = _attr(message, "content", None)
     if isinstance(content, list):
-        return "".join(str(item.get("text", "")) if isinstance(item, Mapping) else str(item) for item in content)
+        return "".join(
+            str(item.get("text", "")) if isinstance(item, Mapping) else str(item)
+            for item in content
+        )
     return content
 
 
@@ -310,7 +356,11 @@ def _jsonable(value: Any) -> Any:
     if isinstance(value, (str, int, float, bool)):
         return value
     if isinstance(value, Mapping):
-        return {str(key): _jsonable(val) for key, val in value.items() if "key" not in str(key).lower()}
+        return {
+            str(key): _jsonable(val)
+            for key, val in value.items()
+            if "key" not in str(key).lower()
+        }
     if isinstance(value, list):
         return [_jsonable(item) for item in value]
     if hasattr(value, "model_dump"):
@@ -323,7 +373,9 @@ def _jsonable(value: Any) -> Any:
 def _redact_secrets(value: Any) -> Any:
     if isinstance(value, Mapping):
         return {
-            str(key): ("<redacted>" if _secret_key_name(str(key)) else _redact_secrets(val))
+            str(key): (
+                "<redacted>" if _secret_key_name(str(key)) else _redact_secrets(val)
+            )
             for key, val in value.items()
         }
     if isinstance(value, list):
@@ -342,6 +394,13 @@ def _safe_error_message(exc: Exception | str | None) -> str:
     if exc is None:
         return "unknown error"
     text = str(exc)
-    text = re.sub(r"(key=|api[_-]?key[=:]\s*)[A-Za-z0-9._-]+", r"\1<redacted>", text, flags=re.IGNORECASE)
-    text = re.sub(r"(bearer\s+)[A-Za-z0-9._-]+", r"\1<redacted>", text, flags=re.IGNORECASE)
+    text = re.sub(
+        r"(key=|api[_-]?key[=:]\s*)[A-Za-z0-9._-]+",
+        r"\1<redacted>",
+        text,
+        flags=re.IGNORECASE,
+    )
+    text = re.sub(
+        r"(bearer\s+)[A-Za-z0-9._-]+", r"\1<redacted>", text, flags=re.IGNORECASE
+    )
     return text
