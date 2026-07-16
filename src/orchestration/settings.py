@@ -1,9 +1,11 @@
 import os
 from pathlib import Path
 
+
 def get_project_root() -> str:
     """Resolve the absolute path to the project root."""
     return str(Path(__file__).resolve().parent.parent.parent)
+
 
 def configure_prefect_results_dir() -> None:
     """

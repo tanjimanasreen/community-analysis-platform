@@ -10,10 +10,12 @@ from .models import DatasetIdentity, ArtifactReference, PipelineRunContext
 from .hashing import hash_mapping, hash_file
 from .settings import configure_prefect_results_dir
 
+
 @task(retries=0, persist_result=True)
 def build_config_digest_task(config: Mapping[str, Any]) -> str:
     """A minimal task to build a config digest deterministically."""
     return hash_mapping(config)
+
 
 @task(retries=0, persist_result=True)
 def create_test_artifact_task(content: str, output_path: str) -> ArtifactReference:
@@ -27,14 +29,13 @@ def create_test_artifact_task(content: str, output_path: str) -> ArtifactReferen
         path=output_path,
         sha256=sha256,
         media_type="text/plain",
-        byte_size=len(content.encode("utf-8"))
+        byte_size=len(content.encode("utf-8")),
     )
+
 
 @flow(task_runner=ThreadPoolTaskRunner(max_workers=1))
 def run_orchestration_foundation_flow(
-    config: Mapping[str, Any],
-    dataset_metadata: Mapping[str, str],
-    output_root: str
+    config: Mapping[str, Any], dataset_metadata: Mapping[str, str], output_root: str
 ) -> dict[str, Any]:
     """
     Skeleton offline Prefect flow to validate orchestration foundation.
@@ -54,7 +55,7 @@ def run_orchestration_foundation_flow(
         dataset_id=dataset_metadata.get("dataset_id", "test-dataset"),
         path=dataset_metadata.get("path", "/dev/null"),
         sha256=dataset_metadata.get("sha256", "a" * 64),
-        platform=dataset_metadata.get("platform")
+        platform=dataset_metadata.get("platform"),
     )
 
     # 3. Task: Config digest
@@ -68,7 +69,7 @@ def run_orchestration_foundation_flow(
         config_digest=config_digest,
         output_root=output_root,
         datasets=[dataset_identity],
-        prefect_flow_run_id=flow_run_id
+        prefect_flow_run_id=flow_run_id,
     )
 
     # 5. Task: Artifact creation
@@ -81,5 +82,5 @@ def run_orchestration_foundation_flow(
         "prefect_flow_run_id": run_context.prefect_flow_run_id,
         "config_digest": run_context.config_digest,
         "artifact_ref_path": artifact_ref.path,
-        "artifact_ref_hash": artifact_ref.sha256
+        "artifact_ref_hash": artifact_ref.sha256,
     }

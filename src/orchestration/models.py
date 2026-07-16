@@ -11,8 +11,7 @@ def _validate_sha256(value: str) -> str:
     normalized = value.lower().strip()
     if not re.fullmatch(r"[0-9a-f]{64}", normalized):
         raise ValueError(
-            "sha256 must be a 64-character hexadecimal string, "
-            f"got '{normalized}'"
+            "sha256 must be a 64-character hexadecimal string, " f"got '{normalized}'"
         )
     return normalized
 

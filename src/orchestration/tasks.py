@@ -7,7 +7,10 @@ from typing import Any, Mapping, Optional
 import pandas as pd
 from prefect import task
 
-from src.orchestration.artifact_validation import validate_artifact, validate_artifact_output
+from src.orchestration.artifact_validation import (
+    validate_artifact,
+    validate_artifact_output,
+)
 from src.orchestration.hashing import hash_file, hash_mapping, topic_cache_key_fn
 from src.orchestration.models import (
     ArtifactReference,
@@ -337,7 +340,9 @@ def run_monthly_network_community_phase_task(
             ArtifactReference(
                 path=filepath,
                 sha256=hash_file(filepath),
-                media_type="application/json" if filepath.endswith(".json") else "text/csv",
+                media_type=(
+                    "application/json" if filepath.endswith(".json") else "text/csv"
+                ),
                 byte_size=os.path.getsize(filepath),
                 row_count=(
                     _csv_row_count(filepath) if filepath.endswith(".csv") else None
@@ -353,7 +358,9 @@ def run_monthly_network_community_phase_task(
                 ArtifactReference(
                     path=filepath,
                     sha256=hash_file(filepath),
-                    media_type="application/json" if filepath.endswith(".json") else "text/csv",
+                    media_type=(
+                        "application/json" if filepath.endswith(".json") else "text/csv"
+                    ),
                     byte_size=os.path.getsize(filepath),
                     row_count=(
                         _csv_row_count(filepath) if filepath.endswith(".csv") else None
@@ -472,10 +479,15 @@ def run_monthly_topic_phase_task(
     # --- Load DataFrames inside the task (never serialised to Prefect state) ---
     def _load_community_messages(path):
         import ast
+
         df = pd.read_csv(path)
         if "messages" in df.columns:
             df["messages"] = df["messages"].apply(
-                lambda x: ast.literal_eval(x) if isinstance(x, str) and x.startswith("[") else x
+                lambda x: (
+                    ast.literal_eval(x)
+                    if isinstance(x, str) and x.startswith("[")
+                    else x
+                )
             )
         return df
 
@@ -484,9 +496,8 @@ def run_monthly_topic_phase_task(
     matched_df = pd.read_csv(input_bundle.matched_communities.path)
 
     partial_df = pd.DataFrame()
-    if (
-        input_bundle.partial_matched_communities is not None
-        and os.path.exists(input_bundle.partial_matched_communities.path)
+    if input_bundle.partial_matched_communities is not None and os.path.exists(
+        input_bundle.partial_matched_communities.path
     ):
         partial_df = pd.read_csv(input_bundle.partial_matched_communities.path)
 
@@ -519,7 +530,12 @@ def run_monthly_topic_phase_task(
 
     matched_topics = None
     matched_path = os.path.join(
-        isolated_output, data_type, "LDA", "matched", content_type, f"{month}_{year}.csv"
+        isolated_output,
+        data_type,
+        "LDA",
+        "matched",
+        content_type,
+        f"{month}_{year}.csv",
     )
     if os.path.exists(matched_path) and os.path.isfile(matched_path):
         matched_topics = ArtifactReference(
@@ -533,7 +549,12 @@ def run_monthly_topic_phase_task(
 
     partial_matched_topics = None
     partial_path = os.path.join(
-        isolated_output, data_type, "LDA", "partial_matched", content_type, f"{month}_{year}.csv"
+        isolated_output,
+        data_type,
+        "LDA",
+        "partial_matched",
+        content_type,
+        f"{month}_{year}.csv",
     )
     if os.path.exists(partial_path) and os.path.isfile(partial_path):
         partial_matched_topics = ArtifactReference(
@@ -797,7 +818,9 @@ def run_monthly_themes_task(
 
     # --- 7. Provider lineage summary (safe metadata only) ---
     summary_data = _build_provider_summary(raw)
-    provider_run_summary_path = os.path.join(isolated_output, "provider_run_summary.json")
+    provider_run_summary_path = os.path.join(
+        isolated_output, "provider_run_summary.json"
+    )
     with open(provider_run_summary_path, "w", encoding="utf-8") as fh:
         json.dump(summary_data, fh, indent=2, sort_keys=True)
 

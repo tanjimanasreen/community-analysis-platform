@@ -5,6 +5,7 @@ import ast
 from src.providers.cached import CachedProvider
 from src.providers import factory
 from src.themes.gpt_themes import generate_llm_themes
+
 # Future imports from Milestone 4, 5, 6 will go here:
 # from src.themes.community_transition import calculate_jaccard_transitions
 # from src.themes.sankey_paths import generate_sankey
@@ -18,23 +19,31 @@ from src.visualization.membership_changes import draw_members_transition_diagram
 from src.themes.theme_similarity import extract_themes
 from src.visualization.theme_similarity import draw_theme_similarity_heatmap
 
+
 def process_single_file_themes(df: pd.DataFrame, provider) -> pd.DataFrame:
     # Ensure correct lists
-    for col in ['absolute_unigram_keywords', 'absolute_bigram_keywords',
-                'weighted_unigram_keywords', 'weighted_bigram_keywords']:
+    for col in [
+        "absolute_unigram_keywords",
+        "absolute_bigram_keywords",
+        "weighted_unigram_keywords",
+        "weighted_bigram_keywords",
+    ]:
         if col in df.columns:
             if df[col].dtype == object and isinstance(df[col].iloc[0], str):
-                df[col] = df[col].apply(lambda x: ast.literal_eval(x) if x.startswith('[') else x)
+                df[col] = df[col].apply(
+                    lambda x: ast.literal_eval(x) if x.startswith("[") else x
+                )
         else:
             df[col] = [[] for _ in range(len(df))]
 
-    if 'absolute_community' not in df.columns:
-        df['absolute_community'] = -1
-    if 'weighted_community' not in df.columns:
-        df['weighted_community'] = -1
+    if "absolute_community" not in df.columns:
+        df["absolute_community"] = -1
+    if "weighted_community" not in df.columns:
+        df["weighted_community"] = -1
 
     themed_df = generate_llm_themes(provider, df)
     return themed_df
+
 
 def run_theme_pipeline(
     input_dir: str,
@@ -44,7 +53,7 @@ def run_theme_pipeline(
     config: dict | None = None,
     provider=None,
     render_visuals: bool = True,
-    similarity_model_name: str = 'paraphrase-MiniLM-L6-v2',
+    similarity_model_name: str = "paraphrase-MiniLM-L6-v2",
 ):
     """
     Runs the full theme intelligence pipeline on the LDA outputs directory.
@@ -76,7 +85,7 @@ def run_theme_pipeline_from_bundle(
     config: dict | None = None,
     provider=None,
     render_visuals: bool = True,
-    similarity_model_name: str = 'paraphrase-MiniLM-L6-v2',
+    similarity_model_name: str = "paraphrase-MiniLM-L6-v2",
 ):
     return run_theme_pipeline_from_monthly_data(
         monthly_data_dict=bundle.monthly_data,
@@ -98,12 +107,15 @@ def run_theme_pipeline_from_monthly_data(
     config: dict | None = None,
     provider=None,
     render_visuals: bool = True,
-    similarity_model_name: str = 'paraphrase-MiniLM-L6-v2',
+    similarity_model_name: str = "paraphrase-MiniLM-L6-v2",
 ):
     import ast
+
     os.makedirs(output_dir, exist_ok=True)
     if not monthly_data_dict:
-        print("No monthly matched LDA files found. Theme pipeline will emit empty transition output.")
+        print(
+            "No monthly matched LDA files found. Theme pipeline will emit empty transition output."
+        )
 
     # Milestone 2: GPT Theme Generation
     print("Generating themes via LLM for all months...")
@@ -137,7 +149,9 @@ def run_theme_pipeline_from_monthly_data(
     source_ind, target_ind, score, all_community = get_path_info(matched_df)
     sankey_dir = os.path.join(output_dir, "sankey")
     if render_visuals:
-        draw_community_transition_diagram(sankey_dir, source_ind, target_ind, score, all_community, matched_df)
+        draw_community_transition_diagram(
+            sankey_dir, source_ind, target_ind, score, all_community, matched_df
+        )
 
     # Milestone 5: Membership Changes
     print("Calculating membership changes and diagrams...")
@@ -150,17 +164,47 @@ def run_theme_pipeline_from_monthly_data(
     print("Generating theme similarity heatmaps...")
     similarity_dir = os.path.join(output_dir, "theme_similarity")
 
-    community_absolute_themes = extract_themes(matched_df, paths_detected, 'start_month_absolute_theme', 'end_month_absolute_theme')
+    community_absolute_themes = extract_themes(
+        matched_df,
+        paths_detected,
+        "start_month_absolute_theme",
+        "end_month_absolute_theme",
+    )
     if render_visuals:
-        draw_theme_similarity_heatmap(community_absolute_themes, similarity_dir, 'absolute_theme', model_name=similarity_model_name)
+        draw_theme_similarity_heatmap(
+            community_absolute_themes,
+            similarity_dir,
+            "absolute_theme",
+            model_name=similarity_model_name,
+        )
 
-    community_weighted_themes = extract_themes(matched_df, paths_detected, 'start_month_weighted_theme', 'end_month_weighted_theme')
+    community_weighted_themes = extract_themes(
+        matched_df,
+        paths_detected,
+        "start_month_weighted_theme",
+        "end_month_weighted_theme",
+    )
     if render_visuals:
-        draw_theme_similarity_heatmap(community_weighted_themes, similarity_dir, 'weighted_theme', model_name=similarity_model_name)
+        draw_theme_similarity_heatmap(
+            community_weighted_themes,
+            similarity_dir,
+            "weighted_theme",
+            model_name=similarity_model_name,
+        )
 
-    community_general_themes = extract_themes(matched_df, paths_detected, 'start_month_general_theme', 'end_month_general_theme')
+    community_general_themes = extract_themes(
+        matched_df,
+        paths_detected,
+        "start_month_general_theme",
+        "end_month_general_theme",
+    )
     if render_visuals:
-        draw_theme_similarity_heatmap(community_general_themes, similarity_dir, 'general_theme', model_name=similarity_model_name)
+        draw_theme_similarity_heatmap(
+            community_general_themes,
+            similarity_dir,
+            "general_theme",
+            model_name=similarity_model_name,
+        )
 
     print("Full theme intelligence pipeline completed successfully!")
     return matched_df

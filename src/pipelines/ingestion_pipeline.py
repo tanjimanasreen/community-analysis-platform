@@ -82,8 +82,7 @@ def load_legacy_relationship_csv(csv_path: PathLike) -> pd.DataFrame:
     missing = [column for column in LEGACY_EXPORT_COLUMNS if column not in df.columns]
     if missing:
         raise ValueError(
-            "Legacy relationship CSV is missing required columns: "
-            + ", ".join(missing)
+            "Legacy relationship CSV is missing required columns: " + ", ".join(missing)
         )
     return df
 
@@ -146,11 +145,15 @@ def build_interaction_dataframe(
     return df_users, df_network, _with_snapshot_columns(df_interactions, config)
 
 
-def write_interactions_csv(df_interactions: pd.DataFrame, output_path: PathLike) -> Path:
+def write_interactions_csv(
+    df_interactions: pd.DataFrame, output_path: PathLike
+) -> Path:
     """Write derived interaction edges using the repository import column order."""
     path = Path(output_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    columns = [column for column in INTERACTION_EDGE_COLUMNS if column in df_interactions]
+    columns = [
+        column for column in INTERACTION_EDGE_COLUMNS if column in df_interactions
+    ]
     df_interactions.to_csv(path, index=False, columns=columns)
     return path
 

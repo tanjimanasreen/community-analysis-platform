@@ -135,6 +135,7 @@ def validate_artifact(
     # CSV schema check
     if required_csv_columns:
         import pandas as pd
+
         try:
             header = pd.read_csv(path, nrows=0)
             missing = [c for c in required_csv_columns if c not in header.columns]

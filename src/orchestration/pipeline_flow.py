@@ -9,9 +9,10 @@ from src.orchestration.models import PipelineRunContext, PipelineRunResult
 from src.orchestration.tasks import (
     validate_run_configuration_task,
     resolve_dataset_identity_task,
-    run_monthly_network_community_phase_task
+    run_monthly_network_community_phase_task,
 )
 from src.orchestration.settings import configure_prefect_results_dir
+
 
 @flow(
     name="run-monthly-network-foundation-flow",
@@ -23,7 +24,7 @@ def run_monthly_network_foundation_flow(
     dataset_path: str,
     dataset_id: str,
     known_sha256: Optional[str] = None,
-    platform: Optional[str] = None
+    platform: Optional[str] = None,
 ) -> PipelineRunResult:
     """
     Orchestrates the monthly network and community phase.
@@ -44,7 +45,7 @@ def run_monthly_network_foundation_flow(
         path=dataset_path,
         dataset_id=dataset_id,
         known_sha256=known_sha256,
-        platform=platform
+        platform=platform,
     )
 
     context = PipelineRunContext.create(
@@ -53,16 +54,11 @@ def run_monthly_network_foundation_flow(
         config_digest=val_config.config_digest,
         output_root=val_config.output_root,
         datasets=[dataset_ident],
-        prefect_flow_run_id=prefect_flow_run_id
+        prefect_flow_run_id=prefect_flow_run_id,
     )
 
     artifacts = run_monthly_network_community_phase_task(
-        dataset_identity=dataset_ident,
-        config=val_config,
-        context=context
+        dataset_identity=dataset_ident, config=val_config, context=context
     )
 
-    return PipelineRunResult(
-        context=context,
-        artifacts=artifacts
-    )
+    return PipelineRunResult(context=context, artifacts=artifacts)

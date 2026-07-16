@@ -76,7 +76,9 @@ def _provider_parameters(raw: Mapping[str, Any]) -> dict[str, Any]:
         fallback_chain: list[str] = []
     elif isinstance(theme_provider, Mapping):
         primary = str(theme_provider.get("primary", "mock"))
-        fallback_chain = [str(item) for item in theme_provider.get("fallback_chain", [])]
+        fallback_chain = [
+            str(item) for item in theme_provider.get("fallback_chain", [])
+        ]
     else:
         primary = "mock"
         fallback_chain = []
