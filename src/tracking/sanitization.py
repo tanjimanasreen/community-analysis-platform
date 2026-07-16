@@ -63,9 +63,7 @@ def _safe_scalar(value: Any) -> str | int | float | bool:
     if value is None:
         return ""
     if not isinstance(value, str):
-        raise UnsafeTrackingPayload(
-            f"Unsupported scalar type: {type(value).__name__}"
-        )
+        raise UnsafeTrackingPayload(f"Unsupported scalar type: {type(value).__name__}")
     if _SECRET_VALUE_PATTERN.search(value):
         raise UnsafeTrackingPayload("Secret-like value rejected")
     if len(value) > 500:

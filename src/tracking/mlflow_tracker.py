@@ -74,9 +74,7 @@ class MlflowExperimentTracker:
     @staticmethod
     def _string_values(payload: Mapping[str, Any]) -> dict[str, str]:
         return {
-            str(key): str(value)
-            for key, value in payload.items()
-            if value is not None
+            str(key): str(value) for key, value in payload.items() if value is not None
         }
 
     def start_parent_run(
@@ -87,9 +85,7 @@ class MlflowExperimentTracker:
         params: Mapping[str, Any],
     ) -> TrackingRunReference | None:
         def create() -> TrackingRunReference:
-            clean_tags = sanitize_scalar_mapping(
-                tags, allowed_keys=PARENT_TAG_KEYS
-            )
+            clean_tags = sanitize_scalar_mapping(tags, allowed_keys=PARENT_TAG_KEYS)
             clean_params = sanitize_scalar_mapping(
                 params, allowed_keys=PARENT_PARAM_KEYS
             )
@@ -120,18 +116,14 @@ class MlflowExperimentTracker:
             return None
 
         def create() -> StageRunReference:
-            clean_tags = sanitize_scalar_mapping(
-                tags, allowed_keys=STAGE_TAG_KEYS
-            )
+            clean_tags = sanitize_scalar_mapping(tags, allowed_keys=STAGE_TAG_KEYS)
             clean_params = sanitize_scalar_mapping(
                 params, allowed_keys=STAGE_PARAM_KEYS
             )
             run_tags = self._string_values(clean_tags)
             run_tags.update(
                 {
-                    "mlflow.runName": (
-                        f"{stage_name}-{parent.parent_run_id[:8]}"
-                    ),
+                    "mlflow.runName": (f"{stage_name}-{parent.parent_run_id[:8]}"),
                     "mlflow.parentRunId": parent.parent_run_id,
                     "stage_name": stage_name,
                 }

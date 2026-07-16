@@ -189,8 +189,7 @@ def build_lineage_summary(
         "dvc_revision": context.dvc_revision or "",
         "config_digest": context.config_digest,
         "datasets": [
-            _dataset_entry(dataset, root)
-            for dataset in context.dataset_identities
+            _dataset_entry(dataset, root) for dataset in context.dataset_identities
         ],
     }
 
@@ -209,9 +208,7 @@ def build_run_metrics_summary(
             "total_duration_seconds": max(0.0, float(total_duration_seconds)),
             "stage_count": stage_count,
             "artifact_count": len(artifacts),
-            "artifact_total_bytes": sum(
-                ref.byte_size or 0 for ref in artifacts
-            ),
+            "artifact_total_bytes": sum(ref.byte_size or 0 for ref in artifacts),
             "completed_stage_count": completed_stage_count,
             "failed_stage_count": failed_stage_count,
         },

@@ -10,15 +10,31 @@ import pandas as pd
 from src.themes.theme_inputs import ThemeInputError, load_theme_inputs
 from src.topics.topic_inputs import TopicInputError, load_topic_inputs
 
-
 NETWORK_DATA_COLUMNS = ["unique_id", "from_id", "forwarder_id", "text", "created_at"]
-COMMUNITY_GRAPH_COLUMNS = ["source", "target", "community_number", "direction", "weight"]
-MATCHED_COMMUNITY_SUMMARY_COLUMNS = ["month", "total_matched", "total_absolute", "total_weighted"]
+COMMUNITY_GRAPH_COLUMNS = [
+    "source",
+    "target",
+    "community_number",
+    "direction",
+    "weight",
+]
+MATCHED_COMMUNITY_SUMMARY_COLUMNS = [
+    "month",
+    "total_matched",
+    "total_absolute",
+    "total_weighted",
+]
 PARTIAL_MATCHED_COMMUNITY_COLUMNS = ["month", "absolute", "weighted", "jaccard_score"]
 USER_CENTRALITY_COLUMNS = ["month", "absolute", "weighted"]
 COUNT_USER_MESSAGES_COLUMNS = ["month", "user", "messages"]
 DAILY_MESSAGES_STAT_COLUMNS = ["month", "absolute", "weighted"]
-LDA_SCORES_COLUMNS = ["month", "unigram_absolute", "unigram_weighted", "bigram_absolute", "bigram_weighted"]
+LDA_SCORES_COLUMNS = [
+    "month",
+    "unigram_absolute",
+    "unigram_weighted",
+    "bigram_absolute",
+    "bigram_weighted",
+]
 MATCHED_LDA_COLUMNS = [
     "absolute_community",
     "absolute_unigram_topic",
@@ -94,7 +110,9 @@ class VerificationResult:
         return len(self.checked)
 
 
-def verify_output_contract(config: Mapping, *, longitudinal: bool = False) -> VerificationResult:
+def verify_output_contract(
+    config: Mapping, *, longitudinal: bool = False
+) -> VerificationResult:
     """Validate generated artifacts without running any pipeline stage."""
     params = get_output_contract_params(config)
     months = get_output_contract_months(config, longitudinal=longitudinal)
@@ -127,12 +145,22 @@ def verify_output_contract(config: Mapping, *, longitudinal: bool = False) -> Ve
         )
     except (TopicInputError, ThemeInputError) as exc:
         raise OutputContractError(str(exc)) from exc
-    missing_months = [month for month in months if month not in theme_bundle.monthly_data]
+    missing_months = [
+        month for month in months if month not in theme_bundle.monthly_data
+    ]
     if missing_months:
-        raise OutputContractError(f"Theme input manifest is missing months: {missing_months}")
+        raise OutputContractError(
+            f"Theme input manifest is missing months: {missing_months}"
+        )
 
     for month in months:
-        public_lda = _base(params) / "LDA" / "matched" / params["content_type"] / f"{month}_{params['year']}.csv"
+        public_lda = (
+            _base(params)
+            / "LDA"
+            / "matched"
+            / params["content_type"]
+            / f"{month}_{params['year']}.csv"
+        )
         internal_lda = (
             _base(params)
             / "_intermediate"
@@ -174,13 +202,17 @@ def get_output_contract_params(config: Mapping) -> dict[str, str]:
     }
 
 
-def get_output_contract_months(config: Mapping, *, longitudinal: bool = False) -> list[str]:
+def get_output_contract_months(
+    config: Mapping, *, longitudinal: bool = False
+) -> list[str]:
     """Return the configured month or manifest months for a longitudinal run."""
     params = get_output_contract_params(config)
     return _months(config, params["month"], longitudinal)
 
 
-def get_public_artifact_checks(config: Mapping, *, longitudinal: bool = False) -> list[ArtifactCheck]:
+def get_public_artifact_checks(
+    config: Mapping, *, longitudinal: bool = False
+) -> list[ArtifactCheck]:
     """Return public artifact checks for a run without reading any artifacts."""
     params = get_output_contract_params(config)
     months = get_output_contract_months(config, longitudinal=longitudinal)
@@ -225,11 +257,15 @@ def _months(config: Mapping, configured_month: str, longitudinal: bool) -> list[
     )
     manifest_path = theme_input_dir / "manifest.json"
     if not manifest_path.exists():
-        raise OutputContractError(f"Longitudinal theme input manifest is missing: {manifest_path}")
+        raise OutputContractError(
+            f"Longitudinal theme input manifest is missing: {manifest_path}"
+        )
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     months = [str(month) for month in manifest.get("months", [])]
     if len(months) < 2:
-        raise OutputContractError(f"Longitudinal contract requires at least two months; found {months}")
+        raise OutputContractError(
+            f"Longitudinal contract requires at least two months; found {months}"
+        )
     return months
 
 
@@ -237,7 +273,9 @@ def _base(params: Mapping[str, str]) -> Path:
     return Path(params["output_base_path"]) / params["data_type"]
 
 
-def _public_artifact_checks(params: Mapping[str, str], months: Iterable[str]) -> list[ArtifactCheck]:
+def _public_artifact_checks(
+    params: Mapping[str, str], months: Iterable[str]
+) -> list[ArtifactCheck]:
     base = _base(params)
     theme_output = Path(params["theme_output_dir"])
     checks: list[ArtifactCheck] = []
@@ -247,27 +285,48 @@ def _public_artifact_checks(params: Mapping[str, str], months: Iterable[str]) ->
             [
                 ArtifactCheck(
                     "network_data",
-                    base / "network_data" / params["content_type"] / f"{month}{params['year']}.csv",
+                    base
+                    / "network_data"
+                    / params["content_type"]
+                    / f"{month}{params['year']}.csv",
                     NETWORK_DATA_COLUMNS,
                 ),
                 ArtifactCheck(
                     "absolute_community_graph",
-                    base / "communities" / "graphs" / "absolute" / params["content_type"] / f"{month}.csv",
+                    base
+                    / "communities"
+                    / "graphs"
+                    / "absolute"
+                    / params["content_type"]
+                    / f"{month}.csv",
                     COMMUNITY_GRAPH_COLUMNS,
                 ),
                 ArtifactCheck(
                     "weighted_community_graph",
-                    base / "communities" / "graphs" / "weighted" / params["content_type"] / f"{month}.csv",
+                    base
+                    / "communities"
+                    / "graphs"
+                    / "weighted"
+                    / params["content_type"]
+                    / f"{month}.csv",
                     COMMUNITY_GRAPH_COLUMNS,
                 ),
                 ArtifactCheck(
                     "matched_communities",
-                    base / "communities" / "matched" / params["content_type"] / f"{month}.csv",
+                    base
+                    / "communities"
+                    / "matched"
+                    / params["content_type"]
+                    / f"{month}.csv",
                     MATCHED_COMMUNITY_SUMMARY_COLUMNS,
                 ),
                 ArtifactCheck(
                     "partial_matched_communities",
-                    base / "communities" / "partially_matched" / params["content_type"] / f"{month}.csv",
+                    base
+                    / "communities"
+                    / "partially_matched"
+                    / params["content_type"]
+                    / f"{month}.csv",
                     PARTIAL_MATCHED_COMMUNITY_COLUMNS,
                     required=False,
                 ),
@@ -278,12 +337,18 @@ def _public_artifact_checks(params: Mapping[str, str], months: Iterable[str]) ->
                 ),
                 ArtifactCheck(
                     "count_user_messages",
-                    base / "count_user_messages" / params["content_type"] / f"{month}.csv",
+                    base
+                    / "count_user_messages"
+                    / params["content_type"]
+                    / f"{month}.csv",
                     COUNT_USER_MESSAGES_COLUMNS,
                 ),
                 ArtifactCheck(
                     "daily_messages_stat",
-                    base / "daily_messages_stat" / params["content_type"] / f"{month}.csv",
+                    base
+                    / "daily_messages_stat"
+                    / params["content_type"]
+                    / f"{month}.csv",
                     DAILY_MESSAGES_STAT_COLUMNS,
                 ),
                 ArtifactCheck(
@@ -293,12 +358,20 @@ def _public_artifact_checks(params: Mapping[str, str], months: Iterable[str]) ->
                 ),
                 ArtifactCheck(
                     "matched_lda",
-                    base / "LDA" / "matched" / params["content_type"] / f"{month}_{params['year']}.csv",
+                    base
+                    / "LDA"
+                    / "matched"
+                    / params["content_type"]
+                    / f"{month}_{params['year']}.csv",
                     MATCHED_LDA_COLUMNS,
                 ),
                 ArtifactCheck(
                     "partial_matched_lda",
-                    base / "LDA" / "partial_matched" / params["content_type"] / f"{month}_{params['year']}.csv",
+                    base
+                    / "LDA"
+                    / "partial_matched"
+                    / params["content_type"]
+                    / f"{month}_{params['year']}.csv",
                     PARTIAL_MATCHED_LDA_COLUMNS,
                     required=False,
                 ),
@@ -323,13 +396,21 @@ def _public_artifact_checks(params: Mapping[str, str], months: Iterable[str]) ->
 
 def _validate_csv_artifact(check: ArtifactCheck) -> None:
     if not check.path.exists():
-        raise OutputContractError(f"Missing required artifact {check.name}: {check.path}")
+        raise OutputContractError(
+            f"Missing required artifact {check.name}: {check.path}"
+        )
     frame = pd.read_csv(check.path, low_memory=False)
-    missing = [column for column in check.required_columns or [] if column not in frame.columns]
+    missing = [
+        column for column in check.required_columns or [] if column not in frame.columns
+    ]
     if missing:
-        raise OutputContractError(f"{check.name} at {check.path} is missing columns: {missing}")
+        raise OutputContractError(
+            f"{check.name} at {check.path} is missing columns: {missing}"
+        )
     if check.non_empty and frame.empty:
-        raise OutputContractError(f"{check.name} at {check.path} must contain at least one row")
+        raise OutputContractError(
+            f"{check.name} at {check.path} must contain at least one row"
+        )
 
 
 def _assert_same_columns(left: Path, right: Path) -> None:

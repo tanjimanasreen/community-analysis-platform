@@ -22,9 +22,7 @@ _ALLOWED_KEYS = {
 _REQUIRED_ENABLED_KEYS = _ALLOWED_KEYS - {"enabled"}
 
 
-def _resolve_under_root(
-    project_root: Path, raw_path: object, field_name: str
-) -> Path:
+def _resolve_under_root(project_root: Path, raw_path: object, field_name: str) -> Path:
     if not isinstance(raw_path, str) or not raw_path.strip():
         raise ValueError(f"tracking.{field_name} must be a non-empty relative path")
     candidate = Path(raw_path)
@@ -34,9 +32,7 @@ def _resolve_under_root(
     try:
         resolved.relative_to(project_root.resolve())
     except ValueError as exc:
-        raise ValueError(
-            f"tracking.{field_name} escapes the repository root"
-        ) from exc
+        raise ValueError(f"tracking.{field_name} escapes the repository root") from exc
     return resolved
 
 
@@ -80,9 +76,7 @@ def parse_tracking_settings(
     backend_store = _resolve_under_root(
         root, raw["backend_store_path"], "backend_store_path"
     )
-    artifact_root = _resolve_under_root(
-        root, raw["artifact_root"], "artifact_root"
-    )
+    artifact_root = _resolve_under_root(root, raw["artifact_root"], "artifact_root")
 
     return TrackingSettings(
         enabled=True,
