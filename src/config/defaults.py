@@ -2,7 +2,7 @@
 
 All values are Pydantic BaseModel instances so they can be validated,
 serialised, and overridden from config dicts consistently with the rest
-of the settings layer (see db_settings.py).
+of the settings layer (see settings.py).
 
 THESIS CONSTRAINTS — do not change defaults without documenting the experiment:
   GraphThresholds:     min_total_post=10, min_shared_post=5
@@ -45,6 +45,7 @@ class ThemeProviderDefaults(BaseModel):
     fallback: whether the pipeline falls back on rate-limit or API error.
     fallback_chain: ordered list of real provider specs (no mock in production).
     """
+
     primary: str = "mock"
     fallback: bool = True
     fallback_chain: list[str] = Field(
@@ -79,4 +80,4 @@ class ProjectDefaults(BaseModel):
 
 
 # Module-level singleton — import this in provider and pipeline code.
-default_config = ProjectDefaults()
+DEFAULT_CONFIG = ProjectDefaults()

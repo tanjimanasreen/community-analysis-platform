@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 from typing import Any, Union
 
-from src.config.db_settings import get_db_settings  # moved from mid-file (was line 93)
+from src.config.settings import get_database_settings
 
 ENV_VAR_RE = re.compile(r"\$\{([^}]+)\}")
 MONTH_NAME_TO_NUMBER = {
@@ -202,7 +202,7 @@ def validate_provider_config(config: dict[str, Any]) -> None:
 
 def get_database_config(config: dict[str, Any]) -> dict[str, Any]:
     # Strictly load from the environment via Pydantic — config dict is ignored.
-    db_settings = get_db_settings()
+    db_settings = get_database_settings()
     return {
         "engine": db_settings.engine,
         "uri": db_settings.uri,
