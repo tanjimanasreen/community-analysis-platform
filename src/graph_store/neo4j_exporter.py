@@ -35,10 +35,11 @@ TWITTER_REPLY_QUERY = """MATCH (source:Reply)-[r:REPLIED_BY]->(target:Twitter_Us
 """
 
 QUERIES = {
-    'telegram': TELEGRAM_QUERY,
-    'twitter_retweet': TWITTER_RETWEET_QUERY,
-    'twitter_reply': TWITTER_REPLY_QUERY
+    "telegram": TELEGRAM_QUERY,
+    "twitter_retweet": TWITTER_RETWEET_QUERY,
+    "twitter_reply": TWITTER_REPLY_QUERY,
 }
+
 
 class Neo4jExporter:
     def __init__(self, uri=None, user=None, password=None, database="neo4j"):
@@ -67,7 +68,7 @@ class Neo4jExporter:
             "year": year,
             "month": month,
             "year_next": year_next,
-            "month_next": month_next
+            "month_next": month_next,
         }
 
         from neo4j import GraphDatabase
@@ -75,16 +76,20 @@ class Neo4jExporter:
         with GraphDatabase.driver(self.uri, auth=(self.user, self.password)) as driver:
             driver.verify_connectivity()
             records, summary, keys = driver.execute_query(
-                query,
-                parameters_=params,
-                database_=self.database
+                query, parameters_=params, database_=self.database
             )
 
-            with open(output_file, 'w+', newline='') as f:
+            with open(output_file, "w+", newline="") as f:
                 writer = csv.writer(f)
-                writer.writerow(['source', 'target', 'relation'])
+                writer.writerow(["source", "target", "relation"])
 
                 for record in records:
-                    writer.writerow([record.data()['source'], record.data()['target'], record.data()['relation']])
+                    writer.writerow(
+                        [
+                            record.data()["source"],
+                            record.data()["target"],
+                            record.data()["relation"],
+                        ]
+                    )
 
             return summary

@@ -1,11 +1,13 @@
 import os
 from neo4j import GraphDatabase
 
+
 class MemgraphClient:
     """
     Client wrapper for connecting to the local Memgraph instance.
     Memgraph is compatible with the Neo4j bolt protocol and python driver.
     """
+
     def __init__(self, uri=None, user=None, password=None, database=None):
         self.uri = uri or os.environ.get("GRAPH_DB_URI", "bolt://localhost:7687")
         self.user = user or os.environ.get("GRAPH_DB_USER", "")

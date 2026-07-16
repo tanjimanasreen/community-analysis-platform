@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-
 USER = "User"
 MESSAGE = "Message"
 CHANNEL = "Channel"

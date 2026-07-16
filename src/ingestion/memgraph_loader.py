@@ -1,32 +1,50 @@
 import csv
 import ast
 import re
-from src.ingestion.schema import PRIMARY_KEYS, TELEGRAM_RELATION_MAP, TWITTER_RELATION_MAP
+from src.ingestion.schema import (
+    PRIMARY_KEYS,
+    TELEGRAM_RELATION_MAP,
+    TWITTER_RELATION_MAP,
+)
+
 
 def clean_dict_string(dict_str):
     """
     Cleans the stringified neo4j dictionaries so ast.literal_eval can parse them.
     Replaces neo4j.time.DateTime(...) with a string representation.
     """
-    datetime_pattern = re.compile(r"neo4j\.time\.DateTime\((.*?)tzinfo=<UTC>\)", re.DOTALL)
+    datetime_pattern = re.compile(
+        r"neo4j\.time\.DateTime\((.*?)tzinfo=<UTC>\)", re.DOTALL
+    )
     cleaned = datetime_pattern.sub(r"'neo4j_time_(\1)'", dict_str)
     return cleaned
 
+
 def generate_cypher(source_dict, target_dict, relation, platform):
-    mapping = TELEGRAM_RELATION_MAP if platform == 'telegram' else TWITTER_RELATION_MAP
+    mapping = TELEGRAM_RELATION_MAP if platform == "telegram" else TWITTER_RELATION_MAP
     if relation not in mapping:
         # Fallback or skip if relation is not mapped
         return None, None
 
     source_label, target_label = mapping[relation]
 
-    source_pk_field = PRIMARY_KEYS.get(source_label, 'id')
-    target_pk_field = PRIMARY_KEYS.get(target_label, 'id')
+    source_pk_field = PRIMARY_KEYS.get(source_label, "id")
+    target_pk_field = PRIMARY_KEYS.get(target_label, "id")
 
     # In some cases, dicts might not have the primary key.
     # Try to find a fallback if the main one is missing.
-    source_pk_val = source_dict.get(source_pk_field) or source_dict.get('id') or source_dict.get('to_id') or source_dict.get('from_id')
-    target_pk_val = target_dict.get(target_pk_field) or target_dict.get('id') or target_dict.get('to_id') or target_dict.get('from_id')
+    source_pk_val = (
+        source_dict.get(source_pk_field)
+        or source_dict.get("id")
+        or source_dict.get("to_id")
+        or source_dict.get("from_id")
+    )
+    target_pk_val = (
+        target_dict.get(target_pk_field)
+        or target_dict.get("id")
+        or target_dict.get("to_id")
+        or target_dict.get("from_id")
+    )
 
     if not source_pk_val or not target_pk_val:
         return None, None
@@ -50,10 +68,11 @@ def generate_cypher(source_dict, target_dict, relation, platform):
         "source_props": source_dict,
         "target_pk": target_pk_val,
         "target_props": target_dict,
-        "platform": platform
+        "platform": platform,
     }
 
     return query, params
+
 
 class MemgraphLoader:
     def __init__(self, client=None):
@@ -70,18 +89,20 @@ class MemgraphLoader:
         success_count = 0
         error_count = 0
 
-        with open(file_path, 'r', encoding='utf-8') as f:
+        with open(file_path, "r", encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 try:
-                    source_str = clean_dict_string(row['source'])
-                    target_str = clean_dict_string(row['target'])
+                    source_str = clean_dict_string(row["source"])
+                    target_str = clean_dict_string(row["target"])
 
                     source_dict = ast.literal_eval(source_str)
                     target_dict = ast.literal_eval(target_str)
-                    relation = row['relation']
+                    relation = row["relation"]
 
-                    query, params = generate_cypher(source_dict, target_dict, relation, platform)
+                    query, params = generate_cypher(
+                        source_dict, target_dict, relation, platform
+                    )
                     if query:
                         self.client.execute_query(query, params)
                         success_count += 1

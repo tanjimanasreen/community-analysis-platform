@@ -6,7 +6,6 @@ from typing import Any
 
 import pandas as pd
 
-
 NEO4J_DATETIME_RE = re.compile(
     r"neo4j\.time\.DateTime\((?P<args>.*?)(?:,\s*)?tzinfo=<UTC>\)", re.DOTALL
 )
@@ -93,12 +92,16 @@ def create_user_df(
 
     df_user = df_user.dropna(subset=["user_id"]).drop_duplicates("user_id")
     if "username" not in df_user.columns:
-        df_user["username"] = df_user["user_id"].apply(lambda user_id: f"anonymous{user_id}")
+        df_user["username"] = df_user["user_id"].apply(
+            lambda user_id: f"anonymous{user_id}"
+        )
     else:
         df_user["username"] = df_user.apply(
-            lambda row: row["username"]
-            if not pd.isna(row["username"]) and row["username"] not in ("", None)
-            else f"anonymous{row['user_id']}",
+            lambda row: (
+                row["username"]
+                if not pd.isna(row["username"]) and row["username"] not in ("", None)
+                else f"anonymous{row['user_id']}"
+            ),
             axis=1,
         )
 

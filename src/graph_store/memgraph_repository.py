@@ -17,8 +17,15 @@ from src.ingestion.schema import (
     USER,
 )
 
-
-INDEX_LABELS = (USER, CHANNEL, MESSAGE, FORWARD_MESSAGE, TWITTER_USER, RETWEET_QUOTE, REPLY)
+INDEX_LABELS = (
+    USER,
+    CHANNEL,
+    MESSAGE,
+    FORWARD_MESSAGE,
+    TWITTER_USER,
+    RETWEET_QUOTE,
+    REPLY,
+)
 
 
 class MemgraphRepository(GraphRepository):
@@ -55,7 +62,9 @@ class MemgraphRepository(GraphRepository):
             for row in reader:
                 source = _parse_legacy_node(row["source"])
                 target = _parse_legacy_node(row["target"])
-                query, params = generate_cypher(source, target, row["relation"], platform)
+                query, params = generate_cypher(
+                    source, target, row["relation"], platform
+                )
                 if query is not None:
                     self.client.execute_query(query, params)
 
@@ -129,7 +138,9 @@ def _parse_legacy_node(value: str) -> dict[str, Any]:
     return ast.literal_eval(clean_dict_string(value))
 
 
-def _interaction_params(row: Mapping[str, str], snapshot_meta: SnapshotMeta) -> dict[str, Any]:
+def _interaction_params(
+    row: Mapping[str, str], snapshot_meta: SnapshotMeta
+) -> dict[str, Any]:
     shared_post = int(row["shared_post"])
     total_post = int(row["total_post"])
     weighted_post = (
