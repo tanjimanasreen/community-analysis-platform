@@ -10,6 +10,7 @@ from src.config.loader import (
     validate_run_config,
 )
 
+
 def validate_config(config_path, dataset_id=None):
     print(f"Validating config: {config_path}")
     try:
@@ -28,255 +29,526 @@ def validate_config(config_path, dataset_id=None):
         print(f"Error loading config: {e}")
         sys.exit(1)
 
+
 def main():
-    parser = argparse.ArgumentParser(description="Community Analysis Intelligence Platform")
-    subparsers = parser.add_subparsers(dest='command', required=True)
+    parser = argparse.ArgumentParser(
+        description="Community Analysis Intelligence Platform"
+    )
+    subparsers = parser.add_subparsers(dest="command", required=True)
 
     # validate-config command
-    parser_validate = subparsers.add_parser('validate-config', help='Validate a configuration file')
-    parser_validate.add_argument('--config', required=True, help='Path to config file')
-    parser_validate.add_argument('--dataset-id', required=False, help='Optional dataset ID to execute within the config')
+    parser_validate = subparsers.add_parser(
+        "validate-config", help="Validate a configuration file"
+    )
+    parser_validate.add_argument("--config", required=True, help="Path to config file")
+    parser_validate.add_argument(
+        "--dataset-id",
+        required=False,
+        help="Optional dataset ID to execute within the config",
+    )
 
     # export-graph command
-    parser_export = subparsers.add_parser('export-graph', help='Export graph relationships')
-    parser_export.add_argument('--config', required=True, help='Path to config file')
-    parser_export.add_argument('--dataset-id', required=False, help='Optional dataset ID to execute within the config')
-    parser_export.add_argument('--output', required=False, help='Output CSV path')
-    parser_export.add_argument('--query-name', required=False, help='Exporter query name override')
+    parser_export = subparsers.add_parser(
+        "export-graph", help="Export graph relationships"
+    )
+    parser_export.add_argument("--config", required=True, help="Path to config file")
+    parser_export.add_argument(
+        "--dataset-id",
+        required=False,
+        help="Optional dataset ID to execute within the config",
+    )
+    parser_export.add_argument("--output", required=False, help="Output CSV path")
+    parser_export.add_argument(
+        "--query-name", required=False, help="Exporter query name override"
+    )
 
-    parser_db_check = subparsers.add_parser('db-check', help='Check Memgraph connectivity')
-    parser_db_check.add_argument('--config', required=False, help='Path to config file')
-    parser_db_check.add_argument('--dataset-id', required=False, help='Optional dataset ID to execute within the config')
+    parser_db_check = subparsers.add_parser(
+        "db-check", help="Check Memgraph connectivity"
+    )
+    parser_db_check.add_argument("--config", required=False, help="Path to config file")
+    parser_db_check.add_argument(
+        "--dataset-id",
+        required=False,
+        help="Optional dataset ID to execute within the config",
+    )
 
-    subparsers.add_parser('db-up', help='Start local Memgraph using Docker Compose')
+    subparsers.add_parser("db-up", help="Start local Memgraph using Docker Compose")
 
-    parser_import_graph = subparsers.add_parser('import-graph', help='Import legacy source,target,relation CSV into Memgraph')
-    parser_import_graph.add_argument('--file', nargs='+', required=True, help='Path to one or more legacy CSV files')
-    parser_import_graph.add_argument('--platform', required=True, choices=['telegram', 'twitter'], help='Platform of the data')
-    parser_import_graph.add_argument('--config', required=False, help='Path to config file')
-    parser_import_graph.add_argument('--dataset-id', required=False, help='Optional dataset ID to execute within the config')
+    parser_import_graph = subparsers.add_parser(
+        "import-graph", help="Import legacy source,target,relation CSV into Memgraph"
+    )
+    parser_import_graph.add_argument(
+        "--file", nargs="+", required=True, help="Path to one or more legacy CSV files"
+    )
+    parser_import_graph.add_argument(
+        "--platform",
+        required=True,
+        choices=["telegram", "twitter"],
+        help="Platform of the data",
+    )
+    parser_import_graph.add_argument(
+        "--config", required=False, help="Path to config file"
+    )
+    parser_import_graph.add_argument(
+        "--dataset-id",
+        required=False,
+        help="Optional dataset ID to execute within the config",
+    )
 
-    parser_ingest_interactions = subparsers.add_parser('ingest-interactions', help='Build/import monthly interaction CSV into Memgraph')
-    parser_ingest_interactions.add_argument('--file', required=True, help='Path to raw legacy CSV or derived interaction CSV')
-    parser_ingest_interactions.add_argument('--config', required=True, help='Path to config file')
-    parser_ingest_interactions.add_argument('--dataset-id', required=False, help='Optional dataset ID to execute within the config')
-    parser_ingest_interactions.add_argument('--out', required=False, help='Derived interaction CSV output path when --file is raw')
-    parser_ingest_interactions.add_argument('--no-db', action='store_true', help='Build derived CSV without importing into Memgraph')
+    parser_ingest_interactions = subparsers.add_parser(
+        "ingest-interactions", help="Build/import monthly interaction CSV into Memgraph"
+    )
+    parser_ingest_interactions.add_argument(
+        "--file",
+        required=True,
+        help="Path to raw legacy CSV or derived interaction CSV",
+    )
+    parser_ingest_interactions.add_argument(
+        "--config", required=True, help="Path to config file"
+    )
+    parser_ingest_interactions.add_argument(
+        "--dataset-id",
+        required=False,
+        help="Optional dataset ID to execute within the config",
+    )
+    parser_ingest_interactions.add_argument(
+        "--out",
+        required=False,
+        help="Derived interaction CSV output path when --file is raw",
+    )
+    parser_ingest_interactions.add_argument(
+        "--no-db",
+        action="store_true",
+        help="Build derived CSV without importing into Memgraph",
+    )
 
     # run-social-network command
-    parser_social = subparsers.add_parser('run-social-network', help='Run social network analysis')
-    parser_social.add_argument('--config', required=True, help='Path to config file')
-    parser_social.add_argument('--dataset-id', required=False, help='Optional dataset ID to execute within the config')
+    parser_social = subparsers.add_parser(
+        "run-social-network", help="Run social network analysis"
+    )
+    parser_social.add_argument("--config", required=True, help="Path to config file")
+    parser_social.add_argument(
+        "--dataset-id",
+        required=False,
+        help="Optional dataset ID to execute within the config",
+    )
 
     # run-topics command
-    parser_topics = subparsers.add_parser('run-topics', help='Run topic modeling')
-    parser_topics.add_argument('--config', required=True, help='Path to config file')
-    parser_topics.add_argument('--dataset-id', required=False, help='Optional dataset ID to execute within the config')
+    parser_topics = subparsers.add_parser("run-topics", help="Run topic modeling")
+    parser_topics.add_argument("--config", required=True, help="Path to config file")
+    parser_topics.add_argument(
+        "--dataset-id",
+        required=False,
+        help="Optional dataset ID to execute within the config",
+    )
 
     # run-theme-analysis command
-    parser_theme = subparsers.add_parser('run-theme-analysis', help='Run theme generation and transition analysis')
-    parser_theme.add_argument('--config', required=True, help='Path to config file')
-    parser_theme.add_argument('--dataset-id', required=False, help='Optional dataset ID to execute within the config')
+    parser_theme = subparsers.add_parser(
+        "run-theme-analysis", help="Run theme generation and transition analysis"
+    )
+    parser_theme.add_argument("--config", required=True, help="Path to config file")
+    parser_theme.add_argument(
+        "--dataset-id",
+        required=False,
+        help="Optional dataset ID to execute within the config",
+    )
 
     # run-all command
-    parser_all = subparsers.add_parser('run-all', help='Run the full pipeline')
-    parser_all.add_argument('--config', required=True, help='Path to config file')
-    parser_all.add_argument('--dataset-id', required=False, help='Optional dataset ID to execute within the config')
-
-    parser_report = subparsers.add_parser('build-report', help='Build a markdown artifact index')
-    parser_report.add_argument('--config', required=True, help='Path to config file')
-    parser_report.add_argument('--dataset-id', required=False, help='Optional dataset ID to execute within the config')
-    parser_report.add_argument('--out', required=False, default='/tmp/community-analysis-artifact-index.md', help='Report output path')
-
-    parser_verify = subparsers.add_parser('verify-output-contract', help='Validate generated output artifact schemas')
-    parser_verify.add_argument('--config', required=True, help='Path to config file')
-    parser_verify.add_argument('--dataset-id', required=False, help='Optional dataset ID to execute within the config')
-    parser_verify.add_argument('--longitudinal', action='store_true', help='Validate all months listed in the theme-input manifest')
-
-    parser_benchmark = subparsers.add_parser('theme-benchmark', help='Run theme-generation benchmark tools')
-    benchmark_subparsers = parser_benchmark.add_subparsers(dest='benchmark_command', required=True)
-
-    parser_benchmark_dataset = benchmark_subparsers.add_parser('build-dataset', help='Build a frozen offline benchmark dataset')
-    parser_benchmark_dataset.add_argument('--config', required=True, help='Path to config file')
-    parser_benchmark_dataset.add_argument('--dataset-id', required=False, help='Optional dataset ID to execute within the config')
-    parser_benchmark_dataset.add_argument('--run-id', required=True, help='Benchmark run identifier')
-    parser_benchmark_dataset.add_argument('--limit', type=int, required=False, help='Maximum number of valid examples to include')
-    parser_benchmark_dataset.add_argument(
-        '--gpt4o-outputs',
+    parser_all = subparsers.add_parser("run-all", help="Run the full pipeline")
+    parser_all.add_argument("--config", required=True, help="Path to config file")
+    parser_all.add_argument(
+        "--dataset-id",
         required=False,
-        help='Optional local JSONL file of prior GPT-4o outputs to copy as reference data',
+        help="Optional dataset ID to execute within the config",
+    )
+
+    parser_report = subparsers.add_parser(
+        "build-report", help="Build a markdown artifact index"
+    )
+    parser_report.add_argument("--config", required=True, help="Path to config file")
+    parser_report.add_argument(
+        "--dataset-id",
+        required=False,
+        help="Optional dataset ID to execute within the config",
+    )
+    parser_report.add_argument(
+        "--out",
+        required=False,
+        default="/tmp/community-analysis-artifact-index.md",
+        help="Report output path",
+    )
+
+    parser_verify = subparsers.add_parser(
+        "verify-output-contract", help="Validate generated output artifact schemas"
+    )
+    parser_verify.add_argument("--config", required=True, help="Path to config file")
+    parser_verify.add_argument(
+        "--dataset-id",
+        required=False,
+        help="Optional dataset ID to execute within the config",
+    )
+    parser_verify.add_argument(
+        "--longitudinal",
+        action="store_true",
+        help="Validate all months listed in the theme-input manifest",
+    )
+
+    parser_benchmark = subparsers.add_parser(
+        "theme-benchmark", help="Run theme-generation benchmark tools"
+    )
+    benchmark_subparsers = parser_benchmark.add_subparsers(
+        dest="benchmark_command", required=True
+    )
+
+    parser_benchmark_dataset = benchmark_subparsers.add_parser(
+        "build-dataset", help="Build a frozen offline benchmark dataset"
+    )
+    parser_benchmark_dataset.add_argument(
+        "--config", required=True, help="Path to config file"
+    )
+    parser_benchmark_dataset.add_argument(
+        "--dataset-id",
+        required=False,
+        help="Optional dataset ID to execute within the config",
+    )
+    parser_benchmark_dataset.add_argument(
+        "--run-id", required=True, help="Benchmark run identifier"
+    )
+    parser_benchmark_dataset.add_argument(
+        "--limit",
+        type=int,
+        required=False,
+        help="Maximum number of valid examples to include",
+    )
+    parser_benchmark_dataset.add_argument(
+        "--gpt4o-outputs",
+        required=False,
+        help="Optional local JSONL file of prior GPT-4o outputs to copy as reference data",
     )
 
     parser_benchmark_inventory = benchmark_subparsers.add_parser(
-        'inventory-artifacts',
-        help='Inventory saved theme-input artifacts for benchmark readiness',
+        "inventory-artifacts",
+        help="Inventory saved theme-input artifacts for benchmark readiness",
     )
-    parser_benchmark_inventory.add_argument('--config', required=True, help='Path to config file')
-    parser_benchmark_inventory.add_argument('--dataset-id', required=False, help='Optional dataset ID to execute within the config')
     parser_benchmark_inventory.add_argument(
-        '--source-configs',
+        "--config", required=True, help="Path to config file"
+    )
+    parser_benchmark_inventory.add_argument(
+        "--dataset-id",
         required=False,
-        help='Comma-separated configs whose saved theme-input artifacts should be inventoried',
+        help="Optional dataset ID to execute within the config",
+    )
+    parser_benchmark_inventory.add_argument(
+        "--source-configs",
+        required=False,
+        help="Comma-separated configs whose saved theme-input artifacts should be inventoried",
     )
 
     parser_benchmark_freeze = benchmark_subparsers.add_parser(
-        'freeze-dataset',
-        help='Freeze a deterministic benchmark dataset with development/pilot/heldout splits',
+        "freeze-dataset",
+        help="Freeze a deterministic benchmark dataset with development/pilot/heldout splits",
     )
-    parser_benchmark_freeze.add_argument('--config', required=True, help='Path to config file')
-    parser_benchmark_freeze.add_argument('--dataset-id', required=False, help='Optional dataset ID to execute within the config')
-    parser_benchmark_freeze.add_argument('--run-id', required=True, help='Benchmark run identifier')
     parser_benchmark_freeze.add_argument(
-        '--source-configs',
+        "--config", required=True, help="Path to config file"
+    )
+    parser_benchmark_freeze.add_argument(
+        "--dataset-id",
         required=False,
-        help='Comma-separated configs whose saved theme-input artifacts should be frozen',
+        help="Optional dataset ID to execute within the config",
     )
-    parser_benchmark_freeze.add_argument('--target-examples', type=int, default=100)
-    parser_benchmark_freeze.add_argument('--min-examples', type=int, default=40)
-    parser_benchmark_freeze.add_argument('--max-examples', type=int, default=120)
-    parser_benchmark_freeze.add_argument('--seed', type=int, default=16016)
     parser_benchmark_freeze.add_argument(
-        '--overwrite-existing-frozen-run',
-        action='store_true',
-        help='Allow replacing an existing frozen run when manifest hashes or settings differ',
+        "--run-id", required=True, help="Benchmark run identifier"
+    )
+    parser_benchmark_freeze.add_argument(
+        "--source-configs",
+        required=False,
+        help="Comma-separated configs whose saved theme-input artifacts should be frozen",
+    )
+    parser_benchmark_freeze.add_argument("--target-examples", type=int, default=100)
+    parser_benchmark_freeze.add_argument("--min-examples", type=int, default=40)
+    parser_benchmark_freeze.add_argument("--max-examples", type=int, default=120)
+    parser_benchmark_freeze.add_argument("--seed", type=int, default=16016)
+    parser_benchmark_freeze.add_argument(
+        "--overwrite-existing-frozen-run",
+        action="store_true",
+        help="Allow replacing an existing frozen run when manifest hashes or settings differ",
     )
 
     parser_benchmark_validate = benchmark_subparsers.add_parser(
-        'validate-dataset',
-        help='Validate frozen benchmark dataset integrity and write split distribution report',
+        "validate-dataset",
+        help="Validate frozen benchmark dataset integrity and write split distribution report",
     )
-    parser_benchmark_validate.add_argument('--config', required=True, help='Path to config file')
-    parser_benchmark_validate.add_argument('--dataset-id', required=False, help='Optional dataset ID to execute within the config')
-    parser_benchmark_validate.add_argument('--run-id', required=True, help='Benchmark run identifier')
-    parser_benchmark_validate.add_argument('--expected-dataset-hash', required=False)
-    parser_benchmark_validate.add_argument('--expected-split-hash', required=False)
+    parser_benchmark_validate.add_argument(
+        "--config", required=True, help="Path to config file"
+    )
+    parser_benchmark_validate.add_argument(
+        "--dataset-id",
+        required=False,
+        help="Optional dataset ID to execute within the config",
+    )
+    parser_benchmark_validate.add_argument(
+        "--run-id", required=True, help="Benchmark run identifier"
+    )
+    parser_benchmark_validate.add_argument("--expected-dataset-hash", required=False)
+    parser_benchmark_validate.add_argument("--expected-split-hash", required=False)
 
-    parser_benchmark_run = benchmark_subparsers.add_parser('run', help='Run benchmark providers')
-    parser_benchmark_run.add_argument('--config', required=True, help='Path to config file')
-    parser_benchmark_run.add_argument('--dataset-id', required=False, help='Optional dataset ID to execute within the config')
-    parser_benchmark_run.add_argument('--run-id', required=True, help='Benchmark run identifier')
-    parser_benchmark_run.add_argument(
-        '--providers',
-        default='keyword_baseline,mock',
-        help='Comma-separated provider specs. Offline: keyword_baseline,mock. Live: gemini:<exact_model_id>,llm7:<exact_model_id>',
+    parser_benchmark_run = benchmark_subparsers.add_parser(
+        "run", help="Run benchmark providers"
     )
-    parser_benchmark_run.add_argument('--allow-live', action='store_true', help='Allow live benchmark provider calls')
     parser_benchmark_run.add_argument(
-        '--split',
-        choices=['development', 'pilot', 'heldout'],
+        "--config", required=True, help="Path to config file"
+    )
+    parser_benchmark_run.add_argument(
+        "--dataset-id",
         required=False,
-        help='Frozen dataset split to execute',
-    )
-    parser_benchmark_run.add_argument('--max-examples', type=int, required=False, help='Maximum dataset examples to run')
-    parser_benchmark_run.add_argument(
-        '--resume-unresolved',
-        action='store_true',
-        help='Run only requests that do not have successful cache entries for the selected provider/settings',
+        help="Optional dataset ID to execute within the config",
     )
     parser_benchmark_run.add_argument(
-        '--max-unresolved-examples',
+        "--run-id", required=True, help="Benchmark run identifier"
+    )
+    parser_benchmark_run.add_argument(
+        "--providers",
+        default="keyword_baseline,mock",
+        help="Comma-separated provider specs. Offline: keyword_baseline,mock. Live: gemini:<exact_model_id>,llm7:<exact_model_id>",
+    )
+    parser_benchmark_run.add_argument(
+        "--allow-live", action="store_true", help="Allow live benchmark provider calls"
+    )
+    parser_benchmark_run.add_argument(
+        "--split",
+        choices=["development", "pilot", "heldout"],
+        required=False,
+        help="Frozen dataset split to execute",
+    )
+    parser_benchmark_run.add_argument(
+        "--max-examples",
         type=int,
         required=False,
-        help='Maximum unresolved examples to attempt in this invocation',
+        help="Maximum dataset examples to run",
     )
     parser_benchmark_run.add_argument(
-        '--example-ids-file',
-        required=False,
-        help='JSON file containing example_ids to run, such as a Phase 3 stability subset',
+        "--resume-unresolved",
+        action="store_true",
+        help="Run only requests that do not have successful cache entries for the selected provider/settings",
     )
     parser_benchmark_run.add_argument(
-        '--repetition-index',
+        "--max-unresolved-examples",
         type=int,
         required=False,
-        help='Optional repetition index included in benchmark cache identity',
+        help="Maximum unresolved examples to attempt in this invocation",
     )
     parser_benchmark_run.add_argument(
-        '--keyword-modes',
+        "--example-ids-file",
+        required=False,
+        help="JSON file containing example_ids to run, such as a Phase 3 stability subset",
+    )
+    parser_benchmark_run.add_argument(
+        "--repetition-index",
+        type=int,
+        required=False,
+        help="Optional repetition index included in benchmark cache identity",
+    )
+    parser_benchmark_run.add_argument(
+        "--keyword-modes",
         default=None,
-        help='Comma-separated keyword modes to run. Defaults to all modes for offline providers and general for live providers.',
+        help="Comma-separated keyword modes to run. Defaults to all modes for offline providers and general for live providers.",
     )
-    parser_benchmark_run.add_argument('--max-concurrency', type=int, default=1, help='Maximum live provider concurrency')
-    parser_benchmark_run.add_argument('--max-retries', type=int, default=2, help='Maximum retries for live providers')
-    parser_benchmark_run.add_argument('--timeout', type=float, required=False, help='Live provider timeout in seconds')
     parser_benchmark_run.add_argument(
-        '--max-outbound-requests',
+        "--max-concurrency",
+        type=int,
+        default=1,
+        help="Maximum live provider concurrency",
+    )
+    parser_benchmark_run.add_argument(
+        "--max-retries", type=int, default=2, help="Maximum retries for live providers"
+    )
+    parser_benchmark_run.add_argument(
+        "--timeout", type=float, required=False, help="Live provider timeout in seconds"
+    )
+    parser_benchmark_run.add_argument(
+        "--max-outbound-requests",
         type=int,
         default=50,
-        help='Maximum outbound live requests including retries',
+        help="Maximum outbound live requests including retries",
     )
 
-    parser_benchmark_discover = benchmark_subparsers.add_parser('discover-models', help='Discover live benchmark provider models')
-    parser_benchmark_discover.add_argument('--provider', required=True, choices=['gemini', 'llm7'], help='Provider to discover')
-    parser_benchmark_discover.add_argument('--config', required=True, help='Path to config file')
-    parser_benchmark_discover.add_argument('--dataset-id', required=False, help='Optional dataset ID to execute within the config')
-    parser_benchmark_discover.add_argument('--run-id', required=True, help='Benchmark run identifier')
-    parser_benchmark_discover.add_argument('--allow-live', action='store_true', help='Allow live provider discovery calls')
+    parser_benchmark_discover = benchmark_subparsers.add_parser(
+        "discover-models", help="Discover live benchmark provider models"
+    )
+    parser_benchmark_discover.add_argument(
+        "--provider",
+        required=True,
+        choices=["gemini", "llm7"],
+        help="Provider to discover",
+    )
+    parser_benchmark_discover.add_argument(
+        "--config", required=True, help="Path to config file"
+    )
+    parser_benchmark_discover.add_argument(
+        "--dataset-id",
+        required=False,
+        help="Optional dataset ID to execute within the config",
+    )
+    parser_benchmark_discover.add_argument(
+        "--run-id", required=True, help="Benchmark run identifier"
+    )
+    parser_benchmark_discover.add_argument(
+        "--allow-live", action="store_true", help="Allow live provider discovery calls"
+    )
 
-    parser_benchmark_review = benchmark_subparsers.add_parser('export-review', help='Export blinded benchmark review CSV')
-    parser_benchmark_review.add_argument('--config', required=True, help='Path to config file')
-    parser_benchmark_review.add_argument('--dataset-id', required=False, help='Optional dataset ID to execute within the config')
-    parser_benchmark_review.add_argument('--run-id', required=True, help='Benchmark run identifier')
+    parser_benchmark_review = benchmark_subparsers.add_parser(
+        "export-review", help="Export blinded benchmark review CSV"
+    )
+    parser_benchmark_review.add_argument(
+        "--config", required=True, help="Path to config file"
+    )
+    parser_benchmark_review.add_argument(
+        "--dataset-id",
+        required=False,
+        help="Optional dataset ID to execute within the config",
+    )
+    parser_benchmark_review.add_argument(
+        "--run-id", required=True, help="Benchmark run identifier"
+    )
 
     parser_benchmark_summarize = benchmark_subparsers.add_parser(
-        'summarize',
-        help='Write development/pilot benchmark scorecard and evaluation report',
+        "summarize",
+        help="Write development/pilot benchmark scorecard and evaluation report",
     )
-    parser_benchmark_summarize.add_argument('--config', required=True, help='Path to config file')
-    parser_benchmark_summarize.add_argument('--dataset-id', required=False, help='Optional dataset ID to execute within the config')
-    parser_benchmark_summarize.add_argument('--run-id', required=True, help='Benchmark run identifier')
+    parser_benchmark_summarize.add_argument(
+        "--config", required=True, help="Path to config file"
+    )
+    parser_benchmark_summarize.add_argument(
+        "--dataset-id",
+        required=False,
+        help="Optional dataset ID to execute within the config",
+    )
+    parser_benchmark_summarize.add_argument(
+        "--run-id", required=True, help="Benchmark run identifier"
+    )
 
     parser_benchmark_phase3_review = benchmark_subparsers.add_parser(
-        'prepare-phase3-review',
-        help='Create paired blinded Phase 3 human-review package',
+        "prepare-phase3-review",
+        help="Create paired blinded Phase 3 human-review package",
     )
-    parser_benchmark_phase3_review.add_argument('--config', required=True, help='Path to config file')
-    parser_benchmark_phase3_review.add_argument('--dataset-id', required=False, help='Optional dataset ID to execute within the config')
-    parser_benchmark_phase3_review.add_argument('--run-id', required=True, help='Benchmark run identifier')
-    parser_benchmark_phase3_review.add_argument('--cohort-id', default='phase3-paired-review-v1')
+    parser_benchmark_phase3_review.add_argument(
+        "--config", required=True, help="Path to config file"
+    )
+    parser_benchmark_phase3_review.add_argument(
+        "--dataset-id",
+        required=False,
+        help="Optional dataset ID to execute within the config",
+    )
+    parser_benchmark_phase3_review.add_argument(
+        "--run-id", required=True, help="Benchmark run identifier"
+    )
+    parser_benchmark_phase3_review.add_argument(
+        "--cohort-id", default="phase3-paired-review-v1"
+    )
 
     parser_benchmark_phase3_import = benchmark_subparsers.add_parser(
-        'import-phase3-review',
-        help='Validate/import scored Phase 3 review CSV and write summaries',
+        "import-phase3-review",
+        help="Validate/import scored Phase 3 review CSV and write summaries",
     )
-    parser_benchmark_phase3_import.add_argument('--config', required=True, help='Path to config file')
-    parser_benchmark_phase3_import.add_argument('--dataset-id', required=False, help='Optional dataset ID to execute within the config')
-    parser_benchmark_phase3_import.add_argument('--run-id', required=True, help='Benchmark run identifier')
-    parser_benchmark_phase3_import.add_argument('--scores', required=True, help='Completed review CSV')
+    parser_benchmark_phase3_import.add_argument(
+        "--config", required=True, help="Path to config file"
+    )
+    parser_benchmark_phase3_import.add_argument(
+        "--dataset-id",
+        required=False,
+        help="Optional dataset ID to execute within the config",
+    )
+    parser_benchmark_phase3_import.add_argument(
+        "--run-id", required=True, help="Benchmark run identifier"
+    )
+    parser_benchmark_phase3_import.add_argument(
+        "--scores", required=True, help="Completed review CSV"
+    )
 
-    parser_benchmark_deepeval = benchmark_subparsers.add_parser('evaluate-deepeval', help='Evaluate benchmark results using DeepEval LLM judge')
-    parser_benchmark_deepeval.add_argument('--config', required=True, help='Path to config file')
-    parser_benchmark_deepeval.add_argument('--dataset-id', required=False, help='Optional dataset ID to execute within the config')
-    parser_benchmark_deepeval.add_argument('--input-csv', required=True, help='Path to the exported blinded review CSV')
-    parser_benchmark_deepeval.add_argument('--output-csv', required=True, help='Path to save the judged scores')
+    parser_benchmark_deepeval = benchmark_subparsers.add_parser(
+        "evaluate-deepeval", help="Evaluate benchmark results using DeepEval LLM judge"
+    )
+    parser_benchmark_deepeval.add_argument(
+        "--config", required=True, help="Path to config file"
+    )
+    parser_benchmark_deepeval.add_argument(
+        "--dataset-id",
+        required=False,
+        help="Optional dataset ID to execute within the config",
+    )
+    parser_benchmark_deepeval.add_argument(
+        "--input-csv", required=True, help="Path to the exported blinded review CSV"
+    )
+    parser_benchmark_deepeval.add_argument(
+        "--output-csv", required=True, help="Path to save the judged scores"
+    )
 
     parser_benchmark_stability = benchmark_subparsers.add_parser(
-        'prepare-stability-subset',
-        help='Create deterministic Phase 3 stability subset',
+        "prepare-stability-subset",
+        help="Create deterministic Phase 3 stability subset",
     )
-    parser_benchmark_stability.add_argument('--config', required=True, help='Path to config file')
-    parser_benchmark_stability.add_argument('--dataset-id', required=False, help='Optional dataset ID to execute within the config')
-    parser_benchmark_stability.add_argument('--run-id', required=True, help='Benchmark run identifier')
-    parser_benchmark_stability.add_argument('--subset-id', default='phase3-stability-v1')
+    parser_benchmark_stability.add_argument(
+        "--config", required=True, help="Path to config file"
+    )
+    parser_benchmark_stability.add_argument(
+        "--dataset-id",
+        required=False,
+        help="Optional dataset ID to execute within the config",
+    )
+    parser_benchmark_stability.add_argument(
+        "--run-id", required=True, help="Benchmark run identifier"
+    )
+    parser_benchmark_stability.add_argument(
+        "--subset-id", default="phase3-stability-v1"
+    )
 
     parser_benchmark_stability_report = benchmark_subparsers.add_parser(
-        'summarize-stability',
-        help='Write Phase 3 stability summaries',
+        "summarize-stability",
+        help="Write Phase 3 stability summaries",
     )
-    parser_benchmark_stability_report.add_argument('--config', required=True, help='Path to config file')
-    parser_benchmark_stability_report.add_argument('--dataset-id', required=False, help='Optional dataset ID to execute within the config')
-    parser_benchmark_stability_report.add_argument('--run-id', required=True, help='Benchmark run identifier')
-    parser_benchmark_stability_report.add_argument('--subset-id', default='phase3-stability-v1')
+    parser_benchmark_stability_report.add_argument(
+        "--config", required=True, help="Path to config file"
+    )
+    parser_benchmark_stability_report.add_argument(
+        "--dataset-id",
+        required=False,
+        help="Optional dataset ID to execute within the config",
+    )
+    parser_benchmark_stability_report.add_argument(
+        "--run-id", required=True, help="Benchmark run identifier"
+    )
+    parser_benchmark_stability_report.add_argument(
+        "--subset-id", default="phase3-stability-v1"
+    )
 
     # import-csv command
-    parser_import = subparsers.add_parser('import-csv', help='Backward-compatible alias for import-graph')
-    parser_import.add_argument('--file', nargs='+', required=True, help='Path to one or more CSV files')
-    parser_import.add_argument('--platform', required=True, choices=['telegram', 'twitter'], help='Platform of the data')
-    parser_import.add_argument('--config', required=False, help='Path to config file')
-    parser_import.add_argument('--dataset-id', required=False, help='Optional dataset ID to execute within the config')
+    parser_import = subparsers.add_parser(
+        "import-csv", help="Backward-compatible alias for import-graph"
+    )
+    parser_import.add_argument(
+        "--file", nargs="+", required=True, help="Path to one or more CSV files"
+    )
+    parser_import.add_argument(
+        "--platform",
+        required=True,
+        choices=["telegram", "twitter"],
+        help="Platform of the data",
+    )
+    parser_import.add_argument("--config", required=False, help="Path to config file")
+    parser_import.add_argument(
+        "--dataset-id",
+        required=False,
+        help="Optional dataset ID to execute within the config",
+    )
 
     args = parser.parse_args()
 
-    if hasattr(args, "config") and args.config and hasattr(args, "dataset_id") and not args.dataset_id:
+    if (
+        hasattr(args, "config")
+        and args.config
+        and hasattr(args, "dataset_id")
+        and not args.dataset_id
+    ):
         config_data = load_config(args.config)
         datasets = config_data.get("datasets", [])
         if datasets:
@@ -288,15 +560,16 @@ def main():
                     cmd.insert(0, sys.executable)
                 cmd.extend(["--dataset-id", ds_id])
                 import os
+
                 env = os.environ.copy()
                 env["PYTHONPATH"] = str(Path(__file__).parent.parent)
                 subprocess.run(cmd, check=True, env=env)
             return
 
-    if args.command == 'validate-config':
+    if args.command == "validate-config":
         validate_config(args.config, getattr(args, "dataset_id", None))
 
-    elif args.command == 'db-check':
+    elif args.command == "db-check":
         from src.graph_store.memgraph_repository import MemgraphRepository
 
         config = load_config(args.config) if args.config else {}
@@ -309,17 +582,17 @@ def main():
         repo.client.execute_query("RETURN 1 AS ok")
         print("Database connection OK.")
 
-    elif args.command == 'db-up':
+    elif args.command == "db-up":
         subprocess.run(["docker", "compose", "up", "-d", "memgraph"], check=True)
         print("Memgraph startup requested via Docker Compose.")
 
-    elif args.command == 'import-csv':
+    elif args.command == "import-csv":
         _import_raw_graph(args.file, args.platform, args.config)
 
-    elif args.command == 'import-graph':
+    elif args.command == "import-graph":
         _import_raw_graph(args.file, args.platform, args.config)
 
-    elif args.command == 'ingest-interactions':
+    elif args.command == "ingest-interactions":
         config = validate_config(args.config, getattr(args, "dataset_id", None))
         snapshot_meta = {
             "data_type": config["data_type"],
@@ -361,7 +634,7 @@ def main():
             repo.import_interactions(args.file, snapshot_meta)
             print("Interaction ingest complete.")
 
-    elif args.command == 'export-graph':
+    elif args.command == "export-graph":
         from src.graph_store.neo4j_exporter import Neo4jExporter
 
         config = validate_config(args.config, getattr(args, "dataset_id", None))
@@ -383,21 +656,28 @@ def main():
         )
         print(f"Exported graph relationships to {output_file}")
 
-    elif args.command in ['run-social-network', 'run-topics', 'run-all']:
-        _run_social_pipeline_command(args.command, args.config, dataset_id=getattr(args, "dataset_id", None))
+    elif args.command in ["run-social-network", "run-topics", "run-all"]:
+        _run_social_pipeline_command(
+            args.command, args.config, dataset_id=getattr(args, "dataset_id", None)
+        )
 
-    elif args.command == 'run-theme-analysis':
-        _run_theme_analysis_command(args.config, dataset_id=getattr(args, "dataset_id", None))
+    elif args.command == "run-theme-analysis":
+        _run_theme_analysis_command(
+            args.config, dataset_id=getattr(args, "dataset_id", None)
+        )
 
-    elif args.command == 'build-report':
+    elif args.command == "build-report":
         from src.reporting.artifact_index import build_artifact_index
 
         config = validate_config(args.config, getattr(args, "dataset_id", None))
         report_path = build_artifact_index(config, args.out)
         print(f"Artifact index written to {report_path}")
 
-    elif args.command == 'verify-output-contract':
-        from src.reporting.output_contract import OutputContractError, verify_output_contract
+    elif args.command == "verify-output-contract":
+        from src.reporting.output_contract import (
+            OutputContractError,
+            verify_output_contract,
+        )
 
         config = validate_config(args.config, getattr(args, "dataset_id", None))
         try:
@@ -407,9 +687,11 @@ def main():
             sys.exit(1)
         print(f"Output contract verified. Checked {result.checked_count} artifacts.")
         if result.skipped_optional:
-            print(f"Skipped {len(result.skipped_optional)} optional artifacts that were not present.")
+            print(
+                f"Skipped {len(result.skipped_optional)} optional artifacts that were not present."
+            )
 
-    elif args.command == 'theme-benchmark':
+    elif args.command == "theme-benchmark":
         _run_theme_benchmark_command(args)
 
 
@@ -432,11 +714,13 @@ def _import_raw_graph(file_paths, platform, config_path):
 
 def _run_social_pipeline_command(command, config_path, dataset_id=None):
     config = validate_config(config_path, dataset_id)
-    graph_thresholds = config.get('graph_thresholds', {})
+    graph_thresholds = config.get("graph_thresholds", {})
     params = _social_pipeline_params(config, graph_thresholds)
 
-    if command == 'run-topics':
-        from src.pipelines.social_network_pipeline import run_topic_phase_from_saved_inputs
+    if command == "run-topics":
+        from src.pipelines.social_network_pipeline import (
+            run_topic_phase_from_saved_inputs,
+        )
         from src.topics.topic_inputs import TopicInputError
 
         print("Running topic pipeline from saved topic inputs...")
@@ -456,14 +740,14 @@ def _run_social_pipeline_command(command, config_path, dataset_id=None):
 
     import pandas as pd
 
-    input_path = config.get('input_path', 'data/telegram/03_2024.csv')
+    input_path = config.get("input_path", "data/telegram/03_2024.csv")
     try:
         df = pd.read_csv(input_path, low_memory=False)
     except Exception as e:
         print(f"Error loading sample data from {input_path}: {e}")
         return
 
-    if command == 'run-social-network':
+    if command == "run-social-network":
         from src.pipelines.social_network_pipeline import run_network_community_pipeline
 
         print("Running network/community pipeline...")
@@ -482,7 +766,10 @@ def _run_social_pipeline_command(command, config_path, dataset_id=None):
 
 
 def _run_theme_analysis_command(config_path, dataset_id=None):
-    from src.pipelines.theme_pipeline import run_theme_pipeline, run_theme_pipeline_from_bundle
+    from src.pipelines.theme_pipeline import (
+        run_theme_pipeline,
+        run_theme_pipeline_from_bundle,
+    )
     from src.themes.theme_inputs import ThemeInputError, load_theme_inputs
 
     config = validate_config(config_path, dataset_id)
@@ -565,20 +852,20 @@ def _run_theme_analysis_command(config_path, dataset_id=None):
 
 def _social_pipeline_params(config, graph_thresholds):
     return {
-        "content_type": config.get('content_type', 'reply'),
-        "data_type": config.get('data_type', 'twitter'),
-        "month": config.get('month', 'march'),
-        "year": config.get('year', '2017'),
-        "date_column": config.get('date_column', 'created_at'),
-        "creator_relation": config.get('creator_relation', 'REPLIED_TO'),
-        "spreader_relation": config.get('spreader_relation', 'REPLIED_BY'),
-        "creator_node_column": config.get('creator_node_column', 'target'),
-        "spreader_node_column": config.get('spreader_node_column', 'target'),
-        "text_node_column_creator_df": config.get('text_node_column', 'source'),
-        "min_total_post": graph_thresholds.get('min_total_post', 10),
-        "min_shared_post": graph_thresholds.get('min_shared_post', 5),
-        "min_members": graph_thresholds.get('min_members', 3),
-        "output_dir": config.get('output_base_path', 'results/'),
+        "content_type": config.get("content_type", "reply"),
+        "data_type": config.get("data_type", "twitter"),
+        "month": config.get("month", "march"),
+        "year": config.get("year", "2017"),
+        "date_column": config.get("date_column", "created_at"),
+        "creator_relation": config.get("creator_relation", "REPLIED_TO"),
+        "spreader_relation": config.get("spreader_relation", "REPLIED_BY"),
+        "creator_node_column": config.get("creator_node_column", "target"),
+        "spreader_node_column": config.get("spreader_node_column", "target"),
+        "text_node_column_creator_df": config.get("text_node_column", "source"),
+        "min_total_post": graph_thresholds.get("min_total_post", 10),
+        "min_shared_post": graph_thresholds.get("min_shared_post", 5),
+        "min_members": graph_thresholds.get("min_members", 3),
+        "output_dir": config.get("output_base_path", "results/"),
     }
 
 
@@ -642,7 +929,9 @@ def _run_theme_benchmark_command(args):
             source_configs = _load_source_configs(args.source_configs)
             result = inventory_artifacts(config, source_configs=source_configs)
             inventory = result["inventory"]
-            print(f"Benchmark artifact inventory written to {result['output_dir'] / 'inventory.json'}")
+            print(
+                f"Benchmark artifact inventory written to {result['output_dir'] / 'inventory.json'}"
+            )
             print(f"Sources: {inventory['source_count']}")
             print(f"Rows: {inventory['row_count']}")
             print(f"Valid examples: {inventory['valid_example_count']}")
@@ -700,7 +989,11 @@ def _run_theme_benchmark_command(args):
         if args.benchmark_command == "run":
             from src.themes.benchmark.runner import run_benchmark
 
-            provider_ids = [provider.strip() for provider in args.providers.split(",") if provider.strip()]
+            provider_ids = [
+                provider.strip()
+                for provider in args.providers.split(",")
+                if provider.strip()
+            ]
 
             benchmark_config = config.get("benchmark", {})
             if "fallback_chain" in benchmark_config:
@@ -713,7 +1006,9 @@ def _run_theme_benchmark_command(args):
                 else None
             )
             if args.max_concurrency != 1:
-                raise ThemeBenchmarkError("Only max concurrency 1 is supported for Plan 016B.")
+                raise ThemeBenchmarkError(
+                    "Only max concurrency 1 is supported for Plan 016B."
+                )
             example_ids = _load_example_ids(args.example_ids_file)
             _print_live_benchmark_preflight(
                 config=config,
@@ -746,7 +1041,9 @@ def _run_theme_benchmark_command(args):
                 example_ids=example_ids,
                 repetition_index=args.repetition_index,
             )
-            print(f"Benchmark providers completed: {', '.join(report.providers.keys())}")
+            print(
+                f"Benchmark providers completed: {', '.join(report.providers.keys())}"
+            )
             print(f"Requests: {report.request_count}")
             print(f"Results: {report.result_count}")
             print(f"Cache hits: {report.cache_hits}")
@@ -768,7 +1065,9 @@ def _run_theme_benchmark_command(args):
         if args.benchmark_command == "discover-models":
             from src.themes.benchmark.dataset import benchmark_root
 
-            root = benchmark_root(config.get("output_base_path", "results/"), args.run_id)
+            root = benchmark_root(
+                config.get("output_base_path", "results/"), args.run_id
+            )
             if args.provider == "gemini":
                 from src.providers.gemini import discover_gemini_models
 
@@ -781,7 +1080,9 @@ def _run_theme_benchmark_command(args):
                 path = discover_llm7_models(root, allow_live=args.allow_live)
                 print(f"LLM7 model catalog written to {path}")
                 return
-            raise ThemeBenchmarkError(f"Unsupported model discovery provider: {args.provider}")
+            raise ThemeBenchmarkError(
+                f"Unsupported model discovery provider: {args.provider}"
+            )
             return
 
         if args.benchmark_command == "evaluate-deepeval":
@@ -803,14 +1104,18 @@ def _run_theme_benchmark_command(args):
         if args.benchmark_command == "export-review":
             from src.themes.benchmark.review import export_blinded_review
 
-            path = export_blinded_review(config.get("output_base_path", "results/"), args.run_id)
+            path = export_blinded_review(
+                config.get("output_base_path", "results/"), args.run_id
+            )
             print(f"Blinded review export written to {path}")
             return
 
         if args.benchmark_command == "summarize":
             from src.themes.benchmark.metrics import write_phase2_reports
 
-            result = write_phase2_reports(config.get("output_base_path", "results/"), args.run_id)
+            result = write_phase2_reports(
+                config.get("output_base_path", "results/"), args.run_id
+            )
             print(f"Preliminary scorecard written to {result['scorecard_path']}")
             print(f"Phase 2 evaluation report written to {result['report_path']}")
             print(f"Completion status: {result['report']['completion_status']}")
@@ -824,7 +1129,9 @@ def _run_theme_benchmark_command(args):
                 args.run_id,
                 cohort_id=args.cohort_id,
             )
-            print(f"Phase 3 review cohort examples: {result['cohort']['example_count']}")
+            print(
+                f"Phase 3 review cohort examples: {result['cohort']['example_count']}"
+            )
             print(f"Cohort hash: {result['cohort']['cohort_hash']}")
             print(f"Review package written to {result['review_dir']}")
             return
@@ -866,7 +1173,9 @@ def _run_theme_benchmark_command(args):
             print(f"Completion status: {result['report']['completion_status']}")
             return
 
-        raise ThemeBenchmarkError(f"Unknown theme-benchmark command: {args.benchmark_command}")
+        raise ThemeBenchmarkError(
+            f"Unknown theme-benchmark command: {args.benchmark_command}"
+        )
     except (ThemeBenchmarkError, ValueError) as exc:
         print(f"Theme benchmark failed: {exc}", file=sys.stderr)
         sys.exit(1)
@@ -895,9 +1204,15 @@ def _load_example_ids(path):
     import json
 
     data = json.loads(Path(path).read_text(encoding="utf-8"))
-    values = data.get("example_ids") or data.get("subset_example_ids") if isinstance(data, dict) else data
+    values = (
+        data.get("example_ids") or data.get("subset_example_ids")
+        if isinstance(data, dict)
+        else data
+    )
     if not isinstance(values, list):
-        raise ValueError(f"Example ID file must contain a list or example_ids field: {path}")
+        raise ValueError(
+            f"Example ID file must contain a list or example_ids field: {path}"
+        )
     return [str(value) for value in values]
 
 
@@ -918,14 +1233,19 @@ def _print_live_benchmark_preflight(
     repetition_index=None,
 ):
     live_provider_ids = [
-        provider_id for provider_id in provider_ids if provider_id.startswith(("gemini:", "llm7:"))
+        provider_id
+        for provider_id in provider_ids
+        if provider_id.startswith(("gemini:", "llm7:"))
     ]
     if not allow_live or not live_provider_ids:
         return
 
     from src.themes.benchmark.contracts import read_jsonl
     from src.themes.benchmark.dataset import benchmark_root, load_requests
-    from src.themes.benchmark.integrity import filter_examples_by_split, validate_frozen_dataset
+    from src.themes.benchmark.integrity import (
+        filter_examples_by_split,
+        validate_frozen_dataset,
+    )
     from src.themes.benchmark.runner import _filter_requests
 
     effective_keyword_modes = keyword_modes or ["general"]
@@ -936,13 +1256,20 @@ def _print_live_benchmark_preflight(
         root = benchmark_root(output_base_path, run_id)
         dataset_rows = read_jsonl(root / "dataset.jsonl")
         split_example_ids = filter_examples_by_split(
-            [str(request.example_id) for request in load_requests(output_base_path, run_id)],
+            [
+                str(request.example_id)
+                for request in load_requests(output_base_path, run_id)
+            ],
             dataset_rows,
             split,
         )
     if example_ids:
         example_set = set(example_ids)
-        split_example_ids = example_set if split_example_ids is None else split_example_ids.intersection(example_set)
+        split_example_ids = (
+            example_set
+            if split_example_ids is None
+            else split_example_ids.intersection(example_set)
+        )
     requests = _filter_requests(
         load_requests(config.get("output_base_path", "results/"), run_id),
         max_examples=max_examples,
@@ -951,7 +1278,9 @@ def _print_live_benchmark_preflight(
     )
     example_count = len({request.example_id for request in requests})
     model_ids = [provider_id.split(":", 1)[1] for provider_id in live_provider_ids]
-    provider_prefixes = {provider_id.split(":", 1)[0] for provider_id in live_provider_ids}
+    provider_prefixes = {
+        provider_id.split(":", 1)[0] for provider_id in live_provider_ids
+    }
 
     print("Live benchmark preflight:")
     print(f"Selected model IDs: {', '.join(model_ids)}")
@@ -970,5 +1299,5 @@ def _print_live_benchmark_preflight(
         print("Gemini store=False")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
