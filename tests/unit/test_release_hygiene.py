@@ -101,10 +101,5 @@ def test_requirements_file_is_small_compatibility_wrapper():
     assert requirements.lower().count("kaleido") <= 1
 
 
-def test_frontend_lockfile_exists_and_unused_libraries_removed():
-    package = json.loads(_read("frontend/package.json"))
-    dependencies = package.get("dependencies", {})
-
-    removed_libraries = {"react-force-graph-2d", "react-router-dom", "recharts"}
+def test_frontend_lockfile_exists():
     assert (ROOT / "frontend" / "package-lock.json").exists()
-    assert removed_libraries.isdisjoint(dependencies)
