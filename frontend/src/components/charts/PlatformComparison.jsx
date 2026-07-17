@@ -47,7 +47,7 @@ export default function PlatformComparison({ data }) {
           </div>
         </h3>
       </div>
-      
+
       <div className="flex-grow w-full min-h-[200px]">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart

@@ -9,6 +9,12 @@ from prefect import flow
 from prefect.context import get_run_context
 from prefect.task_runners import ThreadPoolTaskRunner
 
+from src.artifacts.run_manifest import (
+    complete_run_bundle,
+    fail_run_bundle,
+    initialize_run_bundle,
+    utc_now,
+)
 from src.orchestration.models import (
     ArtifactReference,
     PipelineRunContext,
@@ -165,6 +171,7 @@ def run_monthly_analysis_flow(
     """Run the monthly analytical stages with optional local MLflow tracking."""
     configure_prefect_results_dir()
     flow_started = time.perf_counter()
+    run_started_at = utc_now()
     project_root = get_project_root()
     pipeline_run_id = str(uuid.uuid4())
 
@@ -209,10 +216,21 @@ def run_monthly_analysis_flow(
             run_themes=run_themes,
         ),
     )
+    mlflow_run_id = tracking_ref.parent_run_id if tracking_ref is not None else None
+    initialize_run_bundle(
+        context=context,
+        config=val_config,
+        started_at=run_started_at,
+        mlflow_run_id=mlflow_run_id,
+    )
     completed_stage_count = 0
     failed_stage_count = 0
     stage_count = 0
     current_stage = "initialization"
+    artifacts: list[ArtifactReference] = []
+    topic_outputs = None
+    theme_outputs = None
+    all_artifacts: list[ArtifactReference] = []
 
     def start_stage(name: str, params: Mapping[str, Any]):
         nonlocal stage_count, current_stage
@@ -282,7 +300,6 @@ def run_monthly_analysis_flow(
             tracker.finish_run(network_ref.run_id, "FINISHED")
         completed_stage_count += 1
 
-        topic_outputs = None
         if run_topics:
             topic_input_bundle = _extract_topic_bundle(artifacts)
             topic_ref = start_stage(
@@ -319,7 +336,6 @@ def run_monthly_analysis_flow(
                 tracker.finish_run(topic_ref.run_id, "FINISHED")
             completed_stage_count += 1
 
-        theme_outputs = None
         if run_themes and topic_outputs and topic_outputs.matched_communities_topics:
             month_str = str(val_config.raw_config["month"])
             theme_input_bundle = ThemeInputBundle(
@@ -397,6 +413,14 @@ def run_monthly_analysis_flow(
             if theme_outputs.provider_run_summary:
                 all_artifacts.append(theme_outputs.provider_run_summary)
 
+        complete_run_bundle(
+            context=context,
+            config=val_config,
+            artifacts=all_artifacts,
+            started_at=run_started_at,
+            mlflow_run_id=mlflow_run_id,
+        )
+
         if tracking_ref is not None:
             total_duration = time.perf_counter() - flow_started
             parent_metrics = {
@@ -443,6 +467,37 @@ def run_monthly_analysis_flow(
             tracking=tracking_ref,
         )
     except Exception as exc:
+        failed_artifacts = list(artifacts)
+        if topic_outputs:
+            failed_artifacts.append(topic_outputs.lda_scores)
+            if topic_outputs.matched_communities_topics:
+                failed_artifacts.append(topic_outputs.matched_communities_topics)
+            if topic_outputs.partial_matched_communities_topics:
+                failed_artifacts.append(
+                    topic_outputs.partial_matched_communities_topics
+                )
+            failed_artifacts.extend(topic_outputs.theme_inputs)
+        if theme_outputs:
+            failed_artifacts.extend(theme_outputs.themes)
+            if theme_outputs.community_transitions:
+                failed_artifacts.append(theme_outputs.community_transitions)
+            failed_artifacts.extend(theme_outputs.visualizations)
+            if theme_outputs.provider_run_summary:
+                failed_artifacts.append(theme_outputs.provider_run_summary)
+        try:
+            category = classify_error(exc)
+            fail_run_bundle(
+                context=context,
+                config=val_config,
+                started_at=run_started_at,
+                failure_stage=current_stage,
+                failure_type=type(exc).__name__,
+                failure_category=category.value,
+                artifacts=failed_artifacts,
+                mlflow_run_id=mlflow_run_id,
+            )
+        except Exception:
+            pass
         if tracking_ref is not None:
             tracker.log_tags(
                 tracking_ref.parent_run_id,

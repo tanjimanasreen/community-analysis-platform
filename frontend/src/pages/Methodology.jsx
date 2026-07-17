@@ -20,7 +20,7 @@ export default function MethodologyPage() {
             <h3 className="text-base font-bold text-text-heading">Telegram + Twitter/X</h3>
           </div>
         </div>
-        
+
         {/* Card 2: Pipeline Components */}
         <div className="bg-panel border border-border rounded-xl p-5 shadow-sm flex items-center gap-4">
           <div className="w-12 h-12 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600">
@@ -31,7 +31,7 @@ export default function MethodologyPage() {
             <h3 className="text-base font-bold text-text-heading">4 Stages</h3>
           </div>
         </div>
-        
+
         {/* Card 3: Affinity Metrics */}
         <div className="bg-panel border border-border rounded-xl p-5 shadow-sm flex items-center gap-4">
           <div className="w-12 h-12 rounded-xl bg-green-50 flex items-center justify-center text-green-600">
@@ -42,7 +42,7 @@ export default function MethodologyPage() {
             <h3 className="text-base font-bold text-text-heading">IF & WIF</h3>
           </div>
         </div>
-        
+
         {/* Card 4: Semantic Workflow */}
         <div className="bg-panel border border-border rounded-xl p-5 shadow-sm flex items-center gap-4">
           <div className="w-12 h-12 rounded-xl bg-orange-50 flex items-center justify-center text-orange-500">
@@ -60,7 +60,7 @@ export default function MethodologyPage() {
         <div className="xl:col-span-2 bg-panel border border-border rounded-xl p-6 shadow-sm">
           <h3 className="text-lg font-bold text-text-heading mb-6">System Architecture</h3>
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            
+
             {/* Step A */}
             <div className="flex-1 flex flex-col items-center text-center">
               <div className="w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs font-bold mb-4 z-10 relative shadow-md">A</div>
@@ -70,9 +70,9 @@ export default function MethodologyPage() {
               <h4 className="font-bold text-sm text-text-heading mb-2">Data Ingestion</h4>
               <p className="text-xs text-muted leading-relaxed">CSV platform data ingested into a centralized graph repository</p>
             </div>
-            
+
             <ArrowRight className="text-border hidden md:block shrink-0" />
-            
+
             {/* Step B */}
             <div className="flex-1 flex flex-col items-center text-center">
               <div className="w-6 h-6 rounded-full bg-purple-500 text-white flex items-center justify-center text-xs font-bold mb-4 z-10 relative shadow-md">B</div>
@@ -82,7 +82,7 @@ export default function MethodologyPage() {
               <h4 className="font-bold text-sm text-text-heading mb-2">Interaction Network Extraction</h4>
               <p className="text-xs text-muted leading-relaxed">Monthly snapshots of creator → spreader interactions; self-shares removed</p>
             </div>
-            
+
             <ArrowRight className="text-border hidden md:block shrink-0" />
 
             {/* Step C */}
@@ -94,7 +94,7 @@ export default function MethodologyPage() {
               <h4 className="font-bold text-sm text-text-heading mb-2">Community Extraction</h4>
               <p className="text-xs text-muted leading-relaxed">NetworkX + Louvain community detection using IF and WIF edge weights</p>
             </div>
-            
+
             <ArrowRight className="text-border hidden md:block shrink-0" />
 
             {/* Step D */}
@@ -152,7 +152,7 @@ export default function MethodologyPage() {
          {/* Affinity Metrics & Community Detection */}
          <div className="xl:col-span-2 bg-panel border border-border rounded-xl p-6 shadow-sm">
            <h3 className="text-lg font-bold text-text-heading mb-5">Affinity Metrics & Community Detection</h3>
-           
+
            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
              <div className="border border-blue-100 bg-blue-50/30 rounded-xl p-4 flex gap-4">
                 <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600 shrink-0">
@@ -198,7 +198,7 @@ export default function MethodologyPage() {
              <div className="flex items-center gap-3"><div className="w-5 h-5 rounded-full bg-blue-500 text-white flex items-center justify-center text-[10px] font-bold shrink-0 shadow-sm">5</div>Run LDA topic modeling</div>
              <div className="flex items-center gap-3"><div className="w-5 h-5 rounded-full bg-blue-500 text-white flex items-center justify-center text-[10px] font-bold shrink-0 shadow-sm">6</div>Generate readable themes with GPT-4</div>
            </div>
-           
+
            <div className="flex flex-col gap-3">
              <div className="flex items-start gap-3">
                <span className="text-xs font-bold text-blue-600 shrink-0 mt-1">For LDA</span>
@@ -231,7 +231,7 @@ export default function MethodologyPage() {
              </div>
              <h3 className="text-base font-bold text-text-heading">Research Questions</h3>
            </div>
-           
+
            <div className="flex flex-col gap-4">
              <div>
                <p className="text-sm font-medium text-purple-800"><span className="font-bold">RQ1.</span> What is the impact of different user affinities on community detection?</p>
@@ -257,7 +257,7 @@ export default function MethodologyPage() {
          <div className="xl:col-span-3 bg-panel border border-border rounded-xl p-6 shadow-sm">
            <h3 className="text-lg font-bold text-text-heading mb-6">Evolution Analysis</h3>
            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-             
+
              {/* Community Similarity Over Time */}
              <div>
                <h4 className="font-bold text-sm text-text-heading mb-2">Community Similarity Over Time</h4>
@@ -322,7 +322,7 @@ export default function MethodologyPage() {
              </div>
              <h3 className="text-base font-bold text-text-heading">Methodology Notes</h3>
            </div>
-           
+
            <ul className="text-sm text-muted list-disc ml-4 space-y-3 flex-1">
              <li>Monthly interaction snapshots</li>
              <li>Cross-platform analytical pipeline</li>

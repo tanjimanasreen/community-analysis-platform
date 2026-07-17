@@ -116,3 +116,48 @@ make verify-longitudinal-output-contract
 Verification is read-only. It validates generated artifacts and never reruns
 network, community, topic, theme, database, OpenAI, model-download, or
 visualization stages.
+
+## Run-Scoped Artifact Bundle
+
+Prefect-orchestrated runs are stored below:
+
+```text
+<output_base_path>/runs/<pipeline_run_id>/
+```
+
+Each run contains:
+
+- `manifest.json`: versioned run status, lineage, and canonical artifact records;
+- `resolved_config.yaml`: recursively secret-free resolved configuration;
+- `inputs/datasets.json`: portable dataset identity and DVC metadata;
+- `intermediate/`: stage handoffs for topic and theme processing;
+- `data/`: published analytical tables for APIs, dashboards, reports, and notebooks;
+- `reports/`: human-facing figures and future report bundles;
+- `logs/`: reserved run-scoped application logs.
+
+The canonical folders are additive. Existing public CSV files retain their
+frozen paths and schemas inside the same run directory so legacy consumers and
+contract tests continue to work.
+
+### Run Manifest Lifecycle
+
+The run manifest uses schema version `1.0` and one of these statuses:
+
+- `running`: initialized before analytical stages execute;
+- `completed`: written only after canonical artifacts validate successfully;
+- `failed`: terminal status containing safe failure type/category metadata.
+
+Each artifact record contains:
+
+- stable artifact key;
+- relative canonical path;
+- category (`intermediate`, `data`, or `report`);
+- producer stage;
+- media type and schema version;
+- SHA-256 digest;
+- byte size;
+- row count for tabular CSV artifacts.
+
+Manifest readers must reject absolute paths, parent traversal, symlink escape,
+checksum mismatches, byte-size mismatches, row-count mismatches, and known CSV
+schema violations before loading data.

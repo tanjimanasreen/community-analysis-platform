@@ -19,6 +19,7 @@ from prefect.settings import (
     temporary_settings,
 )
 
+from src.artifacts import RunStatus, load_run_manifest, validate_run_manifest
 from src.orchestration.composition_flow import run_monthly_analysis_flow
 from src.orchestration.models import (
     ArtifactReference,
@@ -35,6 +36,7 @@ from src.orchestration.tasks import (
     validate_run_configuration_task,
 )
 from src.providers.base import BaseLLMProvider
+from src.reporting.output_contract import get_required_columns_by_artifact
 
 COMMUNITY_MESSAGE_CSV = pd.DataFrame(
     {
@@ -52,17 +54,35 @@ MATCHED_COMMUNITY_CSV = pd.DataFrame(
         "members": [["u1"]],
     }
 )
-THEME_INPUT_CSV = pd.DataFrame(
-    {
-        "members": [["u1"]],
-        "absolute_community": [1],
-        "weighted_community": [2],
-        "absolute_unigram_keywords": [["a"]],
-        "absolute_bigram_keywords": [["b"]],
-        "weighted_unigram_keywords": [["c"]],
-        "weighted_bigram_keywords": [["d"]],
-    }
-)
+
+
+def _schema_frame(schema_name: str) -> pd.DataFrame:
+    columns = get_required_columns_by_artifact()[schema_name]
+    values = {}
+    for column in columns:
+        if any(
+            token in column
+            for token in ("members", "keywords", "theme_names", "theme_gpt")
+        ):
+            values[column] = [["value"]]
+        elif column in {
+            "month",
+            "start_month",
+            "end_month",
+            "created_at",
+        }:
+            values[column] = ["march"]
+        elif any(
+            token in column
+            for token in ("community", "total", "score", "user", "messages")
+        ):
+            values[column] = [1]
+        else:
+            values[column] = ["value"]
+    return pd.DataFrame(values)
+
+
+THEME_INPUT_CSV = _schema_frame("matched_lda")
 
 
 @pytest.fixture(autouse=True)
@@ -179,9 +199,9 @@ def _fake_topic_domain(**kwargs) -> None:
     scores.parent.mkdir(parents=True, exist_ok=True)
     matched.parent.mkdir(parents=True, exist_ok=True)
     manifest.parent.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame({"month": [month], "score": [0.5]}).to_csv(scores, index=False)
+    _schema_frame("lda_scores").to_csv(scores, index=False)
     THEME_INPUT_CSV.to_csv(matched, index=False)
-    manifest.write_text("{}\n", encoding="utf-8")
+    manifest.write_text('{"schema_version": 1}\n', encoding="utf-8")
 
 
 def _fake_theme_domain(**kwargs) -> None:
@@ -189,10 +209,10 @@ def _fake_theme_domain(**kwargs) -> None:
     out.mkdir(parents=True, exist_ok=True)
     year = kwargs["year"]
     for month in kwargs["monthly_data_dict"]:
-        pd.DataFrame({"community": [1], "theme": ["Technology"]}).to_csv(
+        _schema_frame("themed_output").to_csv(
             out / f"{month}_{year}_with_themes.csv", index=False
         )
-    pd.DataFrame({"source": [], "target": [], "score": []}).to_csv(
+    _schema_frame("community_transition").to_csv(
         out / "community_transition.csv", index=False
     )
     sankey = out / "sankey"
@@ -208,16 +228,26 @@ def _fake_network_domain(**kwargs) -> None:
     month = kwargs["month"]
     year = kwargs["year"]
 
-    csv_paths = [
-        out / data_type / "network_data" / content_type / f"{month}{year}.csv",
-        out / data_type / "user_centrality" / content_type / f"{month}.csv",
-        out / data_type / "count_user_messages" / content_type / f"{month}.csv",
-        out / data_type / "daily_messages_stat" / content_type / f"{month}.csv",
-        out / data_type / "communities" / "matched" / content_type / f"{month}.csv",
-    ]
-    for path in csv_paths:
+    csv_paths = {
+        "network_data": (
+            out / data_type / "network_data" / content_type / f"{month}{year}.csv"
+        ),
+        "user_centrality": (
+            out / data_type / "user_centrality" / content_type / f"{month}.csv"
+        ),
+        "count_user_messages": (
+            out / data_type / "count_user_messages" / content_type / f"{month}.csv"
+        ),
+        "daily_messages_stat": (
+            out / data_type / "daily_messages_stat" / content_type / f"{month}.csv"
+        ),
+        "matched_communities": (
+            out / data_type / "communities" / "matched" / content_type / f"{month}.csv"
+        ),
+    }
+    for schema_name, path in csv_paths.items():
         path.parent.mkdir(parents=True, exist_ok=True)
-        pd.DataFrame({"value": [1]}).to_csv(path, index=False)
+        _schema_frame(schema_name).to_csv(path, index=False)
 
     topic_root = (
         out
@@ -235,7 +265,9 @@ def _fake_network_domain(**kwargs) -> None:
         topic_root / "weighted_community_messages.csv", index=False
     )
     MATCHED_COMMUNITY_CSV.to_csv(topic_root / "matched_communities.csv", index=False)
-    (topic_root / "manifest.json").write_text("{}\n", encoding="utf-8")
+    (topic_root / "manifest.json").write_text(
+        '{"schema_version": 1}\n', encoding="utf-8"
+    )
 
 
 def _assert_result_boundary(obj, path: str = "root") -> None:
@@ -406,8 +438,18 @@ def test_smoke_full_network_topic_theme_composition(monkeypatch, tmp_path):
         )
 
     assert isinstance(result, PipelineRunResult)
-    run_root = output_root / result.context.pipeline_run_id
+    run_root = output_root / "runs" / result.context.pipeline_run_id
     assert run_root.is_dir()
+    manifest = load_run_manifest(run_root)
+    assert manifest.status is RunStatus.COMPLETED
+    assert validate_run_manifest(run_root) == manifest
+    assert {record.key for record in manifest.artifacts} == {
+        ref.asset_key for ref in result.artifacts
+    }
+    assert all((run_root / record.path).is_file() for record in manifest.artifacts)
+    resolved_config = (run_root / "resolved_config.yaml").read_text(encoding="utf-8")
+    assert "must-not-persist" not in resolved_config
+    assert "credentials" not in resolved_config
     assert result.context.prefect_flow_run_id is not None
     assert any(ref.asset_key == "lda_scores" for ref in result.artifacts)
     assert any(ref.asset_key == "provider_run_summary" for ref in result.artifacts)

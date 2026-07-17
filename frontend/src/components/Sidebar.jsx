@@ -1,12 +1,12 @@
 import { NavLink } from 'react-router-dom';
-import { 
-  LayoutDashboard, 
-  Network, 
-  FileSearch, 
-  TrendingUp, 
-  GitMerge, 
-  Users, 
-  BarChart2, 
+import {
+  LayoutDashboard,
+  Network,
+  FileSearch,
+  TrendingUp,
+  GitMerge,
+  Users,
+  BarChart2,
   Settings,
   BookOpen,
   ChevronLeft,
@@ -44,7 +44,7 @@ export default function Sidebar({ isCollapsed, toggleSidebar }) {
           </div>
         )}
       </div>
-      
+
       <div className="px-4 pb-4 mt-2 flex-1">
         {!isCollapsed && <p className="text-xs text-muted mb-4 px-2 uppercase tracking-wider font-semibold">Dashboards</p>}
         <nav className="flex flex-col gap-1">
@@ -55,8 +55,8 @@ export default function Sidebar({ isCollapsed, toggleSidebar }) {
                 key={item.name}
                 to={item.path}
                 className={({ isActive }) => `flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'} px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
-                  isActive 
-                    ? 'bg-primary/10 text-primary shadow-[inset_2px_0_0_var(--color-primary)]' 
+                  isActive
+                    ? 'bg-primary/10 text-primary shadow-[inset_2px_0_0_var(--color-primary)]'
                     : 'text-text hover:bg-panel-soft hover:text-text-heading'
                 }`}
                 title={isCollapsed ? item.name : undefined}
@@ -84,7 +84,7 @@ export default function Sidebar({ isCollapsed, toggleSidebar }) {
             {!isCollapsed && "Settings"}
           </button>
         </nav>
-        
+
         <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'} bg-panel-soft p-2 rounded-xl border border-border/50 relative group`}>
           <div className="w-8 h-8 rounded-full bg-gradient-to-r from-accent to-primary flex items-center justify-center text-white font-bold text-xs shadow-lg shrink-0">
             AR
@@ -97,9 +97,9 @@ export default function Sidebar({ isCollapsed, toggleSidebar }) {
           )}
         </div>
       </div>
-      
+
       {/* Collapse Toggle Button */}
-      <button 
+      <button
         onClick={toggleSidebar}
         className="absolute -right-3 top-8 bg-panel border border-border rounded-full p-1 text-muted hover:text-text-heading hover:bg-panel-soft transition-colors shadow-md z-50"
       >

@@ -70,7 +70,7 @@ export default function Topbar({ selectedMonth, months, onMonthChange, health, d
       alert("No data available to export.");
       return;
     }
-    
+
     // Flatten data for CSV
     const csvData = dataToExport.communities.map(c => ({
       CommunityID: c.community_id,
@@ -97,7 +97,7 @@ export default function Topbar({ selectedMonth, months, onMonthChange, health, d
 
   return (
     <header className="flex flex-col gap-4 py-4 px-4 lg:px-8 border-b border-border bg-bg/80 backdrop-blur-md sticky top-0 z-10">
-      
+
       {/* Top Row: Title and Global Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -147,17 +147,17 @@ export default function Topbar({ selectedMonth, months, onMonthChange, health, d
             {showSearch && (
               <div className="flex items-center px-3 py-1.5 gap-2 border-r border-border">
                 <Search size={16} className="text-muted" />
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   placeholder="Search communities..."
                   className="bg-transparent border-none text-sm text-text-heading placeholder-muted font-medium focus:outline-none w-48"
                 />
               </div>
             )}
-            
+
             <div className="flex items-center px-3 py-1.5 gap-2 border-r border-border">
               <Calendar size={16} className="text-muted" />
-              <select 
+              <select
                 className="bg-transparent border-none text-sm text-text-heading font-medium focus:outline-none cursor-pointer appearance-none pr-4"
                 value={selectedMonth}
                 onChange={(e) => onMonthChange(e.target.value)}
@@ -165,7 +165,7 @@ export default function Topbar({ selectedMonth, months, onMonthChange, health, d
                 {months.map(m => <option key={m} value={m}>{m}</option>)}
               </select>
             </div>
-            
+
             {showTransitionWindow && (
               <div className={`flex items-center px-3 py-1.5 gap-2 border-r border-border`}>
                 <Activity size={16} className="text-blue-500" />

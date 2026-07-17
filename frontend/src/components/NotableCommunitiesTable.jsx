@@ -20,7 +20,7 @@ export default function NotableCommunitiesTable() {
           </div>
         </h2>
       </div>
-      
+
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse min-w-[1200px]">
           <thead>

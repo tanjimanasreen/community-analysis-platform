@@ -2,11 +2,11 @@ import { Users, MessageSquare, Maximize, Shield } from 'lucide-react';
 
 function MetricCard({ title, value, trend, trendValue, icon: Icon, colorClass, bgClass }) {
   const isPositive = trend === 'up';
-  
+
   return (
     <div className="bg-panel border border-border rounded-xl p-5 shadow-sm relative overflow-hidden group hover:border-border/80 transition-colors">
       <div className={`absolute top-0 right-0 w-24 h-24 ${bgClass} rounded-full blur-2xl opacity-20 -mr-8 -mt-8 group-hover:opacity-30 transition-opacity`}></div>
-      
+
       <div className="flex justify-between items-start mb-4 relative z-10">
         <div className={`w-10 h-10 rounded-lg ${bgClass} bg-opacity-20 flex items-center justify-center`}>
           <Icon size={20} className={colorClass} />
@@ -15,11 +15,11 @@ function MetricCard({ title, value, trend, trendValue, icon: Icon, colorClass, b
           i
         </div>
       </div>
-      
+
       <div className="relative z-10">
         <h3 className="text-muted text-sm font-medium mb-1">{title}</h3>
         <div className="text-2xl font-bold text-text-heading mb-2">{value}</div>
-        
+
         <div className="flex items-center gap-1.5 text-xs font-medium">
           {isPositive ? (
             <span className="text-success flex items-center gap-0.5">
@@ -48,7 +48,7 @@ export default function KPICards({ summary }) {
   const userMessageCounts = summary?.user_message_counts || {};
   const messages = userMessageCounts.messages || { absolute: 0 };
   const users = userMessageCounts.user || { absolute: 0 };
-  
+
   // Format numbers nicely
   const formatNum = (num) => {
     if (!num) return '0';
@@ -59,38 +59,38 @@ export default function KPICards({ summary }) {
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-      <MetricCard 
-        title="Active Communities" 
-        value={(matchedSummary.total_absolute || 0).toLocaleString()} 
-        trend="up" 
-        trendValue="12.4%" 
+      <MetricCard
+        title="Active Communities"
+        value={(matchedSummary.total_absolute || 0).toLocaleString()}
+        trend="up"
+        trendValue="12.4%"
         icon={Users}
         colorClass="text-primary"
         bgClass="bg-primary"
       />
-      <MetricCard 
-        title="Total Messages" 
-        value={formatNum(messages.absolute)} 
-        trend="up" 
-        trendValue="18.7%" 
+      <MetricCard
+        title="Total Messages"
+        value={formatNum(messages.absolute)}
+        trend="up"
+        trendValue="18.7%"
         icon={MessageSquare}
         colorClass="text-secondary"
         bgClass="bg-secondary"
       />
-      <MetricCard 
-        title="Avg Community Size" 
-        value={Math.round((users.absolute || 0) / (matchedSummary.total_absolute || 1)).toLocaleString()} 
-        trend="up" 
-        trendValue="5.6%" 
+      <MetricCard
+        title="Avg Community Size"
+        value={Math.round((users.absolute || 0) / (matchedSummary.total_absolute || 1)).toLocaleString()}
+        trend="up"
+        trendValue="5.6%"
         icon={Users}
         colorClass="text-success"
         bgClass="bg-success"
       />
-      <MetricCard 
-        title="Persistence Score (WIF)" 
-        value="0.68" 
-        trend="up" 
-        trendValue="6.1%" 
+      <MetricCard
+        title="Persistence Score (WIF)"
+        value="0.68"
+        trend="up"
+        trendValue="6.1%"
         icon={Shield}
         colorClass="text-warning"
         bgClass="bg-warning"

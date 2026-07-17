@@ -8,7 +8,7 @@ export default function ComparativeAnalysisPage() {
   return (
     <div className="flex flex-col gap-6 max-w-[1600px] mx-auto w-full">
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        
+
         {/* Twitter/X Card */}
         <div className="bg-panel border border-border rounded-xl p-6 flex items-center justify-between shadow-sm">
           <div className="flex flex-col items-center gap-2">
@@ -79,12 +79,12 @@ export default function ComparativeAnalysisPage() {
         <div className="lg:col-span-2 xl:col-span-3 grid grid-cols-1 lg:grid-cols-2 gap-6">
           <EvolutionChart title="Message Volume Over Time" />
           <EvolutionChart title="Persistence Score (WIF) Over Time" />
-          
+
           {/* Theme Distribution Bar Chart Mockup */}
           <div className="bg-panel border border-border rounded-xl p-6">
             <h3 className="text-lg font-bold text-text-heading mb-1">Theme Distribution <span className="text-muted font-normal text-sm">(by Message Volume)</span></h3>
             <p className="text-sm text-muted mb-6">Share of total messages by dominant theme</p>
-            
+
             <div className="flex justify-between gap-8">
               <div className="w-1/2">
                 <p className="text-sm font-bold text-blue-500 mb-4">Twitter/X</p>
@@ -119,7 +119,7 @@ export default function ComparativeAnalysisPage() {
               <h3 className="text-lg font-bold text-text-heading mb-1">Theme Overlap</h3>
               <p className="text-sm text-muted mb-6">Overlap in dominant themes by message volume</p>
             </div>
-            
+
             <div className="relative h-48 flex items-center justify-center -mt-8">
               {/* Fake Venn */}
               <div className="absolute w-44 h-44 rounded-full bg-blue-500/10 border-2 border-blue-500/20 -translate-x-12 flex flex-col items-center justify-center pl-8 text-center mix-blend-screen">
@@ -135,7 +135,7 @@ export default function ComparativeAnalysisPage() {
                 <span className="text-3xl font-bold text-text-heading mt-1">46%</span>
               </div>
             </div>
-            
+
             <div className="flex justify-center gap-6 mt-4 text-[10px] text-muted font-medium">
               <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-blue-500"></span> Exclusive to Twitter/X</span>
               <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-indigo-500"></span> Shared Themes</span>
@@ -152,7 +152,7 @@ export default function ComparativeAnalysisPage() {
                <Lightbulb className="text-blue-500" size={20} />
                <h3 className="text-sm font-bold text-text-heading">Key Findings</h3>
              </div>
-             
+
              <div className="flex flex-col gap-5">
                <div className="flex gap-4">
                  <div className="w-8 h-8 rounded-full bg-blue-500/10 text-blue-500 flex items-center justify-center shrink-0"><TrendingUp size={16} /></div>
@@ -184,7 +184,7 @@ export default function ComparativeAnalysisPage() {
                </div>
              </div>
           </div>
-          
+
           <div className="bg-panel border border-border rounded-xl p-6">
             <h3 className="text-sm font-bold text-text-heading mb-4 flex items-center gap-2">
               <Database size={16} className="text-blue-500" />
@@ -216,7 +216,7 @@ export default function ComparativeAnalysisPage() {
                 <span className="text-text-heading font-medium">8.67M</span>
               </div>
             </div>
-            
+
             <div className="mt-4 pt-4 flex items-center justify-between">
               <span className="text-xs text-muted">Data Source Status</span>
               <span className="text-xs font-medium text-success flex items-center gap-1">

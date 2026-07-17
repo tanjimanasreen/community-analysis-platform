@@ -72,3 +72,13 @@ make verify-longitudinal-output-contract
 
 The verifier is read-only and must not call database, LLM, model-download, or
 visualization services.
+
+## Run Artifact Contract Tests
+
+| Feature | Implementation | Required tests |
+|---|---|---|
+| Run layout | `src/artifacts/run_manifest.py` | Creates `runs/<run_id>` metadata, intermediate, data, report, and log directories. |
+| Manifest models | `src/artifacts/models.py` | Status/category values, relative paths, SHA-256 validation, unique keys. |
+| Canonical publication | `complete_run_bundle` | Classifies artifacts and preserves legacy source bytes. |
+| Manifest verification | `validate_run_manifest` | Path containment, checksum, byte size, row count, JSON schema version, CSV columns. |
+| Atomic lifecycle | `initialize_run_bundle`, `complete_run_bundle`, `fail_run_bundle` | No temporary files remain; failed runs are never completed. |

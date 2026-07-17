@@ -44,7 +44,7 @@ function DashboardLayout() {
         setIsSidebarCollapsed(false);
       }
     };
-    
+
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);

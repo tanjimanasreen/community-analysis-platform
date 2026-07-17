@@ -44,7 +44,7 @@ export default function EvolutionChart({ data, title }) {
           <option>Month</option>
         </select>
       </div>
-      
+
       <div className="flex-grow w-full min-h-[250px]">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart

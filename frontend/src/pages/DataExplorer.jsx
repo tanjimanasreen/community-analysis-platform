@@ -35,7 +35,7 @@ export default function DataExplorerPage() {
 
   return (
     <div className="flex gap-4 max-w-[1800px] mx-auto w-full items-start">
-      
+
       {/* Left Sidebar - Filters */}
       <div className="w-64 shrink-0 flex flex-col gap-5 sticky top-24">
         <div className="flex justify-between items-center">
@@ -135,7 +135,7 @@ export default function DataExplorerPage() {
 
       {/* Main Center Table Area */}
       <div className="flex-1 flex flex-col min-w-0">
-        
+
         {/* Active Filters Row */}
         <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
           <div className="flex flex-wrap items-center gap-2">
@@ -168,9 +168,9 @@ export default function DataExplorerPage() {
           <p className="text-xs font-medium text-muted">1,248 results</p>
           <div className="relative w-48">
             <Search size={14} className="absolute left-3 top-2 text-muted" />
-            <input 
-              type="text" 
-              placeholder="Search table..." 
+            <input
+              type="text"
+              placeholder="Search table..."
               className="w-full bg-panel border border-border rounded-lg text-xs text-text-heading font-medium pl-8 pr-3 py-1.5 outline-none shadow-sm placeholder-muted"
             />
           </div>
@@ -196,15 +196,15 @@ export default function DataExplorerPage() {
               </thead>
               <tbody className="text-text font-medium">
                 {communities.map((community, index) => (
-                  <tr 
-                    key={community.id} 
+                  <tr
+                    key={community.id}
                     className={`border-b border-border/30 hover:bg-panel-soft transition-colors cursor-pointer ${selectedCommunity === community.id ? 'bg-primary/10' : ''}`}
                     onClick={() => setSelectedCommunity(community.id)}
                   >
                     <td className="py-3 px-4">
-                      <input 
-                        type="checkbox" 
-                        className="rounded border-muted bg-transparent cursor-pointer" 
+                      <input
+                        type="checkbox"
+                        className="rounded border-muted bg-transparent cursor-pointer"
                         checked={selectedCommunity === community.id}
                         onChange={() => {}}
                       />
@@ -235,10 +235,10 @@ export default function DataExplorerPage() {
               </tbody>
             </table>
           </div>
-          
+
           <div className="p-3 flex items-center justify-between text-xs text-muted font-medium">
             <div className="flex items-center gap-2">
-              Rows per page: 
+              Rows per page:
               <select className="bg-transparent border border-border rounded text-text-heading outline-none cursor-pointer px-1 py-0.5">
                 <option>25</option>
                 <option>50</option>

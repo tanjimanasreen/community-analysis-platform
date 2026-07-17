@@ -42,9 +42,9 @@ run_test() {
     local setup="$2"
     local expected="$3"
     local not_expected="${4:-}"
-    
+
     echo "Running test: $name"
-    
+
     # Run in a subshell so env vars don't leak
     local output
     output=$(bash -c "
@@ -60,7 +60,7 @@ EOF_MOCK
         fi
         \"$TEI_SCRIPT\" 2>&1 || true
     ")
-    
+
     if ! echo "$output" | grep -q "$expected"; then
         echo "FAIL: $name"
         echo "Expected output to contain: $expected"
@@ -68,7 +68,7 @@ EOF_MOCK
         echo "$output"
         exit 1
     fi
-    
+
     if [[ -n "$not_expected" ]] && echo "$output" | grep -q -e "$not_expected"; then
         echo "FAIL: $name"
         echo "Expected output NOT to contain: $not_expected"
@@ -76,7 +76,7 @@ EOF_MOCK
         echo "$output"
         exit 1
     fi
-    
+
     echo "PASS"
 }
 

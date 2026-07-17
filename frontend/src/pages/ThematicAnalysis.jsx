@@ -59,7 +59,7 @@ export default function ThematicAnalysisPage() {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
-        
+
         {/* Main Content Area */}
         <div className="xl:col-span-3 flex flex-col gap-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[400px]">
@@ -69,7 +69,7 @@ export default function ThematicAnalysisPage() {
                 Theme Distribution
                 <div className="w-4 h-4 rounded-full border border-border flex items-center justify-center text-muted text-[10px] cursor-help">i</div>
               </h3>
-              
+
               <div className="flex-1 flex items-center justify-center">
                  {/* Fake Donut Chart */}
                  <div className="relative w-64 h-64">
@@ -87,7 +87,7 @@ export default function ThematicAnalysisPage() {
                      <span className="text-xl font-bold text-text-heading">8.67M</span>
                    </div>
                  </div>
-                 
+
                  {/* Legend */}
                  <div className="absolute left-6 top-16 flex flex-col gap-2 text-xs">
                    <div className="flex items-center gap-4 justify-between w-36"><span className="flex items-center gap-1.5 text-muted"><span className="w-2 h-2 rounded-full bg-[#bb9af7]"></span> Personal Support</span> <span className="font-medium text-text-heading">23.8%</span></div>
@@ -100,14 +100,14 @@ export default function ThematicAnalysisPage() {
                  </div>
               </div>
             </div>
-            
+
             {/* Topic Clusters Bubble Chart */}
             <div className="bg-panel border border-border rounded-xl p-6 relative">
               <h3 className="text-lg font-bold text-text-heading mb-4 flex items-center gap-2">
                 Topic Clusters (by Theme)
                 <div className="w-4 h-4 rounded-full border border-border flex items-center justify-center text-muted text-[10px] cursor-help">i</div>
               </h3>
-              
+
               <div className="relative w-full h-[300px] bg-panel-soft rounded-lg flex items-center justify-center overflow-hidden border border-border">
                 <span className="text-muted/30 font-medium">Interactive Bubble Chart Mockup</span>
                 <div className="absolute right-2 top-2 flex flex-col gap-1">
@@ -117,7 +117,7 @@ export default function ThematicAnalysisPage() {
               </div>
             </div>
           </div>
-          
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Top Keywords Table */}
             <div className="bg-panel border border-border rounded-xl flex flex-col overflow-hidden">
@@ -170,7 +170,7 @@ export default function ThematicAnalysisPage() {
                 Communities by Theme
                 <div className="w-4 h-4 rounded-full border border-border flex items-center justify-center text-muted text-[10px] cursor-help">i</div>
               </h3>
-              
+
               <div className="flex-1 w-full flex flex-col justify-center gap-1">
                 {/* Heatmap header */}
                 <div className="flex text-xs font-semibold text-muted mb-2">
@@ -188,7 +188,7 @@ export default function ThematicAnalysisPage() {
                     </div>
                   </div>
                 </div>
-                
+
                 {/* Heatmap rows */}
                 {[
                   { name: 'Telegram', icon: '✈', color: 'text-blue-400', vals: [28, 17, 14, 12, 9, 8, 12] },
@@ -210,7 +210,7 @@ export default function ThematicAnalysisPage() {
                     </div>
                   </div>
                 ))}
-                
+
                 {/* Heatmap legend */}
                 <div className="flex items-center gap-4 mt-6">
                   <span className="text-xs text-muted w-24">% of Conversations</span>
@@ -231,7 +231,7 @@ export default function ThematicAnalysisPage() {
             <h3 className="text-lg font-bold text-text-heading mb-4 flex items-center gap-2">
               <span className="text-primary">💡</span> Theme Insights
             </h3>
-            
+
             <div className="flex flex-col gap-6">
               <div className="flex gap-4">
                 <div className="w-8 h-8 rounded-full bg-blue-500/20 text-blue-500 flex items-center justify-center shrink-0">📈</div>
@@ -263,12 +263,12 @@ export default function ThematicAnalysisPage() {
               </div>
             </div>
           </div>
-          
+
           <div className="bg-panel border border-border rounded-xl p-6">
             <h3 className="text-lg font-bold text-text-heading mb-4 flex items-center gap-2">
               <span className="text-muted">⚙</span> Methodology
             </h3>
-            
+
             <div className="flex flex-col gap-4 text-sm">
               <div>
                 <p className="font-semibold text-text-heading mb-1">Theme Detection</p>
@@ -283,7 +283,7 @@ export default function ThematicAnalysisPage() {
                 <p className="text-xs text-muted leading-relaxed">Themes and topics are updated daily based on new conversations.</p>
               </div>
             </div>
-            
+
             <button className="mt-6 text-sm text-primary font-medium hover:text-primary/80 transition-colors flex items-center gap-1">
               View full methodology →
             </button>

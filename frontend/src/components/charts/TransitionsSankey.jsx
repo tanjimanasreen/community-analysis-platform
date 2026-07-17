@@ -22,7 +22,7 @@ export default function TransitionsSankey() {
           </div>
         </h3>
       </div>
-      
+
       <div className="flex-grow w-full relative min-h-[220px] flex">
         {/* Y Axis Labels */}
         <div className="flex flex-col justify-between py-8 pr-2 w-32 shrink-0">
@@ -50,7 +50,7 @@ export default function TransitionsSankey() {
             <path d="M 100 180 C 300 180, 300 180, 500 180 C 700 180, 700 180, 900 180" fill="none" stroke="#f7768e" strokeWidth="14" strokeOpacity="0.4" />
             <path d="M 100 220 C 300 220, 300 140, 500 140 C 700 140, 700 260, 900 260" fill="none" stroke="#ff9e64" strokeWidth="8" strokeOpacity="0.4" />
             <path d="M 100 260 C 300 260, 300 260, 500 260 C 700 260, 700 220, 900 220" fill="none" stroke="#a9b1d6" strokeWidth="12" strokeOpacity="0.4" />
-            
+
             {/* Bars at columns */}
             {[100, 500, 900].map(x => (
               <g key={x}>
@@ -71,7 +71,7 @@ export default function TransitionsSankey() {
             <span className="text-right">→</span >
           </div>
         </div>
-        
+
         {/* Right Percentages */}
         <div className="flex flex-col justify-between py-8 pl-4 w-12 shrink-0 border-l border-border/30">
           <div className="text-xs font-medium text-muted">22%</div>

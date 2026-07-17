@@ -22,30 +22,30 @@ export default function RightSidebar({ summary }) {
           <Lightbulb size={16} className="text-accent" />
           Key Insights
         </h3>
-        
+
         <div className="flex flex-col gap-6">
-          <InsightItem 
+          <InsightItem
             title="Higher Persistence on Telegram"
             description="Telegram communities show significantly higher persistence scores compared to Twitter/X."
             icon={Activity}
             colorClass="text-secondary"
             bgClass="bg-secondary"
           />
-          <InsightItem 
+          <InsightItem
             title="Stronger Topic Consistency on Twitter/X"
             description="Twitter/X communities exhibit greater thematic consistency across time."
             icon={Target}
             colorClass="text-primary"
             bgClass="bg-primary"
           />
-          <InsightItem 
+          <InsightItem
             title="WIF and IF are Comparable"
             description="Both affinity metrics produce comparable community structures with high overlap."
             icon={CheckCircle2}
             colorClass="text-success"
             bgClass="bg-success"
           />
-          <InsightItem 
+          <InsightItem
             title="Growth in Support Communities"
             description="Personal Support and Emotional Topics communities have grown steadily over the past 3 months."
             icon={Users => <span className="text-lg">👥</span>} // Quick mockup icon
@@ -57,7 +57,7 @@ export default function RightSidebar({ summary }) {
 
       <div className="bg-panel border border-border rounded-xl p-5 flex-grow">
         <h3 className="text-sm font-bold text-text-heading mb-4 uppercase tracking-wider">Data Summary</h3>
-        
+
         <div className="flex flex-col gap-3 text-sm">
           <div className="flex justify-between py-2 border-b border-border/50">
             <span className="text-muted">Time Range</span>

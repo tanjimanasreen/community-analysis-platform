@@ -30,7 +30,7 @@ def _ref(path: Path, asset_key: str) -> ArtifactReference:
 
 def test_summaries_use_artifact_references_not_file_contents(tmp_path):
     output_root = tmp_path / "output"
-    run_root = output_root / "run-1"
+    run_root = output_root / "runs" / "run-1"
     run_root.mkdir(parents=True)
     lda = run_root / "lda.csv"
     matched = run_root / "matched.csv"

@@ -136,3 +136,22 @@ Validation:
 make run-pipeline-sample
 make test
 ```
+
+## Gate 9: Run Artifact Contract
+
+Required:
+
+- Orchestrated outputs are isolated below `<output_base_path>/runs/<run_id>`.
+- Running, completed, and failed statuses are persisted atomically.
+- Canonical artifact records use relative paths and validate containment.
+- Checksums, byte sizes, CSV row counts, and known schemas are verified.
+- Legacy public CSV outputs remain byte-for-byte unchanged during publication.
+- Failed runs cannot retain completed status.
+
+Validation:
+
+```bash
+pytest tests/unit/test_run_manifest.py
+pytest tests/unit/test_orchestration_monthly_flow.py
+pytest tests/integration/test_orchestration_smoke.py
+```

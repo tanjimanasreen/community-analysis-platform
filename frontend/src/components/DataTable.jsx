@@ -2,7 +2,7 @@ import { MoreHorizontal } from 'lucide-react';
 
 export default function DataTable({ communities }) {
   const records = communities?.records || [];
-  
+
   // Use mock data if records are empty to match the mockup
   const data = records.length > 0 ? records.slice(0, 5) : [
     { id: 'C-1124', platform: 'Telegram', theme: 'Personal Support', themeColor: '#bb9af7', size: 5432, messages: 320154, persistence: 0.82, trend: 15.3, diversity: 4.3, starred: true },
@@ -22,7 +22,7 @@ export default function DataTable({ communities }) {
           </div>
         </h2>
       </div>
-      
+
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse">
           <thead>
@@ -46,7 +46,7 @@ export default function DataTable({ communities }) {
                   <td className="px-5 py-3 font-medium flex items-center gap-2">
                     <span className={row.starred ? "text-warning" : "text-muted"}>
                       {row.starred ? "★" : "☆"}
-                    </span> 
+                    </span>
                     {row.id || `C-${Math.floor(Math.random()*10000)}`}
                   </td>
                   <td className="px-5 py-3 text-muted">

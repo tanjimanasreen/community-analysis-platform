@@ -15,7 +15,7 @@ export default function CommunityTransitionsPage() {
             </div>
             <div>
               <p className="text-sm font-medium text-muted flex items-center gap-1">
-                Retention Rate 
+                Retention Rate
                 <span className="w-3.5 h-3.5 rounded-full border border-muted flex items-center justify-center text-[8px] cursor-help">i</span>
               </p>
               <h3 className="text-2xl font-bold text-text-heading">64.2%</h3>
@@ -23,7 +23,7 @@ export default function CommunityTransitionsPage() {
           </div>
           <p className="text-xs text-success font-medium flex items-center gap-1">↑ 4.8pp <span className="text-muted font-normal">vs Apr 1 - Apr 30</span></p>
         </div>
-        
+
         <div className="bg-panel border border-border rounded-xl p-4 flex flex-col justify-center">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center text-purple-500">
@@ -31,7 +31,7 @@ export default function CommunityTransitionsPage() {
             </div>
             <div>
               <p className="text-sm font-medium text-muted flex items-center gap-1">
-                Members Transitioned 
+                Members Transitioned
                 <span className="w-3.5 h-3.5 rounded-full border border-muted flex items-center justify-center text-[8px] cursor-help">i</span>
               </p>
               <h3 className="text-2xl font-bold text-text-heading">1.42M</h3>
@@ -39,7 +39,7 @@ export default function CommunityTransitionsPage() {
           </div>
           <p className="text-xs text-success font-medium flex items-center gap-1">↑ 12.6% <span className="text-muted font-normal">vs Apr 1 - Apr 30</span></p>
         </div>
-        
+
         <div className="bg-panel border border-border rounded-xl p-4 flex flex-col justify-center">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center text-green-500">
@@ -47,7 +47,7 @@ export default function CommunityTransitionsPage() {
             </div>
             <div>
               <p className="text-sm font-medium text-muted flex items-center gap-1">
-                Stable Communities 
+                Stable Communities
                 <span className="w-3.5 h-3.5 rounded-full border border-muted flex items-center justify-center text-[8px] cursor-help">i</span>
               </p>
               <h3 className="text-2xl font-bold text-text-heading">128</h3>
@@ -55,7 +55,7 @@ export default function CommunityTransitionsPage() {
           </div>
           <p className="text-xs text-success font-medium flex items-center gap-1">↑ 9.4% <span className="text-muted font-normal">vs Apr 1 - Apr 30</span></p>
         </div>
-        
+
         <div className="bg-panel border border-border rounded-xl p-4 flex flex-col justify-center">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-10 h-10 rounded-lg bg-orange-500/10 flex items-center justify-center text-orange-500">
@@ -63,7 +63,7 @@ export default function CommunityTransitionsPage() {
             </div>
             <div>
               <p className="text-sm font-medium text-muted flex items-center gap-1">
-                New Communities 
+                New Communities
                 <span className="w-3.5 h-3.5 rounded-full border border-muted flex items-center justify-center text-[8px] cursor-help">i</span>
               </p>
               <h3 className="text-2xl font-bold text-text-heading">74</h3>
@@ -75,7 +75,7 @@ export default function CommunityTransitionsPage() {
 
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
         <div className="xl:col-span-3 flex flex-col gap-6">
-          
+
           {/* Member Overlap Diagram */}
           <div className="bg-panel border border-border rounded-xl p-6 flex flex-col relative overflow-hidden">
             <div className="flex justify-between items-center mb-6">
@@ -88,7 +88,7 @@ export default function CommunityTransitionsPage() {
                 <option>12 Months</option>
               </select>
             </div>
-            
+
             <div className="flex flex-1 min-h-[250px] relative mt-4">
               {/* Legend */}
               <div className="w-32 flex flex-col justify-start gap-4 z-10 pt-8 border-r border-border/50 pr-4">
@@ -101,7 +101,7 @@ export default function CommunityTransitionsPage() {
                 <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-red-400"></span><span className="text-[10px] text-muted font-medium">News Discussion</span></div>
                 <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-gray-400"></span><span className="text-[10px] text-muted font-medium">Other</span></div>
               </div>
-              
+
               {/* Mockup Sankey Container */}
               <div className="flex-1 flex flex-col relative px-4">
                 {/* Headers */}
@@ -113,7 +113,7 @@ export default function CommunityTransitionsPage() {
                   <span>Apr '24</span>
                   <span>May '24</span>
                 </div>
-                
+
                 {/* Decorative SVG Paths for Sankey flows */}
                 <div className="absolute inset-0 top-10 pointer-events-none opacity-20">
                   <svg width="100%" height="100%" preserveAspectRatio="none">
@@ -123,7 +123,7 @@ export default function CommunityTransitionsPage() {
                     <path d="M 50 110 C 150 110, 150 110, 250 110 C 350 110, 350 80, 450 80 C 550 80, 550 50, 650 50" stroke="#fb923c" strokeWidth="15" fill="none" />
                   </svg>
                 </div>
-                
+
                 {/* Mock Nodes Column Data */}
                 <div className="flex-1 flex justify-between relative px-8 pb-10">
                   {[1, 2, 3, 4, 5, 6].map((col, index) => (
@@ -138,7 +138,7 @@ export default function CommunityTransitionsPage() {
                     </div>
                   ))}
                 </div>
-                
+
                 {/* Bottom Timeline Retention */}
                 <div className="border-t border-border/50 pt-3 text-[10px] text-muted font-medium text-center relative flex justify-between px-16">
                    <div className="absolute top-[-10px] left-1/2 -translate-x-1/2 bg-panel px-2 text-xs">
@@ -166,7 +166,7 @@ export default function CommunityTransitionsPage() {
                 <Download size={14} /> Download Matrix
               </button>
             </div>
-            
+
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs min-w-[700px]">
                 <thead>
@@ -263,20 +263,20 @@ export default function CommunityTransitionsPage() {
                 </tbody>
               </table>
             </div>
-            
+
             <p className="text-[10px] text-muted mt-4">Values represent the percentage of members transitioning from one theme to another in the next month.</p>
           </div>
         </div>
 
         {/* Right Sidebar Column */}
         <div className="flex flex-col gap-6">
-          
+
           <div className="bg-panel border border-border rounded-xl p-6">
             <h3 className="text-sm font-bold text-text-heading mb-4 flex items-center gap-2">
               Retention Insights
               <div className="w-4 h-4 rounded-full border border-border flex items-center justify-center text-muted text-[10px] cursor-help">i</div>
             </h3>
-            
+
             <div className="mb-4">
               <p className="text-xs text-muted font-medium mb-1">Retention Rate</p>
               <div className="flex items-center justify-between">
@@ -292,22 +292,22 @@ export default function CommunityTransitionsPage() {
                 </div>
               </div>
             </div>
-            
+
             <p className="text-xs text-muted leading-relaxed">
               Overall retention improved this month, with stronger stability in <span className="font-semibold text-text-heading">Education</span> and <span className="font-semibold text-text-heading">Personal Support</span> communities.
             </p>
           </div>
-          
+
           <div className="bg-panel border border-border rounded-xl p-6">
             <h3 className="text-sm font-bold text-text-heading mb-4">Top Transition Paths</h3>
-            
+
             <div className="flex flex-col gap-4 text-xs font-medium">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="text-muted w-3">1.</span>
                   <div className="flex items-center gap-1.5">
-                    <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div> Current Events 
-                    <ArrowRight size={10} className="text-muted" /> 
+                    <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div> Current Events
+                    <ArrowRight size={10} className="text-muted" />
                     Personal Support
                   </div>
                 </div>
@@ -317,8 +317,8 @@ export default function CommunityTransitionsPage() {
                 <div className="flex items-center gap-2">
                   <span className="text-muted w-3">2.</span>
                   <div className="flex items-center gap-1.5">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-400"></div> News Discussion 
-                    <ArrowRight size={10} className="text-muted" /> 
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-400"></div> News Discussion
+                    <ArrowRight size={10} className="text-muted" />
                     Current Events
                   </div>
                 </div>
@@ -328,8 +328,8 @@ export default function CommunityTransitionsPage() {
                 <div className="flex items-center gap-2">
                   <span className="text-muted w-3">3.</span>
                   <div className="flex items-center gap-1.5">
-                    <div className="w-1.5 h-1.5 rounded-full bg-teal-500"></div> Civic Discourse 
-                    <ArrowRight size={10} className="text-muted" /> 
+                    <div className="w-1.5 h-1.5 rounded-full bg-teal-500"></div> Civic Discourse
+                    <ArrowRight size={10} className="text-muted" />
                     News Discussion
                   </div>
                 </div>
@@ -339,8 +339,8 @@ export default function CommunityTransitionsPage() {
                 <div className="flex items-center gap-2">
                   <span className="text-muted w-3">4.</span>
                   <div className="flex items-center gap-1.5">
-                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-500"></div> Personal Support 
-                    <ArrowRight size={10} className="text-muted" /> 
+                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-500"></div> Personal Support
+                    <ArrowRight size={10} className="text-muted" />
                     Current Events
                   </div>
                 </div>
@@ -350,28 +350,28 @@ export default function CommunityTransitionsPage() {
                 <div className="flex items-center gap-2">
                   <span className="text-muted w-3">5.</span>
                   <div className="flex items-center gap-1.5">
-                    <div className="w-1.5 h-1.5 rounded-full bg-orange-400"></div> Education 
-                    <ArrowRight size={10} className="text-muted" /> 
+                    <div className="w-1.5 h-1.5 rounded-full bg-orange-400"></div> Education
+                    <ArrowRight size={10} className="text-muted" />
                     Civic Discourse
                   </div>
                 </div>
                 <span className="font-bold text-text-heading">7.8%</span>
               </div>
             </div>
-            
+
             <div className="mt-6 flex justify-end">
               <button className="text-xs text-primary font-medium hover:text-primary/80 transition-colors flex items-center gap-1">
                 View all transition paths <ArrowRight size={12} />
               </button>
             </div>
           </div>
-          
+
           <div className="bg-panel border border-border rounded-xl p-6">
             <h3 className="text-sm font-bold text-text-heading mb-4 flex items-center gap-2">
               Churn & Decline Notes
               <div className="w-4 h-4 rounded-full border border-border flex items-center justify-center text-muted text-[10px] cursor-help">i</div>
             </h3>
-            
+
             <div className="flex flex-col gap-4 text-xs text-muted leading-relaxed">
               <div className="flex gap-3">
                 <div className="w-6 h-6 rounded-full bg-danger/10 text-danger flex items-center justify-center shrink-0 mt-0.5">
@@ -392,7 +392,7 @@ export default function CommunityTransitionsPage() {
                 <p>New Communities grew by 16.7%, driven by Education and Civic Discourse.</p>
               </div>
             </div>
-            
+
             <div className="mt-6 flex justify-end">
               <button className="text-xs text-primary font-medium hover:text-primary/80 transition-colors flex items-center gap-1">
                 View churn analysis <ArrowRight size={12} />

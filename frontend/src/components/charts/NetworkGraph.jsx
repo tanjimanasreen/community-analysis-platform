@@ -28,7 +28,7 @@ export default function NetworkGraph({ communities }) {
     // Generate mock graph data for the network visualization
     const N = 120; // nodes
     const colors = ['#7aa2f7', '#bb9af7', '#9ece6a', '#e0af68', '#f7768e', '#ff9e64', '#a9b1d6'];
-    
+
     // Create clusters
     const nodes = Array.from({ length: N }).map((_, i) => ({
       id: i,
@@ -85,7 +85,7 @@ export default function NetworkGraph({ communities }) {
             <p>Edges: <span className="text-text">78,932</span></p>
           </div>
         </div>
-        
+
         {/* Graph controls mockup */}
         <div className="flex flex-col border border-border rounded-lg overflow-hidden z-10">
           <button className="p-1.5 bg-panel hover:bg-panel-soft text-text border-b border-border transition-colors">⛶</button>
@@ -94,7 +94,7 @@ export default function NetworkGraph({ communities }) {
           <button className="p-1.5 bg-panel hover:bg-panel-soft text-text transition-colors">⟲</button>
         </div>
       </div>
-      
+
       <div className="flex-grow w-full h-[300px] mt-[-180px] relative z-0" ref={containerRef}>
         {dimensions.width > 0 && dimensions.height > 0 && (
           <ForceGraph2D

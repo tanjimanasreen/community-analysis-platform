@@ -71,7 +71,7 @@ export default function CommunityNetworkPage() {
             </h3>
             <button className="text-muted hover:text-text-heading"><X size={16} /></button>
           </div>
-          
+
           <div className="flex items-center gap-4 mb-6">
             <div className="w-14 h-14 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400">
               <Users size={24} />
@@ -107,7 +107,7 @@ export default function CommunityNetworkPage() {
               <span className="text-muted">Total Messages</span>
               <span className="text-text-heading font-medium">320,154 <span className="text-muted font-normal text-xs ml-1">18.6% of total</span></span>
             </div>
-            
+
             <div className="mt-4 border-t border-border/50 pt-4">
               <p className="text-sm font-bold text-text-heading mb-3">Platform Mix</p>
               <div className="h-3 rounded-full bg-panel-soft flex overflow-hidden">
@@ -121,7 +121,7 @@ export default function CommunityNetworkPage() {
                 <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-gray-500"></span> Other 10%</span>
               </div>
             </div>
-            
+
             <div className="mt-6">
               <p className="text-sm font-bold text-text-heading mb-3">Top Linked Communities</p>
               <div className="flex flex-col gap-3">
@@ -148,7 +148,7 @@ export default function CommunityNetworkPage() {
                 </div>
               </div>
             </div>
-            
+
             <button className="w-full mt-6 flex items-center justify-center gap-2 py-2.5 border border-border rounded-lg text-sm font-semibold text-primary hover:bg-panel-soft transition-colors">
               View Community Details <ExternalLink size={14} />
             </button>

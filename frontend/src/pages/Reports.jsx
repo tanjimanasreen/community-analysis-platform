@@ -32,7 +32,7 @@ export default function ReportsPage() {
             </div>
           </div>
         </div>
-        
+
         <div className="bg-panel border border-border rounded-xl p-5 shadow-sm">
           <div className="flex gap-4 items-center">
             <div className="w-12 h-12 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-500 shrink-0">
@@ -45,7 +45,7 @@ export default function ReportsPage() {
             </div>
           </div>
         </div>
-        
+
         <div className="bg-panel border border-border rounded-xl p-5 shadow-sm">
           <div className="flex gap-4 items-center">
             <div className="w-12 h-12 rounded-xl bg-green-500/10 flex items-center justify-center text-green-500 shrink-0">
@@ -58,7 +58,7 @@ export default function ReportsPage() {
             </div>
           </div>
         </div>
-        
+
         <div className="bg-panel border border-border rounded-xl p-5 shadow-sm">
           <div className="flex gap-4 items-center">
             <div className="w-12 h-12 rounded-xl bg-orange-500/10 flex items-center justify-center text-orange-500 shrink-0">
@@ -82,9 +82,9 @@ export default function ReportsPage() {
             <div className="flex items-center gap-3">
               <div className="relative w-64">
                 <Search size={16} className="absolute left-3 top-2.5 text-muted" />
-                <input 
-                  type="text" 
-                  placeholder="Search reports..." 
+                <input
+                  type="text"
+                  placeholder="Search reports..."
                   className="w-full bg-panel border border-border rounded-lg text-sm text-text-heading font-medium pl-9 pr-3 py-2 outline-none placeholder-muted shadow-sm"
                 />
               </div>
@@ -168,7 +168,7 @@ export default function ReportsPage() {
               </tbody>
             </table>
           </div>
-          
+
           <div className="p-4 flex items-center justify-between text-xs text-muted font-medium bg-panel/50 rounded-b-xl border-t border-border">
             <span>Showing 1 to 8 of 42 reports</span>
             <div className="flex items-center gap-1">
@@ -191,7 +191,7 @@ export default function ReportsPage() {
               <h3 className="text-base font-bold text-text-heading">Scheduled Reports</h3>
               <button className="text-primary text-sm font-semibold hover:underline">View all</button>
             </div>
-            
+
             <div className="flex flex-col gap-4">
               <div className="flex items-center justify-between">
                 <div className="flex gap-3 items-center">
@@ -263,7 +263,7 @@ export default function ReportsPage() {
           {/* Recent Activity Card */}
           <div className="bg-panel border border-border rounded-xl shadow-sm p-5">
             <h3 className="text-base font-bold text-text-heading mb-5">Recent Activity</h3>
-            
+
             <div className="flex flex-col gap-6">
               <div className="flex gap-3 relative">
                 <div className="absolute top-8 bottom-[-16px] left-3.5 w-px bg-border"></div>

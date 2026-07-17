@@ -1,9 +1,11 @@
-import pytest
 import os
+from pathlib import Path
+
 import pandas as pd
+import pytest
 from prefect.testing.utilities import prefect_test_harness
 from src.orchestration.pipeline_flow import run_monthly_network_foundation_flow
-from src.orchestration.models import ArtifactReference
+from src.artifacts import RunStatus, load_run_manifest, run_root_path
 
 
 @pytest.fixture(autouse=True, scope="session")
@@ -65,9 +67,15 @@ def test_run_monthly_network_foundation_flow(tmp_path):
     assert len(result.context.dataset_identities) == 1
 
     assert len(result.artifacts) > 0
-    # ensure everything is written into the pipeline output root
+    run_root = run_root_path(output_root, result.context.pipeline_run_id)
+    manifest = load_run_manifest(run_root)
+    assert manifest.status is RunStatus.COMPLETED
+    assert (run_root / "resolved_config.yaml").is_file()
+    assert (run_root / "inputs/datasets.json").is_file()
+    assert any(record.key == "network_data" for record in manifest.artifacts)
+
+    # ensure everything is written into the pipeline run root
     for art in result.artifacts:
-        assert str(output_root) in art.path
         assert os.path.exists(art.path)
-        assert art.path.startswith(str(output_root))
+        assert Path(art.path).resolve().is_relative_to(run_root.resolve())
         assert len(art.sha256) == 64

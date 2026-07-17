@@ -23,6 +23,7 @@ The production version should keep the same behavior but move it into a layered 
 ```text
 src/
   config/
+  artifacts/
   data_io/
   graph_store/
   ingestion/
@@ -71,6 +72,26 @@ Rules:
 - Theme generation may call OpenAI only through a provider abstraction.
 - Visualization functions should consume saved dataframes or typed records, not rerun pipeline logic.
 - CLI commands should orchestrate modules, not contain analysis logic.
+
+## Run Artifact Boundary
+
+Prefect-orchestrated executions persist one immutable, self-contained bundle at:
+
+```text
+<output_base_path>/runs/<pipeline_run_id>/
+```
+
+The bundle contains a versioned lifecycle manifest, secret-free resolved
+configuration, portable dataset identity metadata, intermediate stage handoffs,
+published analytical data, and report artifacts. Domain pipelines continue to
+write the frozen thesis CSV layout inside the run directory; the artifact layer
+publishes additive canonical copies for future API, dashboard, report, and
+notebook consumers.
+
+Consumers must discover files through `manifest.json` and validate relative
+path containment, checksum, byte size, row count, media type, schema version,
+and known CSV columns before reading. The artifact layer does not calculate
+metrics or rerun analysis.
 
 ## Graph Store Boundary
 

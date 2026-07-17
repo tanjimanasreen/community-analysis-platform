@@ -13,9 +13,9 @@ export default function Overview() {
   return (
     <div className="max-w-[1600px] mx-auto flex flex-col lg:flex-row gap-8">
       <div className="flex-1 flex flex-col gap-6 w-full overflow-hidden">
-        
+
         <KPICards summary={summary} />
-        
+
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
           <div className="xl:col-span-3">
             <NetworkGraph communities={communities} />
@@ -28,11 +28,11 @@ export default function Overview() {
             <TransitionsSankey />
           </div>
         </div>
-        
+
         <DataTable communities={communities} />
-        
+
       </div>
-      
+
       <div className="w-full lg:w-80 shrink-0">
         <RightSidebar summary={summary} />
       </div>

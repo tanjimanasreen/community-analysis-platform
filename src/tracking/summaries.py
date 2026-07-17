@@ -5,6 +5,7 @@ import subprocess
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
+from src.artifacts.run_manifest import run_root_path
 from src.orchestration.models import (
     ArtifactReference,
     DatasetIdentity,
@@ -132,7 +133,7 @@ def build_artifact_manifest(
     context: PipelineRunContext,
     artifacts: Sequence[ArtifactReference],
 ) -> dict[str, Any]:
-    run_root = Path(context.output_root) / context.pipeline_run_id
+    run_root = run_root_path(context.output_root, context.pipeline_run_id)
     items = []
     for ref in artifacts:
         asset_key = ref.asset_key or "unknown"

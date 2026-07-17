@@ -64,10 +64,10 @@ if [ "$OS_NAME" = "Darwin" ]; then
         exit 1
     fi
     echo "Running native TEI router on port $TEI_HOST_PORT..."
-    
+
     # Native requires --port
     native_args=(${common_tei_args[@]+"${common_tei_args[@]}"} --port "$TEI_HOST_PORT")
-    
+
     text-embeddings-router ${native_args[@]+"${native_args[@]}"}
 else
     # Linux / AWS: Run via Docker
@@ -75,10 +75,10 @@ else
         echo "Error: docker could not be found."
         exit 1
     fi
-    
+
     GPU_ARG=()
     IMAGE="${TEI_IMAGE:-}"
-    
+
     if command -v nvidia-smi &> /dev/null; then
         GPU_ARG=(--gpus all)
         echo "Running Dockerized TEI with GPU..."

@@ -404,7 +404,7 @@ def test_provider_summary_schema(mock_run, tmp_path, caplog):
 
     # Assert it is under the run output root
     summary_path = Path(result.provider_run_summary.path).resolve()
-    assert summary_path.is_relative_to((tmp_path / "run-test").resolve())
+    assert summary_path.is_relative_to((tmp_path / "runs" / "run-test").resolve())
 
     # Assert it exists
     assert summary_path.is_file()
@@ -655,7 +655,7 @@ def test_artifacts_under_run_directory(mock_run, tmp_path):
 
     result = run_monthly_themes_task.fn(bundle, _config(tmp_path), _context(tmp_path))
 
-    expected_root = (tmp_path / "run-test").resolve()
+    expected_root = (tmp_path / "runs" / "run-test").resolve()
     for art in result.themes:
         assert (
             Path(art.path).resolve().is_relative_to(expected_root)

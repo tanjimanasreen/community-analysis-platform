@@ -35,7 +35,7 @@ export default function TopCommunitiesPage() {
             </div>
             <div>
               <p className="text-sm font-medium text-muted flex items-center gap-1">
-                Tracked Communities 
+                Tracked Communities
                 <span className="w-3.5 h-3.5 rounded-full border border-muted flex items-center justify-center text-[8px] cursor-help">i</span>
               </p>
               <h3 className="text-2xl font-bold text-text-heading">1,248</h3>
@@ -43,7 +43,7 @@ export default function TopCommunitiesPage() {
           </div>
           <p className="text-xs text-success font-medium flex items-center gap-1">↑ 12.4% <span className="text-muted font-normal">vs Apr 1 - Apr 30</span></p>
         </div>
-        
+
         <div className="bg-panel border border-border rounded-xl p-4 flex flex-col justify-center shadow-sm">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center text-purple-500">
@@ -51,7 +51,7 @@ export default function TopCommunitiesPage() {
             </div>
             <div>
               <p className="text-sm font-medium text-muted flex items-center gap-1">
-                Fastest Growing 
+                Fastest Growing
                 <span className="w-3.5 h-3.5 rounded-full border border-muted flex items-center justify-center text-[8px] cursor-help">i</span>
               </p>
               <h3 className="text-2xl font-bold text-text-heading">15.3%</h3>
@@ -59,7 +59,7 @@ export default function TopCommunitiesPage() {
           </div>
           <p className="text-xs text-success font-medium flex items-center gap-1">↑ Growth <span className="text-muted font-normal">(vs Apr 1 - Apr 30)</span></p>
         </div>
-        
+
         <div className="bg-panel border border-border rounded-xl p-4 flex flex-col justify-center shadow-sm">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center text-green-500">
@@ -67,7 +67,7 @@ export default function TopCommunitiesPage() {
             </div>
             <div>
               <p className="text-sm font-medium text-muted flex items-center gap-1">
-                Highest Persistence 
+                Highest Persistence
                 <span className="w-3.5 h-3.5 rounded-full border border-muted flex items-center justify-center text-[8px] cursor-help">i</span>
               </p>
               <h3 className="text-2xl font-bold text-text-heading">0.82</h3>
@@ -75,7 +75,7 @@ export default function TopCommunitiesPage() {
           </div>
           <p className="text-xs text-success font-medium flex items-center gap-1">↑ 6.1% <span className="text-muted font-normal">vs Apr 1 - Apr 30</span></p>
         </div>
-        
+
         <div className="bg-panel border border-border rounded-xl p-4 flex flex-col justify-center shadow-sm">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-10 h-10 rounded-lg bg-orange-500/10 flex items-center justify-center text-orange-500">
@@ -83,7 +83,7 @@ export default function TopCommunitiesPage() {
             </div>
             <div>
               <p className="text-sm font-medium text-muted flex items-center gap-1">
-                Highest Message Volume 
+                Highest Message Volume
                 <span className="w-3.5 h-3.5 rounded-full border border-muted flex items-center justify-center text-[8px] cursor-help">i</span>
               </p>
               <h3 className="text-2xl font-bold text-text-heading">6.87M</h3>
@@ -94,7 +94,7 @@ export default function TopCommunitiesPage() {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
-        
+
         {/* Main Data Table */}
         <div className="xl:col-span-3 bg-panel border border-border rounded-xl flex flex-col overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
@@ -115,8 +115,8 @@ export default function TopCommunitiesPage() {
               </thead>
               <tbody className="text-text font-medium">
                 {communities.map((community, index) => (
-                  <tr 
-                    key={community.id} 
+                  <tr
+                    key={community.id}
                     className={`border-b border-border/30 hover:bg-panel-soft transition-colors cursor-pointer ${selectedCommunity === community.id ? 'bg-primary/5' : ''}`}
                     onClick={() => setSelectedCommunity(community.id)}
                   >
@@ -159,7 +159,7 @@ export default function TopCommunitiesPage() {
               </tbody>
             </table>
           </div>
-          
+
           <div className="p-4 border-t border-border flex items-center justify-between text-xs text-muted font-medium bg-panel/50">
             <span>Showing 1 to 15 of 1,248 communities</span>
             <div className="flex items-center gap-4">
@@ -175,7 +175,7 @@ export default function TopCommunitiesPage() {
                 <button className="w-6 h-6 flex items-center justify-center hover:bg-panel-soft rounded text-text-heading">→</button>
               </div>
               <div className="flex items-center gap-2">
-                Rows per page: 
+                Rows per page:
                 <select className="bg-transparent border-none font-bold text-text-heading outline-none cursor-pointer">
                   <option>15</option>
                   <option>30</option>
@@ -190,7 +190,7 @@ export default function TopCommunitiesPage() {
         <div className="xl:col-span-1 flex flex-col h-full">
           {selectedCommunity && (
             <div className="bg-panel border border-border rounded-xl flex flex-col shadow-sm sticky top-[100px]">
-              
+
               {/* Header */}
               <div className="p-5 border-b border-border flex justify-between items-start">
                 <div>
@@ -208,14 +208,14 @@ export default function TopCommunitiesPage() {
                     </div>
                   </div>
                 </div>
-                <button 
+                <button
                   onClick={() => setSelectedCommunity(null)}
                   className="p-1 hover:bg-panel-soft rounded-lg text-muted transition-colors"
                 >
                   <X size={16} />
                 </button>
               </div>
-              
+
               <div className="p-5 flex flex-col gap-6">
                 {/* Overview Stats */}
                 <div>
@@ -243,7 +243,7 @@ export default function TopCommunitiesPage() {
                     </div>
                   </div>
                 </div>
-                
+
                 {/* Trend Chart Mock */}
                 <div>
                   <h3 className="text-xs font-bold text-text-heading mb-1">Trend (vs Apr)</h3>
@@ -257,7 +257,7 @@ export default function TopCommunitiesPage() {
                     <div className="absolute bottom-[-15px] right-0 text-[9px] text-muted font-medium">May 31</div>
                   </div>
                 </div>
-                
+
                 {/* Top Themes Progress Bars */}
                 <div className="pt-4">
                   <h3 className="text-xs font-bold text-text-heading mb-3">Top Themes</h3>
@@ -310,13 +310,13 @@ export default function TopCommunitiesPage() {
                   </div>
                 </div>
               </div>
-              
+
               <div className="p-4 border-t border-border mt-auto">
                 <button className="w-full flex items-center justify-center gap-2 bg-primary/5 hover:bg-primary/10 text-primary py-2 rounded-lg text-xs font-semibold transition-colors">
                   View Community Insights <ArrowRight size={14} />
                 </button>
               </div>
-              
+
             </div>
           )}
         </div>

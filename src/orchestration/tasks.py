@@ -7,6 +7,7 @@ from typing import Any, Mapping, Optional
 import pandas as pd
 from prefect import task
 
+from src.artifacts.run_manifest import run_root_path
 from src.orchestration.artifact_validation import (
     validate_artifact,
     validate_artifact_output,
@@ -90,7 +91,7 @@ def _required_config_value(raw: Mapping[str, Any], key: str) -> Any:
 
 
 def _current_run_root(context: PipelineRunContext) -> str:
-    return str((Path(context.output_root) / context.pipeline_run_id).resolve())
+    return str(run_root_path(context.output_root, context.pipeline_run_id))
 
 
 def _csv_row_count(path: str) -> int:
@@ -261,7 +262,7 @@ def run_monthly_network_community_phase_task(
     df = pd.read_csv(dataset_identity.path)
 
     raw = config.raw_config
-    isolated_output = os.path.join(context.output_root, context.pipeline_run_id)
+    isolated_output = _current_run_root(context)
     os.makedirs(isolated_output, exist_ok=True)
 
     run_network_community_pipeline(
