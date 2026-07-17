@@ -13,6 +13,7 @@ LONGITUDINAL_CONFIG_04 ?= configs/longitudinal/sample_twitter_reply_04.yml
 LONGITUDINAL_OUTPUT ?= /tmp/community-analysis-longitudinal-sample
 LONGITUDINAL_THEME_OUTPUT ?= /tmp/community-analysis-longitudinal-theme-sample
 LONGITUDINAL_REPORT ?= /tmp/community-analysis-longitudinal-artifact-index.md
+API_ARTIFACT_ROOT ?= $(SAMPLE_OUTPUT)
 
 # Keep all sample/demo theme generation deterministic and offline.
 # A command-line override remains possible, e.g. `make run-theme-sample OFFLINE_LLM_PROVIDER=mock`.
@@ -37,7 +38,7 @@ help:
 	@echo "  run-longitudinal-sample - Run two-month offline pipeline and transitions"
 	@echo "  verify-output-contract - Validate generated one-month sample artifact schemas"
 	@echo "  verify-longitudinal-output-contract - Validate generated longitudinal artifact schemas"
-	@echo "  api-smoke-test       - Run read-only backend API smoke tests"
+	@echo "  api-smoke-test       - Run read-only dashboard API smoke tests"
 	@echo "  run-api              - Start the read-only artifact API"
 	@echo "  demo                 - Run offline sample, verifiers, report, and API smoke tests"
 	@echo "  demo-api             - Start the read-only artifact API for demo outputs"
@@ -129,7 +130,7 @@ api-smoke-test:
 	$(PYTHON) -m pytest tests/unit/test_backend_api.py
 
 run-api:
-	COMMUNITY_ANALYSIS_API_CONFIGS=$(SAMPLE_CONFIG),$(LONGITUDINAL_CONFIG_04) $(PYTHON) -m uvicorn backend.main:app --reload
+	COMMUNITY_ANALYSIS_ARTIFACT_ROOT=$(API_ARTIFACT_ROOT) $(PYTHON) -m uvicorn src.api.app:app --reload
 
 demo: run-pipeline-sample verify-output-contract run-longitudinal-sample verify-longitudinal-output-contract build-report api-smoke-test
 

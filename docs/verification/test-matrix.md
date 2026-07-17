@@ -82,3 +82,16 @@ visualization services.
 | Canonical publication | `complete_run_bundle` | Classifies artifacts and preserves legacy source bytes. |
 | Manifest verification | `validate_run_manifest` | Path containment, checksum, byte size, row count, JSON schema version, CSV columns. |
 | Atomic lifecycle | `initialize_run_bundle`, `complete_run_bundle`, `fail_run_bundle` | No temporary files remain; failed runs are never completed. |
+
+## Dashboard Data API Tests
+
+| Feature | Implementation | Required tests |
+|---|---|---|
+| Run discovery and filters | `src/api/services/run_catalog.py` | Platform, content type, year, month, and status filters; no absolute paths in responses. |
+| Manifest/artifact validation | `src/api/services/artifact_reader.py` | Invalid manifest, checksum mismatch, schema mismatch, and symlink/path escape. |
+| Pagination | Topic, theme, transition, and centrality routers | Stable totals, limits, offsets, and JSON normalization. |
+| Bounded graph read model | `src/api/services/network_service.py` | IF/WIF selection, community filtering, sampling, and hard request caps. |
+| Evolution read model | `src/api/services/evolution_service.py` | Transitions, persistent components, membership counts, and optional theme-similarity outputs. |
+| Report/download serving | `src/api/routers/reports.py` | Manifest-only file resolution and no intermediate downloads. |
+| OpenAPI/error contract | `src/api/app.py`, `src/api/errors.py` | Stable route set and structured error envelopes. |
+| Analytical isolation | API test suite | Pipeline/model/NetworkX modules remain unimported during requests. |

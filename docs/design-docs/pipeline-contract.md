@@ -105,17 +105,24 @@ CLI command validates generated artifacts without rerunning any pipeline stage.
 
 ## Read-Only Artifact API
 
-Plan 011 adds a FastAPI read-only API under `/api/v1` for generated artifact
-browsing. The API must only read configured output roots and known
-output-contract paths. It must not run ingestion, network/community, LDA,
-theme generation, visualization rendering, database clients, or model code.
+Plan 025 provides the canonical FastAPI read model under `src/api/`. It
+discovers `<artifact_root>/runs/<run_id>/manifest.json`, resolves files only by
+manifest artifact key, and verifies the selected artifact before reading or
+streaming it. The API must not run ingestion, graph analysis, community
+detection, LDA, theme generation, embeddings, visualization rendering, or
+database clients.
+
+The API exposes stable `/api/v1` routes for run discovery and filtering,
+overview summaries, bounded graph subsets, communities, centrality, topics,
+themes, transitions, persistent communities, membership changes, theme
+similarity, reports, and downloads. Large table responses are paginated and
+graph requests are limited by configured node and edge caps.
 
 Local commands:
 
 ```bash
 make api-smoke-test
-make run-api
-make run-frontend
+make run-api API_ARTIFACT_ROOT=/path/to/artifacts
 ```
 
 ## Read-Only Dashboard

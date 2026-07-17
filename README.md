@@ -282,35 +282,42 @@ compatibility between public matched LDA outputs and copied theme inputs. Use
 
 ## Read-Only Artifact API
 
-After generating sample outputs, start the read-only backend API with:
+The dashboard API reads only canonical run bundles created below
+`<artifact_root>/runs/<run_id>/`. It validates manifest-listed files before
+returning analytical data and never runs ingestion, NetworkX, Louvain, LDA,
+theme providers, TEI, or visualization generation.
+
+Start it with an artifact root that contains the `runs/` directory:
 
 ```bash
-make run-api
+make run-api API_ARTIFACT_ROOT=/path/to/artifacts
 ```
-
-The API serves generated artifacts only. It does not run ingestion, network,
-community, topic, theme, visualization, database, or model code.
 
 Useful endpoints:
 
 ```text
 GET /api/v1/health
-GET /api/v1/runs
-GET /api/v1/runs/{run_id}/facets
-GET /api/v1/runs/{run_id}/verification
+GET /api/v1/runs?platform=twitter&content_type=reply&year=2017&month=3
+GET /api/v1/runs/{run_id}
 GET /api/v1/runs/{run_id}/artifacts
-GET /api/v1/runs/{run_id}/community-summary?month=03
-GET /api/v1/runs/{run_id}/topics?month=03&type=matched
+GET /api/v1/runs/{run_id}/verification
+GET /api/v1/runs/{run_id}/overview
+GET /api/v1/runs/{run_id}/network?metric=if&max_nodes=200&max_edges=500
+GET /api/v1/runs/{run_id}/communities?metric=wif
+GET /api/v1/runs/{run_id}/centrality
+GET /api/v1/runs/{run_id}/topics?type=matched
 GET /api/v1/runs/{run_id}/themes?month=03
 GET /api/v1/runs/{run_id}/transitions
+GET /api/v1/runs/{run_id}/persistent-communities
+GET /api/v1/runs/{run_id}/membership-changes
+GET /api/v1/runs/{run_id}/theme-similarity
+GET /api/v1/runs/{run_id}/report
+GET /api/v1/runs/{run_id}/downloads/{artifact_key}
 ```
 
-Override configured API runs with:
-
-```bash
-COMMUNITY_ANALYSIS_API_CONFIGS=configs/sample_twitter_reply.yml,configs/longitudinal/sample_twitter_reply_04.yml \
-.venv/bin/python -m uvicorn backend.main:app --reload
-```
+The OpenAPI document is available at `/openapi.json`. API errors use a stable
+JSON envelope with `code`, `message`, `run_id`, and `artifact_key` fields where
+applicable.
 
 ## Read-Only Dashboard
 

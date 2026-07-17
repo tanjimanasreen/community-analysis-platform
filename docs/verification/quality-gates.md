@@ -155,3 +155,16 @@ pytest tests/unit/test_run_manifest.py
 pytest tests/unit/test_orchestration_monthly_flow.py
 pytest tests/integration/test_orchestration_smoke.py
 ```
+
+## Dashboard Data API Gate
+
+- The API discovers only `runs/<run_id>/manifest.json` below the configured
+  artifact root.
+- Analytical and report files are resolved only through manifest artifact keys.
+- Selected artifacts pass path-containment, checksum, size, media-type, and
+  schema validation before their contents are returned.
+- Table responses enforce pagination and graph responses enforce configured
+  node/edge caps.
+- API requests do not import or execute pipeline, NetworkX, Louvain, LDA,
+  provider, TEI, or visualization-generation modules.
+- `python -m pytest tests/unit/test_backend_api.py` passes offline.
