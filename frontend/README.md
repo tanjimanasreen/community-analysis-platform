@@ -136,3 +136,29 @@ does not calculate embeddings or run topic/theme generation.
 Topic and theme records link to the corresponding IF or WIF community while
 preserving the selected run. Community detail panels provide the reverse link
 back to the semantic route with the exact metric-aware community filter.
+
+## Longitudinal, comparison, report, and methodology routes
+
+The remaining analytical routes are read-only views over canonical run
+artifacts:
+
+- **Evolution Over Time** groups completed runs by the same platform and content
+  type, loads their overview records, and plots one compatible unit at a time.
+  Missing values stay unavailable, and configuration differences are shown as
+  warnings rather than hidden.
+- **Community Transitions** loads transitions, persistent communities,
+  membership changes, and theme similarity independently. The Sankey uses saved
+  Jaccard membership similarity, tables preserve canonical community IDs, and
+  CSV exports contain only the loaded real records.
+- **Comparative Analysis** requires an explicit Twitter/X run and an explicit
+  Telegram run. It compares only shared overview fields and exact normalized
+  top-theme label overlap, with visible content, date, configuration, model, and
+  artifact-availability warnings.
+- **Reports** is a manifest-backed artifact library. It does not create or
+  schedule reports, and intermediate artifacts remain unavailable for download.
+- **Methodology** separates protected thesis defaults from selected-run
+  configuration, provider/model metadata, and artifact categories. Theme labels
+  are shown as downstream interpretations of LDA keyword evidence.
+
+These routes do not execute pipelines, recalculate community detection, invoke
+an LLM, or infer missing run metadata in the browser.

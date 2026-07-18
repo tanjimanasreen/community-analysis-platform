@@ -26,7 +26,7 @@ dist/
 # Generated pipeline outputs
 results/
 outputs/
-reports/
+/reports/
 artifacts/
 data/generated/
 .prefect_results/

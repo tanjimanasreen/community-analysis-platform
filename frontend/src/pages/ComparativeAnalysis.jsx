@@ -1,230 +1,302 @@
-import { Lightbulb, TrendingUp, ShieldPlus, Palette, Users, Shield, Database } from 'lucide-react';
-import EvolutionChart from '../components/charts/EvolutionChart';
+import React from 'react';
+import { AlertTriangle, Database, Lightbulb, Scale, Send } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import ErrorState from '../components/states/ErrorState';
+import LoadingState from '../components/states/LoadingState';
+import EmptyState from '../components/states/EmptyState';
+import {
+  compareThemeLabels,
+  comparisonMetricRows,
+  deterministicComparisonFindings,
+  formatMetric,
+  platformRuns,
+} from '../features/comparison/comparisonModel';
+import { useComparisonData } from '../features/comparison/useComparisonData';
+import { comparisonWarnings } from '../features/evolution/runCompatibility';
+import { displayArtifactValue } from '../utils/artifactValues';
+
+const TWITTER_RUN_PARAM = 'twitterRun';
+const TELEGRAM_RUN_PARAM = 'telegramRun';
 
 export default function ComparativeAnalysisPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const dashboard = useComparisonData(
+    searchParams.get(TWITTER_RUN_PARAM) ?? '',
+    searchParams.get(TELEGRAM_RUN_PARAM) ?? '',
+  );
+  const twitterOptions = platformRuns(dashboard.runs, 'twitter');
+  const telegramOptions = platformRuns(dashboard.runs, 'telegram');
+  const twitterRunId = twitterOptions.some((run) => run.run_id === searchParams.get(TWITTER_RUN_PARAM))
+    ? searchParams.get(TWITTER_RUN_PARAM) ?? ''
+    : '';
+  const telegramRunId = telegramOptions.some((run) => run.run_id === searchParams.get(TELEGRAM_RUN_PARAM))
+    ? searchParams.get(TELEGRAM_RUN_PARAM) ?? ''
+    : '';
+  const twitterRun = twitterOptions.find((run) => run.run_id === twitterRunId) ?? null;
+  const telegramRun = telegramOptions.find((run) => run.run_id === telegramRunId) ?? null;
+
+  const updateRun = (key, runId) => {
+    const next = new URLSearchParams(searchParams);
+    if (runId) next.set(key, runId);
+    else next.delete(key);
+    setSearchParams(next);
+  };
+
+  const selectionComplete = Boolean(twitterRun && telegramRun);
+  const errors = [
+    dashboard.twitterOverview.error,
+    dashboard.telegramOverview.error,
+    dashboard.twitterDetail.error,
+    dashboard.telegramDetail.error,
+    dashboard.twitterArtifacts.error,
+    dashboard.telegramArtifacts.error,
+  ].filter(Boolean);
+
+  const twitterOverview = dashboard.twitterOverview.data;
+  const telegramOverview = dashboard.telegramOverview.data;
+  const comparisonReady = Boolean(selectionComplete && twitterOverview && telegramOverview);
+  const rows = comparisonReady
+    ? comparisonMetricRows(twitterOverview, telegramOverview, dashboard.metric)
+    : [];
+  const themes = comparisonReady
+    ? compareThemeLabels(twitterOverview.top_themes, telegramOverview.top_themes)
+    : null;
+  const warnings = comparisonReady && twitterRun && telegramRun
+    ? comparisonWarnings({
+      leftRun: twitterRun,
+      rightRun: telegramRun,
+      leftOverview: twitterOverview,
+      rightOverview: telegramOverview,
+      leftArtifacts: dashboard.twitterArtifacts.data?.artifacts ?? [],
+      rightArtifacts: dashboard.telegramArtifacts.data?.artifacts ?? [],
+    })
+    : [];
+  const findings = comparisonReady
+    ? deterministicComparisonFindings(rows, 'Twitter/X', 'Telegram')
+    : [];
 
   return (
     <div className="flex flex-col gap-6 max-w-[1600px] mx-auto w-full">
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-
-        {/* Twitter/X Card */}
-        <div className="bg-panel border border-border rounded-xl p-6 flex items-center justify-between shadow-sm">
-          <div className="flex flex-col items-center gap-2">
-            <div className="w-16 h-16 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-500 text-4xl">
-              <span className="font-bold">𝕏</span>
-            </div>
-            <p className="text-sm font-bold text-blue-500">Twitter/X</p>
-          </div>
-          <div className="flex gap-8 text-center flex-1 justify-end">
-            <div className="flex flex-col items-start text-left">
-              <p className="text-sm font-medium text-muted mb-1">Active Communities</p>
-              <h3 className="text-2xl font-bold text-text-heading">742</h3>
-              <p className="text-[10px] text-success font-medium">↑ 8.7% vs Apr 1 - Apr 30</p>
-            </div>
-            <div className="flex flex-col items-start text-left">
-              <p className="text-sm font-medium text-muted mb-1">Total Messages</p>
-              <h3 className="text-2xl font-bold text-text-heading">4.91M</h3>
-              <p className="text-[10px] text-success font-medium">↑ 12.1% vs Apr 1 - Apr 30</p>
-            </div>
-            <div className="flex flex-col items-start text-left">
-              <p className="text-sm font-medium text-muted mb-1">Persistence Score (WIF)</p>
-              <h3 className="text-2xl font-bold text-text-heading">0.63</h3>
-              <p className="text-[10px] text-success font-medium">↑ 8.7% vs Apr 1 - Apr 30</p>
-            </div>
-            <div className="flex flex-col items-start text-left">
-              <p className="text-sm font-medium text-muted mb-1">Thematic Diversity</p>
-              <h3 className="text-2xl font-bold text-text-heading">7.1</h3>
-              <p className="text-[10px] text-success font-medium">↑ 4.5% vs Apr 1 - Apr 30</p>
-            </div>
-          </div>
+      <header className="rounded-xl border border-border bg-panel p-5">
+        <h1 className="text-xl font-bold text-text-heading">Cross-platform comparison</h1>
+        <p className="mt-1 max-w-4xl text-sm text-muted">
+          Select one completed Twitter/X run and one completed Telegram run. No arbitrary catalog entries are compared automatically.
+        </p>
+        <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <RunSelector
+            label="Twitter/X run"
+            icon={Scale}
+            value={twitterRunId}
+            options={twitterOptions}
+            onChange={(value) => updateRun(TWITTER_RUN_PARAM, value)}
+          />
+          <RunSelector
+            label="Telegram run"
+            icon={Send}
+            value={telegramRunId}
+            options={telegramOptions}
+            onChange={(value) => updateRun(TELEGRAM_RUN_PARAM, value)}
+          />
         </div>
+        <p className="mt-3 text-xs text-muted">Selected affinity metric: <span className="font-semibold text-text-heading">{dashboard.metric.toUpperCase()}</span>. Change it in the global top bar.</p>
+      </header>
 
-        {/* Telegram Card */}
-        <div className="bg-panel border border-border rounded-xl p-6 flex items-center justify-between shadow-sm">
-          <div className="flex flex-col items-center gap-2">
-             <div className="w-16 h-16 rounded-2xl bg-purple-500/10 flex items-center justify-center text-purple-500 text-5xl">
-              <span className="font-bold">✈</span>
-            </div>
-            <p className="text-sm font-bold text-purple-500">Telegram</p>
-          </div>
-          <div className="flex gap-8 text-center flex-1 justify-end">
-            <div className="flex flex-col items-start text-left">
-              <p className="text-sm font-medium text-muted mb-1">Active Communities</p>
-              <h3 className="text-2xl font-bold text-text-heading">506</h3>
-              <p className="text-[10px] text-success font-medium">↑ 5.4% vs Apr 1 - Apr 30</p>
-            </div>
-            <div className="flex flex-col items-start text-left">
-              <p className="text-sm font-medium text-muted mb-1">Total Messages</p>
-              <h3 className="text-2xl font-bold text-text-heading">3.76M</h3>
-              <p className="text-[10px] text-success font-medium">↑ 15.3% vs Apr 1 - Apr 30</p>
-            </div>
-            <div className="flex flex-col items-start text-left">
-              <p className="text-sm font-medium text-muted mb-1">Persistence Score (WIF)</p>
-              <h3 className="text-2xl font-bold text-text-heading">0.69</h3>
-              <p className="text-[10px] text-success font-medium">↑ 5.4% vs Apr 1 - Apr 30</p>
-            </div>
-            <div className="flex flex-col items-start text-left">
-              <p className="text-sm font-medium text-muted mb-1">Thematic Diversity</p>
-              <h3 className="text-2xl font-bold text-text-heading">5.2</h3>
-              <p className="text-[10px] text-success font-medium">↑ 3.1% vs Apr 1 - Apr 30</p>
-            </div>
-          </div>
-        </div>
-
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        <div className="lg:col-span-2 xl:col-span-3 grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <EvolutionChart title="Message Volume Over Time" />
-          <EvolutionChart title="Persistence Score (WIF) Over Time" />
-
-          {/* Theme Distribution Bar Chart Mockup */}
-          <div className="bg-panel border border-border rounded-xl p-6">
-            <h3 className="text-lg font-bold text-text-heading mb-1">Theme Distribution <span className="text-muted font-normal text-sm">(by Message Volume)</span></h3>
-            <p className="text-sm text-muted mb-6">Share of total messages by dominant theme</p>
-
-            <div className="flex justify-between gap-8">
-              <div className="w-1/2">
-                <p className="text-sm font-bold text-blue-500 mb-4">Twitter/X</p>
-                <div className="flex flex-col gap-3 text-sm">
-                  <div className="flex items-center justify-between"><span className="w-24 text-text-heading text-xs">Personal Support</span> <div className="flex-1 mx-2 h-2 bg-panel-soft rounded-full"><div className="h-full bg-blue-500 rounded-full" style={{width: '22%'}}></div></div> <span className="text-blue-500 font-medium text-xs">22%</span></div>
-                  <div className="flex items-center justify-between"><span className="w-24 text-text-heading text-xs">Current Events</span> <div className="flex-1 mx-2 h-2 bg-panel-soft rounded-full"><div className="h-full bg-blue-500 rounded-full" style={{width: '18%'}}></div></div> <span className="text-muted text-xs">18%</span></div>
-                  <div className="flex items-center justify-between"><span className="w-24 text-text-heading text-xs">Civic Discourse</span> <div className="flex-1 mx-2 h-2 bg-panel-soft rounded-full"><div className="h-full bg-blue-500 rounded-full" style={{width: '16%'}}></div></div> <span className="text-muted text-xs">16%</span></div>
-                  <div className="flex items-center justify-between"><span className="w-24 text-text-heading text-xs">Education</span> <div className="flex-1 mx-2 h-2 bg-panel-soft rounded-full"><div className="h-full bg-blue-500 rounded-full" style={{width: '13%'}}></div></div> <span className="text-muted text-xs">13%</span></div>
-                  <div className="flex items-center justify-between"><span className="w-24 text-text-heading text-xs">Emotional Topics</span> <div className="flex-1 mx-2 h-2 bg-panel-soft rounded-full"><div className="h-full bg-blue-500 rounded-full" style={{width: '11%'}}></div></div> <span className="text-muted text-xs">11%</span></div>
-                  <div className="flex items-center justify-between"><span className="w-24 text-text-heading text-xs">News Discussion</span> <div className="flex-1 mx-2 h-2 bg-panel-soft rounded-full"><div className="h-full bg-blue-500 rounded-full" style={{width: '9%'}}></div></div> <span className="text-muted text-xs">9%</span></div>
-                  <div className="flex items-center justify-between"><span className="w-24 text-text-heading text-xs">Other</span> <div className="flex-1 mx-2 h-2 bg-panel-soft rounded-full"><div className="h-full bg-muted/30 rounded-full" style={{width: '11%'}}></div></div> <span className="text-muted text-xs">11%</span></div>
-                </div>
-              </div>
-              <div className="w-1/2">
-                <p className="text-sm font-bold text-purple-500 mb-4">Telegram</p>
-                <div className="flex flex-col gap-3 text-sm">
-                  <div className="flex items-center justify-between"><span className="w-24 text-text-heading text-xs">Personal Support</span> <div className="flex-1 mx-2 h-2 bg-panel-soft rounded-full"><div className="h-full bg-purple-500 rounded-full" style={{width: '24%'}}></div></div> <span className="text-muted text-xs">24%</span></div>
-                  <div className="flex items-center justify-between"><span className="w-24 text-text-heading text-xs">Current Events</span> <div className="flex-1 mx-2 h-2 bg-panel-soft rounded-full"><div className="h-full bg-purple-500 rounded-full" style={{width: '19%'}}></div></div> <span className="text-muted text-xs">19%</span></div>
-                  <div className="flex items-center justify-between"><span className="w-24 text-text-heading text-xs">Education</span> <div className="flex-1 mx-2 h-2 bg-panel-soft rounded-full"><div className="h-full bg-purple-500 rounded-full" style={{width: '16%'}}></div></div> <span className="text-muted text-xs">16%</span></div>
-                  <div className="flex items-center justify-between"><span className="w-24 text-text-heading text-xs">Civic Discourse</span> <div className="flex-1 mx-2 h-2 bg-panel-soft rounded-full"><div className="h-full bg-purple-500 rounded-full" style={{width: '12%'}}></div></div> <span className="text-muted text-xs">12%</span></div>
-                  <div className="flex items-center justify-between"><span className="w-24 text-text-heading text-xs">Emotional Topics</span> <div className="flex-1 mx-2 h-2 bg-panel-soft rounded-full"><div className="h-full bg-purple-500 rounded-full" style={{width: '11%'}}></div></div> <span className="text-muted text-xs">11%</span></div>
-                  <div className="flex items-center justify-between"><span className="w-24 text-text-heading text-xs">News Discussion</span> <div className="flex-1 mx-2 h-2 bg-panel-soft rounded-full"><div className="h-full bg-purple-500 rounded-full" style={{width: '7%'}}></div></div> <span className="text-muted text-xs">7%</span></div>
-                  <div className="flex items-center justify-between"><span className="w-24 text-text-heading text-xs">Other</span> <div className="flex-1 mx-2 h-2 bg-panel-soft rounded-full"><div className="h-full bg-muted/30 rounded-full" style={{width: '11%'}}></div></div> <span className="text-muted text-xs">11%</span></div>
-                </div>
-              </div>
-            </div>
+      {!selectionComplete ? (
+        <EmptyState
+          title="Select both platform runs"
+          message="The comparison remains empty until explicit Twitter/X and Telegram runs are selected."
+        />
+      ) : dashboard.isLoading ? (
+        <LoadingState title="Loading selected run comparison" />
+      ) : errors.length > 0 ? (
+        <ErrorState error={errors[0]} title="Selected runs could not be compared" />
+      ) : comparisonReady ? (
+        <>
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+            <RunSummaryCard title="Twitter/X" run={twitterRun} overview={twitterOverview} metric={dashboard.metric} accent="text-blue-500" />
+            <RunSummaryCard title="Telegram" run={telegramRun} overview={telegramOverview} metric={dashboard.metric} accent="text-purple-500" />
           </div>
 
-          {/* Theme Overlap Venn Diagram Mockup */}
-          <div className="bg-panel border border-border rounded-xl p-6 relative overflow-hidden flex flex-col justify-between">
-            <div>
-              <h3 className="text-lg font-bold text-text-heading mb-1">Theme Overlap</h3>
-              <p className="text-sm text-muted mb-6">Overlap in dominant themes by message volume</p>
-            </div>
+          {warnings.length > 0 && (
+            <section className="rounded-xl border border-warning/30 bg-warning/5 p-5" aria-label="Comparison compatibility warnings">
+              <div className="flex items-center gap-2">
+                <AlertTriangle size={18} className="text-warning" />
+                <h2 className="text-sm font-bold text-text-heading">Compatibility warnings</h2>
+              </div>
+              <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-muted">
+                {warnings.map((warning) => <li key={warning.code}>{warning.message}</li>)}
+              </ul>
+            </section>
+          )}
 
-            <div className="relative h-48 flex items-center justify-center -mt-8">
-              {/* Fake Venn */}
-              <div className="absolute w-44 h-44 rounded-full bg-blue-500/10 border-2 border-blue-500/20 -translate-x-12 flex flex-col items-center justify-center pl-8 text-center mix-blend-screen">
-                <span className="text-blue-500 font-bold text-xs">Twitter/X<br/>Exclusive</span>
-                <span className="text-2xl font-bold text-text-heading mt-1">32%</span>
-              </div>
-              <div className="absolute w-44 h-44 rounded-full bg-purple-500/10 border-2 border-purple-500/20 translate-x-12 flex flex-col items-center justify-center pr-8 text-center mix-blend-screen">
-                <span className="text-purple-500 font-bold text-xs">Telegram<br/>Exclusive</span>
-                <span className="text-2xl font-bold text-text-heading mt-1">22%</span>
-              </div>
-              <div className="absolute z-10 flex flex-col items-center text-center">
-                <span className="text-indigo-400 font-bold text-xs">Shared<br/>Themes</span>
-                <span className="text-3xl font-bold text-text-heading mt-1">46%</span>
-              </div>
+          <section className="rounded-xl border border-border bg-panel p-5">
+            <h2 className="text-sm font-bold text-text-heading">Supported overview fields</h2>
+            <p className="mt-1 text-xs text-muted">Only fields exposed by both selected run overviews are compared. Missing values remain unavailable.</p>
+            <div className="mt-4 overflow-x-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead className="border-b border-border text-xs text-muted">
+                  <tr><th className="px-3 py-3">Field</th><th className="px-3 py-3">Twitter/X</th><th className="px-3 py-3">Telegram</th><th className="px-3 py-3">Absolute difference</th></tr>
+                </thead>
+                <tbody>
+                  {rows.map((row) => (
+                    <tr key={row.key} className="border-b border-border/40">
+                      <td className="px-3 py-3 font-medium text-text-heading">{row.label}</td>
+                      <td className="px-3 py-3 text-text-heading">{formatMetric(row.left, row.format)}</td>
+                      <td className="px-3 py-3 text-text-heading">{formatMetric(row.right, row.format)}</td>
+                      <td className="px-3 py-3 text-muted">{row.left === null || row.right === null ? 'Unavailable' : formatMetric(Math.abs(row.left - row.right), row.format)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
+          </section>
 
-            <div className="flex justify-center gap-6 mt-4 text-[10px] text-muted font-medium">
-              <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-blue-500"></span> Exclusive to Twitter/X</span>
-              <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-indigo-500"></span> Shared Themes</span>
-              <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-purple-500"></span> Exclusive to Telegram</span>
-            </div>
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+            <ThemeComparison title="Twitter/X top theme labels" themes={themes.left} />
+            <ThemeComparison title="Telegram top theme labels" themes={themes.right} />
           </div>
 
-        </div>
+          <section className="rounded-xl border border-border bg-panel p-5">
+            <h2 className="text-sm font-bold text-text-heading">Exact normalized theme-label overlap</h2>
+            <p className="mt-1 text-xs text-muted">This is exact label overlap after case and surrounding-whitespace normalization. It is not message-volume overlap or semantic similarity.</p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {themes.sharedNames.length > 0 ? themes.sharedNames.map((name) => (
+                <span key={name} className="rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">{name}</span>
+              )) : <span className="text-sm text-muted">No exact labels overlap in the returned top-theme sets.</span>}
+            </div>
+          </section>
 
-        {/* Right column */}
-        <div className="flex flex-col gap-6">
-          <div className="bg-panel border border-border rounded-xl p-6">
-             <div className="flex items-center gap-2 mb-4">
-               <Lightbulb className="text-blue-500" size={20} />
-               <h3 className="text-sm font-bold text-text-heading">Key Findings</h3>
-             </div>
-
-             <div className="flex flex-col gap-5">
-               <div className="flex gap-4">
-                 <div className="w-8 h-8 rounded-full bg-blue-500/10 text-blue-500 flex items-center justify-center shrink-0"><TrendingUp size={16} /></div>
-                 <div>
-                   <p className="text-xs font-bold text-text-heading mb-1">Higher Message Volume on Twitter/X</p>
-                   <p className="text-[10px] text-muted leading-relaxed">Twitter/X generated 30% more messages than Telegram during the selected period.</p>
-                 </div>
-               </div>
-               <div className="flex gap-4">
-                 <div className="w-8 h-8 rounded-full bg-purple-500/10 text-purple-500 flex items-center justify-center shrink-0"><ShieldPlus size={16} /></div>
-                 <div>
-                   <p className="text-xs font-bold text-text-heading mb-1">Stronger Persistence on Telegram</p>
-                   <p className="text-[10px] text-muted leading-relaxed">Telegram communities show a higher persistence score throughout the month.</p>
-                 </div>
-               </div>
-               <div className="flex gap-4">
-                 <div className="w-8 h-8 rounded-full bg-green-500/10 text-green-500 flex items-center justify-center shrink-0"><Palette size={16} /></div>
-                 <div>
-                   <p className="text-xs font-bold text-text-heading mb-1">Broader Thematic Diversity on Twitter/X</p>
-                   <p className="text-[10px] text-muted leading-relaxed">Twitter/X communities cover a wider range of themes compared to Telegram.</p>
-                 </div>
-               </div>
-               <div className="flex gap-4">
-                 <div className="w-8 h-8 rounded-full bg-orange-500/10 text-orange-500 flex items-center justify-center shrink-0"><Users size={16} /></div>
-                 <div>
-                   <p className="text-xs font-bold text-text-heading mb-1">Related But Distinct Audiences</p>
-                   <p className="text-[10px] text-muted leading-relaxed">Both platforms share overlapping themes, but engagement patterns differ significantly.</p>
-                 </div>
-               </div>
-             </div>
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+            <ConfigurationPanel
+              title="Twitter/X configuration"
+              overview={twitterOverview}
+              detail={dashboard.twitterDetail.data}
+              artifactCount={dashboard.twitterArtifacts.data?.total ?? null}
+            />
+            <ConfigurationPanel
+              title="Telegram configuration"
+              overview={telegramOverview}
+              detail={dashboard.telegramDetail.data}
+              artifactCount={dashboard.telegramArtifacts.data?.total ?? null}
+            />
           </div>
 
-          <div className="bg-panel border border-border rounded-xl p-6">
-            <h3 className="text-sm font-bold text-text-heading mb-4 flex items-center gap-2">
-              <Database size={16} className="text-blue-500" />
-              Data Summary
-            </h3>
-            <div className="flex flex-col gap-3 text-xs">
-              <div className="flex justify-between border-b border-border/30 pb-2">
-                <span className="text-muted">Time Range</span>
-                <span className="text-text-heading font-medium">May 1 - May 31, 2024</span>
-              </div>
-              <div className="flex justify-between border-b border-border/30 pb-2">
-                <span className="text-muted">Platforms</span>
-                <span className="text-text-heading font-medium">Twitter/X vs Telegram</span>
-              </div>
-              <div className="flex justify-between border-b border-border/30 pb-2">
-                <span className="text-muted">Affinity Metric</span>
-                <span className="text-text-heading font-medium">WIF</span>
-              </div>
-              <div className="flex justify-between border-b border-border/30 pb-2">
-                <span className="text-muted">Min Community Size</span>
-                <span className="text-text-heading font-medium">50</span>
-              </div>
-              <div className="flex justify-between border-b border-border/30 pb-2">
-                <span className="text-muted">Total Communities</span>
-                <span className="text-text-heading font-medium">1,248</span>
-              </div>
-              <div className="flex justify-between border-b border-border/30 pb-2">
-                <span className="text-muted">Total Messages</span>
-                <span className="text-text-heading font-medium">8.67M</span>
-              </div>
+          <section className="rounded-xl border border-border bg-panel p-5">
+            <div className="flex items-center gap-2">
+              <Lightbulb size={18} className="text-primary" />
+              <h2 className="text-sm font-bold text-text-heading">Deterministic findings</h2>
             </div>
-
-            <div className="mt-4 pt-4 flex items-center justify-between">
-              <span className="text-xs text-muted">Data Source Status</span>
-              <span className="text-xs font-medium text-success flex items-center gap-1">
-                <div className="w-3 h-3 rounded-full bg-success flex items-center justify-center text-[8px] text-white">✓</div> All Systems Operational
-              </span>
-            </div>
-          </div>
-        </div>
-
-      </div>
+            {findings.length > 0 ? (
+              <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-muted">
+                {findings.map((finding) => <li key={finding}>{finding}</li>)}
+              </ul>
+            ) : (
+              <p className="mt-3 text-sm text-muted">No supported numeric fields contain unequal values in both selected runs.</p>
+            )}
+            <p className="mt-4 text-xs text-muted">These statements report visible arithmetic differences only and make no causal claims.</p>
+          </section>
+        </>
+      ) : null}
     </div>
   );
+}
+
+function RunSelector({ label, icon: Icon, value, options, onChange }) {
+  return (
+    <label className="rounded-xl border border-border bg-bg/30 p-4 text-xs font-medium text-muted">
+      <span className="flex items-center gap-2"><Icon size={16} className="text-primary" /> {label}</span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-2 w-full rounded-lg border border-border bg-panel px-3 py-2 text-sm text-text-heading"
+      >
+        <option value="">Select a completed run</option>
+        {options.map((run) => (
+          <option key={run.run_id} value={run.run_id}>
+            {run.content_type ?? 'unknown'} · {run.date_start ?? 'unknown'}–{run.date_end ?? 'unknown'} · {run.run_id}
+          </option>
+        ))}
+      </select>
+      {options.length === 0 && <span className="mt-2 block text-xs text-warning">No completed runs for this platform are available.</span>}
+    </label>
+  );
+}
+
+function RunSummaryCard({ title, run, overview, metric, accent }) {
+  const communityCount = metric === 'if' ? overview.if_community_count : overview.wif_community_count;
+  return (
+    <section className="rounded-xl border border-border bg-panel p-5">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className={`text-lg font-bold ${accent}`}>{title}</h2>
+        <span className="rounded-full border border-border px-2 py-1 text-[11px] text-muted">{run.status}</span>
+      </div>
+      <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+        <SummaryItem label="Content type" value={run.content_type} />
+        <SummaryItem label="Date range" value={`${run.date_start ?? 'Unknown'}–${run.date_end ?? 'Unknown'}`} />
+        <SummaryItem label="Run ID" value={run.run_id} mono />
+        <SummaryItem label={`${metric.toUpperCase()} communities`} value={communityCount} />
+      </dl>
+    </section>
+  );
+}
+
+function SummaryItem({ label, value, mono = false }) {
+  return (
+    <div className="rounded-lg border border-border bg-panel-soft/40 p-3">
+      <dt className="text-xs text-muted">{label}</dt>
+      <dd className={`mt-1 break-words font-semibold text-text-heading ${mono ? 'font-mono text-xs' : ''}`}>{value ?? 'Unavailable'}</dd>
+    </div>
+  );
+}
+
+function ThemeComparison({ title, themes }) {
+  return (
+    <section className="rounded-xl border border-border bg-panel p-5">
+      <h2 className="text-sm font-bold text-text-heading">{title}</h2>
+      <div className="mt-4 space-y-3">
+        {themes.map((theme) => (
+          <div key={theme.name} className="flex items-center justify-between gap-4 rounded-lg border border-border bg-panel-soft/40 px-3 py-2 text-sm">
+            <span className="text-text-heading">{theme.name}</span>
+            <span className="font-semibold text-muted">{theme.count}</span>
+          </div>
+        ))}
+        {themes.length === 0 && <p className="text-sm text-muted">No top theme labels are available.</p>}
+      </div>
+    </section>
+  );
+}
+
+function ConfigurationPanel({ title, overview, detail, artifactCount }) {
+  const entries = [
+    ...flattenMetadata(overview.config_metadata, 'config'),
+    ...flattenMetadata(overview.model_metadata, 'model'),
+    ['pipeline.mlflow_run_id', detail?.pipeline?.mlflow_run_id],
+    ['pipeline.prefect_flow_run_id', detail?.pipeline?.prefect_flow_run_id],
+    ['artifact_count', artifactCount],
+  ].filter(([, value]) => value !== null && value !== undefined && value !== '');
+  return (
+    <section className="rounded-xl border border-border bg-panel p-5">
+      <div className="flex items-center gap-2"><Database size={17} className="text-primary" /><h2 className="text-sm font-bold text-text-heading">{title}</h2></div>
+      {entries.length > 0 ? (
+        <dl className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {entries.map(([key, value]) => (
+            <div key={key} className="rounded-lg border border-border bg-panel-soft/40 p-3">
+              <dt className="break-all text-[11px] text-muted">{key}</dt>
+              <dd className="mt-1 break-words text-sm font-semibold text-text-heading">{displayArtifactValue(value)}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : <p className="mt-4 text-sm text-muted">Configuration and model metadata are unavailable.</p>}
+    </section>
+  );
+}
+
+function flattenMetadata(metadata, prefix) {
+  const entries = [];
+  for (const [section, value] of Object.entries(metadata ?? {})) {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      for (const [key, item] of Object.entries(value)) entries.push([`${prefix}.${section}.${key}`, item]);
+    } else entries.push([`${prefix}.${section}`, value]);
+  }
+  return entries;
 }
