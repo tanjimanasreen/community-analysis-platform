@@ -1,9 +1,7 @@
-import { useOutletContext } from 'react-router-dom';
 import { Lightbulb, TrendingUp, ShieldPlus, Palette, Users, Shield, Database } from 'lucide-react';
 import EvolutionChart from '../components/charts/EvolutionChart';
 
 export default function ComparativeAnalysisPage() {
-  const { summary } = useOutletContext();
 
   return (
     <div className="flex flex-col gap-6 max-w-[1600px] mx-auto w-full">

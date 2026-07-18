@@ -1,9 +1,7 @@
 import { useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
 import { Network, Target, Users, Shield, Star, MoreHorizontal, X, ArrowRight, TrendingUp, TrendingDown, Send } from 'lucide-react';
 
 export default function TopCommunitiesPage() {
-  const { summary } = useOutletContext() || {};
   const [selectedCommunity, setSelectedCommunity] = useState('C-1124');
 
   const communities = [

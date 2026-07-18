@@ -1,8 +1,6 @@
-import { useOutletContext } from 'react-router-dom';
 import { RefreshCcw, Users, ShieldCheck, Star, ArrowRight, TrendingDown, Info, Download } from 'lucide-react';
 
 export default function CommunityTransitionsPage() {
-  const { summary } = useOutletContext();
 
   return (
     <div className="flex flex-col gap-6 max-w-[1600px] mx-auto w-full">

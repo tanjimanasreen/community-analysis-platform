@@ -2,7 +2,7 @@ import { Calendar, Layers, Activity, Users, Filter, Download, Bell, HelpCircle, 
 import Papa from 'papaparse';
 import { useLocation } from 'react-router-dom';
 
-export default function Topbar({ selectedMonth, months, onMonthChange, health, dataToExport, toggleSidebar }) {
+export default function Topbar({ selectedRunId, runs, onRunChange, metric, onMetricChange, health, dataToExport, toggleSidebar }) {
   const location = useLocation();
   const path = location.pathname;
 
@@ -88,7 +88,7 @@ export default function Topbar({ selectedMonth, months, onMonthChange, health, d
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
     link.setAttribute("href", url);
-    link.setAttribute("download", `community_report_${selectedMonth.replace(/\s+/g, '_')}.csv`);
+    link.setAttribute("download", `community_report_${selectedRunId || 'run'}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
@@ -106,7 +106,14 @@ export default function Topbar({ selectedMonth, months, onMonthChange, health, d
           </button>
           <div>
             <h1 className="text-xl md:text-2xl font-bold text-text-heading">{title}</h1>
-            <p className="text-xs md:text-sm text-muted mt-1 hidden sm:block">{subtitle}</p>
+            <div className="flex items-center gap-2 mt-1">
+              <p className="text-xs md:text-sm text-muted hidden sm:block">{subtitle}</p>
+              {health && (
+                <span className="hidden md:inline-flex items-center rounded-full border border-border bg-panel px-2 py-0.5 text-[10px] font-medium text-muted">
+                  API {health.status}
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
@@ -158,11 +165,17 @@ export default function Topbar({ selectedMonth, months, onMonthChange, health, d
             <div className="flex items-center px-3 py-1.5 gap-2 border-r border-border">
               <Calendar size={16} className="text-muted" />
               <select
-                className="bg-transparent border-none text-sm text-text-heading font-medium focus:outline-none cursor-pointer appearance-none pr-4"
-                value={selectedMonth}
-                onChange={(e) => onMonthChange(e.target.value)}
+                aria-label="Analysis run"
+                className="bg-transparent border-none text-sm text-text-heading font-medium focus:outline-none cursor-pointer appearance-none pr-4 max-w-[18rem]"
+                value={selectedRunId}
+                onChange={(e) => onRunChange(e.target.value)}
+                disabled={runs.length === 0}
               >
-                {months.map(m => <option key={m} value={m}>{m}</option>)}
+                {runs.map((run) => (
+                  <option key={run.run_id} value={run.run_id}>
+                    {formatRunLabel(run)}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -212,9 +225,14 @@ export default function Topbar({ selectedMonth, months, onMonthChange, health, d
             {showAffinity && (
               <div className={`flex items-center px-3 py-1.5 gap-2 hidden md:flex ${showMinSize || showTimeGranularity ? 'border-r border-border' : ''}`}>
                 <Activity size={16} className="text-secondary" />
-                <select className="bg-transparent border-none text-sm text-text-heading font-medium focus:outline-none cursor-pointer appearance-none pr-4">
-                  <option>Affinity Metric: WIF</option>
-                  <option>Affinity Metric: Absolute</option>
+                <select
+                  aria-label="Affinity metric"
+                  className="bg-transparent border-none text-sm text-text-heading font-medium focus:outline-none cursor-pointer appearance-none pr-4"
+                  value={metric}
+                  onChange={(e) => onMetricChange(e.target.value)}
+                >
+                  <option value="if">Affinity Metric: IF</option>
+                  <option value="wif">Affinity Metric: WIF</option>
                 </select>
               </div>
             )}
@@ -262,4 +280,13 @@ export default function Topbar({ selectedMonth, months, onMonthChange, health, d
       )}
     </header>
   );
+}
+
+function formatRunLabel(run) {
+  const platform = run.platform || 'unknown platform';
+  const contentType = run.content_type || 'unknown content';
+  const period = run.year && run.month
+    ? `${run.year}-${String(run.month).padStart(2, '0')}`
+    : run.date_start || 'undated';
+  return `${platform} · ${contentType} · ${period} · ${run.status}`;
 }

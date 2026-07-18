@@ -66,3 +66,7 @@ mlflow.db
 
 *.patch
 modern-web-guidance.md
+frontend/playwright-report/
+frontend/test-results/
+frontend/coverage/
+coverage/

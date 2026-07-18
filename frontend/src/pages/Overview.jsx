@@ -1,4 +1,4 @@
-import { useOutletContext } from 'react-router-dom';
+import { useDashboardContext } from '../hooks/useDashboardContext';
 import KPICards from '../components/KPICards';
 import NetworkGraph from '../components/charts/NetworkGraph';
 import EvolutionChart from '../components/charts/EvolutionChart';
@@ -8,10 +8,12 @@ import DataTable from '../components/DataTable';
 import RightSidebar from '../components/RightSidebar';
 
 export default function Overview() {
-  const { summary, communities } = useOutletContext();
+  const { selectedRunId } = useDashboardContext();
+  const summary = undefined;
+  const communities = undefined;
 
   return (
-    <div className="max-w-[1600px] mx-auto flex flex-col lg:flex-row gap-8">
+    <div data-run-id={selectedRunId || undefined} className="max-w-[1600px] mx-auto flex flex-col lg:flex-row gap-8">
       <div className="flex-1 flex flex-col gap-6 w-full overflow-hidden">
 
         <KPICards summary={summary} />

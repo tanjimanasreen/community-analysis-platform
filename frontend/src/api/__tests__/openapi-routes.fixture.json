@@ -1,0 +1,67 @@
+{
+  "/health": [],
+  "/runs": [
+    "content_type",
+    "month",
+    "platform",
+    "status",
+    "year"
+  ],
+  "/runs/{run_id}": [],
+  "/runs/{run_id}/artifacts": [],
+  "/runs/{run_id}/centrality": [
+    "limit",
+    "offset"
+  ],
+  "/runs/{run_id}/communities": [
+    "limit",
+    "metric",
+    "offset"
+  ],
+  "/runs/{run_id}/communities/{community_id}": [
+    "max_edges",
+    "max_nodes",
+    "metric",
+    "min_weight"
+  ],
+  "/runs/{run_id}/downloads/{artifact_key}": [],
+  "/runs/{run_id}/membership-changes": [],
+  "/runs/{run_id}/network": [
+    "community_id",
+    "max_edges",
+    "max_nodes",
+    "metric",
+    "min_weight"
+  ],
+  "/runs/{run_id}/overview": [],
+  "/runs/{run_id}/persistent-communities": [],
+  "/runs/{run_id}/report": [],
+  "/runs/{run_id}/theme-similarity": [],
+  "/runs/{run_id}/themes": [
+    "community_id",
+    "limit",
+    "month",
+    "offset"
+  ],
+  "/runs/{run_id}/themes/{community_id}": [
+    "limit",
+    "month",
+    "offset"
+  ],
+  "/runs/{run_id}/topics": [
+    "community_id",
+    "limit",
+    "offset",
+    "type"
+  ],
+  "/runs/{run_id}/topics/{community_id}": [
+    "limit",
+    "offset",
+    "type"
+  ],
+  "/runs/{run_id}/transitions": [
+    "limit",
+    "offset"
+  ],
+  "/runs/{run_id}/verification": []
+}

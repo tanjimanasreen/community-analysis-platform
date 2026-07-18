@@ -1,9 +1,7 @@
 import { useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
 import { FileText, Calendar, Download, Users, Search, Filter, MoreHorizontal, ArrowDown, Activity, TrendingUp, Shield, X, Star, ChevronLeft, ChevronRight, Share2, FilePlus, Settings, LayoutGrid } from 'lucide-react';
 
 export default function ReportsPage() {
-  const { summary } = useOutletContext() || {};
 
   const reports = [
     { id: 1, name: 'Community Overview Report', desc: 'Overview of key community metrics', type: 'Overview', dateRange: 'May 1 – May 31, 2024', authorInitials: 'AR', author: 'Aisha Rahman', status: 'Completed', updated: 'May 31, 2024\n10:30 AM', icon: <Activity size={16} />, iconColor: 'text-blue-500', iconBg: 'bg-blue-500/10' },

@@ -1,4 +1,4 @@
-.PHONY: help install install-dev test format lint mlflow-ui db-up db-down db-check validate-config ingest-sample run-network-sample run-topic-sample run-theme-sample run-pipeline-sample run-longitudinal-sample verify-output-contract verify-longitudinal-output-contract api-smoke-test run-api demo demo-api demo-frontend frontend-install frontend-build frontend-lint run-frontend clean-generated clean-cache build-report
+.PHONY: help install install-dev test format lint mlflow-ui db-up db-down db-check validate-config ingest-sample run-network-sample run-topic-sample run-theme-sample run-pipeline-sample run-longitudinal-sample verify-output-contract verify-longitudinal-output-contract api-smoke-test run-api demo demo-api demo-frontend frontend-install frontend-build frontend-lint frontend-typecheck frontend-test frontend-check run-frontend clean-generated clean-cache build-report
 
 PYTHON ?= .venv/bin/python
 PYTHON_BOOTSTRAP ?= python3
@@ -46,6 +46,9 @@ help:
 	@echo "  frontend-install     - Install frontend dependencies"
 	@echo "  frontend-build       - Build the read-only dashboard"
 	@echo "  frontend-lint        - Lint the read-only dashboard"
+	@echo "  frontend-typecheck   - Type-check frontend TypeScript boundaries"
+	@echo "  frontend-test        - Run frontend unit/component tests"
+	@echo "  frontend-check       - Run all frontend quality gates"
 	@echo "  run-frontend         - Start the dashboard dev server"
 	@echo "  clean-generated      - Remove known demo outputs and frontend build output"
 	@echo "  clean-cache          - Remove Python/test/Vite caches and egg-info"
@@ -146,6 +149,15 @@ frontend-build:
 
 frontend-lint:
 	cd frontend && npm run lint
+
+frontend-typecheck:
+	cd frontend && npm run typecheck
+
+frontend-test:
+	cd frontend && npm run test -- --run
+
+frontend-check:
+	cd frontend && npm run check
 
 run-frontend:
 	cd frontend && npm run dev

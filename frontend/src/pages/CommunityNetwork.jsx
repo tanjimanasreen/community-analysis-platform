@@ -1,13 +1,14 @@
-import { useOutletContext } from 'react-router-dom';
+import { useDashboardContext } from '../hooks/useDashboardContext';
 import { Network, Share2, Users, GitCommit, X, ExternalLink } from 'lucide-react';
 import NetworkGraph from '../components/charts/NetworkGraph';
 import NotableCommunitiesTable from '../components/NotableCommunitiesTable';
 
 export default function CommunityNetworkPage() {
-  const { communities } = useOutletContext();
+  const { selectedRunId } = useDashboardContext();
+  const communities = undefined;
 
   return (
-    <div className="flex flex-col gap-6 max-w-[1600px] mx-auto w-full">
+    <div data-run-id={selectedRunId || undefined} className="flex flex-col gap-6 max-w-[1600px] mx-auto w-full">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Metric Cards */}
         <div className="bg-panel border border-border rounded-xl p-4 flex flex-col justify-center">

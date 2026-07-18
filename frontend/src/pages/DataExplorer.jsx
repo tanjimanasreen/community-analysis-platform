@@ -1,9 +1,7 @@
 import { useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
-import { Network, Star, X, Search, ChevronDown, Filter, ChevronLeft, ChevronRight, Settings, Info, MessageCircle, Send, MoreHorizontal, LayoutGrid } from 'lucide-react';
+import { Network, Star, X, Search, ChevronDown, Filter, ChevronLeft, ChevronRight, Settings, Info, MessageCircle, Send, MoreHorizontal, LayoutGrid, ArrowRight } from 'lucide-react';
 
 export default function DataExplorerPage() {
-  const { summary } = useOutletContext() || {};
   const [selectedCommunity, setSelectedCommunity] = useState('C-1124');
 
   const communities = [

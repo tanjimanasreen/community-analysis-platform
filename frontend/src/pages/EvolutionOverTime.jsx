@@ -1,9 +1,7 @@
-import { useOutletContext } from 'react-router-dom';
 import { Users, MessageSquare, ShieldCheck, Calendar, TrendingUp, Shield } from 'lucide-react';
 import EvolutionChart from '../components/charts/EvolutionChart';
 
 export default function EvolutionOverTimePage() {
-  const { summary } = useOutletContext();
 
   return (
     <div className="flex flex-col gap-6 max-w-[1600px] mx-auto w-full">

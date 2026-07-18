@@ -1,8 +1,6 @@
-import { useOutletContext } from 'react-router-dom';
 import { LayoutGrid, Users, Shield, Flame, ExternalLink } from 'lucide-react';
 
 export default function ThematicAnalysisPage() {
-  const { summary } = useOutletContext();
 
   return (
     <div className="flex flex-col gap-6 max-w-[1600px] mx-auto w-full">
