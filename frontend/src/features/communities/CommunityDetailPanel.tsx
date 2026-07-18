@@ -1,4 +1,5 @@
-import { Hash, Network, Tags, X } from 'lucide-react';
+import { BookOpen, Hash, Network, Tags, X } from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
 import { normalizeApiError } from '../../api/errors';
 import type { CommunityDetail, MetricName, ThemeRecord, TopicRecord } from '../../types/api';
 import { formatCount } from '../overview/overviewUtils';
@@ -31,6 +32,7 @@ export default function CommunityDetailPanel({
   onClose,
   onViewNetwork,
 }: CommunityDetailPanelProps) {
+  const location = useLocation();
   if (!communityId) {
     return (
       <aside className="bg-panel border border-border rounded-xl p-6 h-full flex items-center justify-center text-center">
@@ -126,11 +128,18 @@ export default function CommunityDetailPanel({
         )}
       </section>
 
+      <Link
+        to={thematicHref(location.search, metric, communityId)}
+        className="mt-6 flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-panel-soft/40 px-4 py-2.5 text-sm font-semibold text-primary hover:bg-panel-soft"
+      >
+        <BookOpen size={15} /> Open thematic analysis
+      </Link>
+
       {onViewNetwork && (
         <button
           type="button"
           onClick={onViewNetwork}
-          className="mt-6 flex w-full items-center justify-center gap-2 rounded-lg bg-primary/10 px-4 py-2.5 text-sm font-semibold text-primary hover:bg-primary/15"
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-primary/10 px-4 py-2.5 text-sm font-semibold text-primary hover:bg-primary/15"
         >
           <Network size={15} /> View in Network
         </button>
@@ -163,4 +172,13 @@ function CloseButton({ onClick }: { onClick: () => void }) {
       <X size={16} />
     </button>
   );
+}
+
+
+function thematicHref(search: string, metric: MetricName, communityId: string): string {
+  const params = new URLSearchParams(search);
+  params.set('metric', metric);
+  params.set('semanticMetric', metric);
+  params.set('semanticCommunity', communityId);
+  return `/thematic?${params.toString()}`;
 }

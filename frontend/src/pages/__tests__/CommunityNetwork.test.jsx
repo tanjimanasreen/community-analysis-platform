@@ -71,6 +71,10 @@ describe('CommunityNetwork page', () => {
       topicsQuery: query({ records: [] }), themesQuery: query({ records: [] }),
     });
     renderPage('/network?run=run-1&metric=if&community=1');
+    const thematicLink = screen.getByRole('link', { name: 'Open thematic analysis' });
+    expect(thematicLink).toHaveAttribute('href', expect.stringContaining('/thematic?'));
+    expect(thematicLink).toHaveAttribute('href', expect.stringContaining('semanticCommunity=1'));
+    expect(thematicLink).toHaveAttribute('href', expect.stringContaining('semanticMetric=if'));
     fireEvent.click(screen.getByRole('button', { name: 'Clear selected community' }));
     expect(screen.getByTestId('location')).not.toHaveTextContent('community=');
   });

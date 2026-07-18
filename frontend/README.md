@@ -113,3 +113,26 @@ Community identifiers are preserved as strings and IF/WIF identifiers remain
 separate. Semantic enrichment is shown only when an exact metric-aware match is
 available. Artifact downloads use manifest keys, and intermediate artifacts are
 shown as unavailable for download in accordance with the backend contract.
+
+## Semantic analysis route
+
+The Thematic Analysis route is a read-only browser over canonical semantic
+artifacts. Its URL-backed controls are:
+
+- `topicType=matched|partial` for structural IF/WIF community matching;
+- `token=unigram|bigram` for the saved LDA keyword representation;
+- `semanticMetric=both|if|wif` for the display layout;
+- `semanticCommunity=<community_id>` for exact server-side community filtering;
+- `themeMonth=<month>` for filtering monthly theme records only.
+
+The route always presents LDA topics and keyword evidence before downstream
+provider-generated theme labels. Provider/model metadata is rendered exactly as
+reported by the API and no provider is inferred when metadata is missing.
+Theme-frequency summaries are shown only when the complete filtered result fits
+the 500-record safe cap. Theme similarity is rendered only from the saved
+`/theme-similarity` matrix or its manifest-listed report artifacts; the browser
+does not calculate embeddings or run topic/theme generation.
+
+Topic and theme records link to the corresponding IF or WIF community while
+preserving the selected run. Community detail panels provide the reverse link
+back to the semantic route with the exact metric-aware community filter.

@@ -18,5 +18,6 @@ export default defineConfig({
     clearMocks: true,
     restoreMocks: true,
     mockReset: true,
+    maxWorkers: 4,
   },
 })
