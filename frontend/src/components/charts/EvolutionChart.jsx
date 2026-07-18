@@ -2,7 +2,7 @@ import React from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { metricCommunityCount, runDate } from '../../features/overview/overviewUtils';
 
-export default function EvolutionChart({ history, metric, selectedRunDetail }) {
+export default function EvolutionChart({ history = [], metric = 'if', selectedRunDetail }) {
   const chartData = history
     .map(({ run, overview }) => ({
       name: runDate(run).slice(0, 10),
