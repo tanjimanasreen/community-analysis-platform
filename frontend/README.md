@@ -90,3 +90,26 @@ with:
 ```bash
 npm run test:e2e
 ```
+
+## Structural analysis routes
+
+The Network, Top Communities, and Data Explorer routes consume only canonical,
+run-scoped API records:
+
+- **Community Network** requests a bounded graph for the selected `run` and
+  `metric`. Its selected `community` and applied `minWeight` filter are stored in
+  the URL. Degree values shown by the graph are presentation calculations within
+  the returned subgraph, not new thesis metrics. Sampling labels use the API's
+  available and returned counts.
+- **Top Communities** uses server pagination and displays only community ID, node
+  count, edge count, and metric-aware total weight. Sorting is explicitly local
+  to the loaded page because the backend does not expose a sort parameter.
+- **Data Explorer** provides independent modes for communities, centrality,
+  matched topics, partial topics, themes, transitions, and artifacts. Exact
+  community-ID filtering is used only where the endpoint supports it; other
+  filters are labelled “Filter this page.”
+
+Community identifiers are preserved as strings and IF/WIF identifiers remain
+separate. Semantic enrichment is shown only when an exact metric-aware match is
+available. Artifact downloads use manifest keys, and intermediate artifacts are
+shown as unavailable for download in accordance with the backend contract.

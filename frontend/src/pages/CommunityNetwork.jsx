@@ -1,165 +1,242 @@
-import { useDashboardContext } from '../hooks/useDashboardContext';
-import { Network, Share2, Users, GitCommit, X, ExternalLink } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { GitCommit, Network, Share2, SlidersHorizontal, Users } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import NetworkGraph from '../components/charts/NetworkGraph';
 import NotableCommunitiesTable from '../components/NotableCommunitiesTable';
+import ErrorState from '../components/states/ErrorState';
+import LoadingState from '../components/states/LoadingState';
+import CommunityDetailPanel from '../features/communities/CommunityDetailPanel';
+import CentralityTable from '../features/networks/CentralityTable';
+import {
+  averageDegreeInReturnedGraph,
+  parseMinWeight,
+  transformNetworkResponse,
+  updateNetworkSearchParams,
+} from '../features/networks/networkModel';
+import { useNetworkPageData } from '../features/networks/useNetworkPageData';
+import { formatCount } from '../features/overview/overviewUtils';
+import { clampPageOffset, nextPageOffset, previousPageOffset } from '../utils/pagination';
+
+const COMMUNITY_LIMIT = 10;
+const CENTRALITY_LIMIT = 10;
 
 export default function CommunityNetworkPage() {
-  const { selectedRunId } = useDashboardContext();
-  const communities = undefined;
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedCommunityId = searchParams.get('community');
+  const minWeight = parseMinWeight(searchParams.get('minWeight'));
+  const [minWeightDraft, setMinWeightDraft] = useState(String(minWeight));
+  const [communityOffset, setCommunityOffset] = useState(0);
+  const [centralityOffset, setCentralityOffset] = useState(0);
+  const [selectedNode, setSelectedNode] = useState(null);
+
+  const data = useNetworkPageData({
+    communityId: selectedCommunityId,
+    minWeight,
+    communityOffset,
+    communityLimit: COMMUNITY_LIMIT,
+    centralityOffset,
+    centralityLimit: CENTRALITY_LIMIT,
+  });
+  const {
+    selectedRunId,
+    metric,
+    networkQuery,
+    communitiesQuery,
+    centralityQuery,
+    detailQuery,
+    topicsQuery,
+    themesQuery,
+  } = data;
+
+  useEffect(() => {
+    setMinWeightDraft(String(minWeight));
+  }, [minWeight]);
+
+  useEffect(() => {
+    const response = communitiesQuery.data;
+    if (!response) return;
+    const safeOffset = clampPageOffset(communityOffset, response.total, response.limit);
+    if (safeOffset !== communityOffset) setCommunityOffset(safeOffset);
+  }, [communitiesQuery.data, communityOffset]);
+
+  useEffect(() => {
+    const response = centralityQuery.data;
+    if (!response) return;
+    const safeOffset = clampPageOffset(centralityOffset, response.total, response.limit);
+    if (safeOffset !== centralityOffset) setCentralityOffset(safeOffset);
+  }, [centralityOffset, centralityQuery.data]);
+
+  const graphData = useMemo(
+    () => transformNetworkResponse(networkQuery.data, selectedCommunityId),
+    [networkQuery.data, selectedCommunityId],
+  );
+  const averageDegree = averageDegreeInReturnedGraph(graphData);
+
+  const selectCommunity = (communityId) => {
+    setSelectedNode(null);
+    setSearchParams(updateNetworkSearchParams(searchParams, { communityId }));
+  };
+  const clearCommunity = () => {
+    setSearchParams(updateNetworkSearchParams(searchParams, { communityId: null }));
+  };
+  const applyMinWeight = (event) => {
+    event.preventDefault();
+    setSearchParams(updateNetworkSearchParams(searchParams, {
+      minWeight: parseMinWeight(minWeightDraft),
+    }));
+  };
 
   return (
     <div data-run-id={selectedRunId || undefined} className="flex flex-col gap-6 max-w-[1600px] mx-auto w-full">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Metric Cards */}
-        <div className="bg-panel border border-border rounded-xl p-4 flex flex-col justify-center">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-500">
-              <Network size={20} />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-muted">Total Nodes</p>
-              <h3 className="text-2xl font-bold text-text-heading">12,458</h3>
-            </div>
-          </div>
-          <p className="text-xs text-muted">Unique accounts</p>
+      <div className="flex flex-col gap-4 rounded-xl border border-border bg-panel p-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-text-heading">Community Network</h1>
+          <p className="mt-1 text-sm text-muted">Bounded, run-scoped interaction graph using the selected {metric.toUpperCase()} metric.</p>
         </div>
-        <div className="bg-panel border border-border rounded-xl p-4 flex flex-col justify-center">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center text-purple-500">
-              <Share2 size={20} />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-muted">Total Edges</p>
-              <h3 className="text-2xl font-bold text-text-heading">78,932</h3>
-            </div>
-          </div>
-          <p className="text-xs text-muted">Connections</p>
+        <form onSubmit={applyMinWeight} className="flex flex-col gap-2 sm:flex-row sm:items-end">
+          <label className="text-xs font-semibold text-text-heading">
+            Minimum edge weight
+            <input
+              type="number"
+              min="0"
+              step="any"
+              value={minWeightDraft}
+              onChange={(event) => setMinWeightDraft(event.target.value)}
+              className="mt-1 w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-text-heading sm:w-44"
+            />
+          </label>
+          <button
+            type="submit"
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90"
+          >
+            <SlidersHorizontal size={15} /> Apply
+          </button>
+        </form>
+      </div>
+
+      {networkQuery.isPending || communitiesQuery.isPending ? (
+        <LoadingState title="Loading structural network data" />
+      ) : communitiesQuery.error ? (
+        <ErrorState
+          error={communitiesQuery.error}
+          title="Communities could not be loaded"
+          onRetry={() => void communitiesQuery.refetch()}
+        />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
+          <MetricSummary icon={Network} label="Available nodes" value={formatCount(networkQuery.data?.available_nodes ?? 0)} help="Nodes after the current minimum-weight filter, before graph caps." />
+          <MetricSummary icon={Share2} label="Available edges" value={formatCount(networkQuery.data?.available_edges ?? 0)} help="Edges after the current minimum-weight filter, before graph caps." />
+          <MetricSummary icon={Users} label={`${metric.toUpperCase()} communities`} value={formatCount(communitiesQuery.data?.total ?? 0)} help="Community count from the selected metric partition." />
+          <MetricSummary
+            icon={Share2}
+            label="Returned graph"
+            value={`${formatCount(networkQuery.data?.returned_nodes ?? 0)} / ${formatCount(networkQuery.data?.returned_edges ?? 0)}`}
+            help="Returned nodes / returned edges after bounded API limits."
+          />
+          <MetricSummary
+            icon={GitCommit}
+            label="Average degree in returned graph"
+            value={averageDegree === null ? 'Unavailable' : formatCount(averageDegree)}
+            help={`${formatCount(networkQuery.data?.returned_nodes ?? 0)} returned nodes / ${formatCount(networkQuery.data?.returned_edges ?? 0)} returned edges.`}
+          />
         </div>
-        <div className="bg-panel border border-border rounded-xl p-4 flex flex-col justify-center">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center text-green-500">
-              <Users size={20} />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-muted">Detected Communities</p>
-              <h3 className="text-2xl font-bold text-text-heading">32</h3>
-            </div>
-          </div>
-          <p className="text-xs text-muted">Communities</p>
+      )}
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 min-h-[650px]">
+        <div className="xl:col-span-2 min-h-[520px]">
+          <NetworkGraph
+            network={networkQuery.data}
+            metric={metric}
+            selectedCommunityId={selectedCommunityId}
+            isLoading={networkQuery.isPending}
+            error={networkQuery.error}
+            onRetry={() => void networkQuery.refetch()}
+            onSelectCommunity={selectCommunity}
+            onSelectNode={setSelectedNode}
+            onClearSelection={clearCommunity}
+            height={500}
+          />
         </div>
-        <div className="bg-panel border border-border rounded-xl p-4 flex flex-col justify-center">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-lg bg-orange-500/10 flex items-center justify-center text-orange-500">
-              <GitCommit size={20} />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-muted">Average Degree</p>
-              <h3 className="text-2xl font-bold text-text-heading">12.68</h3>
-            </div>
-          </div>
-          <p className="text-xs text-muted">Connections per node</p>
+        <div className="min-h-[520px]">
+          {selectedNode && !selectedCommunityId && selectedNode.communityIds.length === 0 ? (
+            <NodeDetail node={selectedNode} onClose={() => setSelectedNode(null)} />
+          ) : (
+            <CommunityDetailPanel
+              communityId={selectedCommunityId}
+              metric={metric}
+              detail={detailQuery.data}
+              detailPending={detailQuery.isPending}
+              detailError={detailQuery.error}
+              themes={themesQuery.data?.records}
+              themesError={themesQuery.error}
+              topics={topicsQuery.data?.records}
+              topicsError={topicsQuery.error}
+              onClose={clearCommunity}
+            />
+          )}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 lg:h-[600px]">
-        <div className="xl:col-span-2 h-[400px] lg:h-full">
-          <NetworkGraph communities={communities} />
-        </div>
-        <div className="bg-panel border border-border rounded-xl p-6 lg:h-full flex flex-col overflow-y-auto">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-lg font-bold text-text-heading flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-purple-500"></span> Selected Community
-            </h3>
-            <button className="text-muted hover:text-text-heading"><X size={16} /></button>
-          </div>
+      {communitiesQuery.isPending ? (
+        <LoadingState title="Loading communities" />
+      ) : communitiesQuery.error ? (
+        <ErrorState error={communitiesQuery.error} title="Community table could not be loaded" onRetry={() => void communitiesQuery.refetch()} />
+      ) : (
+        <NotableCommunitiesTable
+          response={communitiesQuery.data}
+          metric={metric}
+          selectedCommunityId={selectedCommunityId}
+          onSelectCommunity={selectCommunity}
+          onPrevious={() => setCommunityOffset(previousPageOffset(communityOffset, COMMUNITY_LIMIT))}
+          onNext={() => setCommunityOffset(nextPageOffset(communityOffset, communitiesQuery.data?.total ?? 0, COMMUNITY_LIMIT))}
+        />
+      )}
 
-          <div className="flex items-center gap-4 mb-6">
-            <div className="w-14 h-14 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400">
-              <Users size={24} />
-            </div>
-            <div>
-              <h4 className="text-xl font-bold text-text-heading">Personal Support</h4>
-              <p className="text-sm text-muted">Community ID: C-1124</p>
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-3 text-sm flex-1">
-            <div className="flex justify-between border-b border-border/50 pb-2">
-              <span className="text-muted">Theme</span>
-              <span className="px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 font-medium text-xs">Personal Support</span>
-            </div>
-            <div className="flex justify-between border-b border-border/50 pb-2">
-              <span className="text-muted">Primary Platform</span>
-              <span className="text-text-heading flex items-center gap-2">
-                <span className="text-primary text-base leading-none">✈</span> Telegram
-              </span>
-            </div>
-            <div className="flex justify-between border-b border-border/50 pb-2">
-              <span className="text-muted">Size (Nodes)</span>
-              <span className="text-text-heading font-medium">1,892</span>
-            </div>
-            <div className="flex justify-between border-b border-border/50 pb-2">
-              <span className="text-muted">Persistence Score (WIF)</span>
-              <span className="text-text-heading font-medium flex items-center gap-2">
-                0.82 <span className="text-success text-xs font-medium">↑ 15.3%</span>
-              </span>
-            </div>
-            <div className="flex justify-between pb-2">
-              <span className="text-muted">Total Messages</span>
-              <span className="text-text-heading font-medium">320,154 <span className="text-muted font-normal text-xs ml-1">18.6% of total</span></span>
-            </div>
-
-            <div className="mt-4 border-t border-border/50 pt-4">
-              <p className="text-sm font-bold text-text-heading mb-3">Platform Mix</p>
-              <div className="h-3 rounded-full bg-panel-soft flex overflow-hidden">
-                <div className="h-full bg-purple-500" style={{ width: '72%' }}></div>
-                <div className="h-full bg-blue-500" style={{ width: '18%' }}></div>
-                <div className="h-full bg-gray-500" style={{ width: '10%' }}></div>
-              </div>
-              <div className="flex justify-between mt-3 text-xs text-muted font-medium">
-                <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-purple-500"></span> Telegram 72%</span>
-                <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-blue-500"></span> Twitter/X 18%</span>
-                <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-gray-500"></span> Other 10%</span>
-              </div>
-            </div>
-
-            <div className="mt-6">
-              <p className="text-sm font-bold text-text-heading mb-3">Top Linked Communities</p>
-              <div className="flex flex-col gap-3">
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-3">
-                    <div className="w-5 h-5 rounded-full border border-purple-500/30 text-purple-500 flex items-center justify-center text-[10px] font-bold">1</div>
-                    <span className="text-text-heading">Current Events (C-0789)</span>
-                  </div>
-                  <span className="font-bold">0.74</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-3">
-                    <div className="w-5 h-5 rounded-full border border-blue-500/30 text-blue-500 flex items-center justify-center text-[10px] font-bold">2</div>
-                    <span className="text-text-heading">News Discussion (C-0312)</span>
-                  </div>
-                  <span className="font-bold">0.62</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-3">
-                    <div className="w-5 h-5 rounded-full border border-green-500/30 text-green-500 flex items-center justify-center text-[10px] font-bold">3</div>
-                    <span className="text-text-heading">Civic Discourse (C-0561)</span>
-                  </div>
-                  <span className="font-bold">0.58</span>
-                </div>
-              </div>
-            </div>
-
-            <button className="w-full mt-6 flex items-center justify-center gap-2 py-2.5 border border-border rounded-lg text-sm font-semibold text-primary hover:bg-panel-soft transition-colors">
-              View Community Details <ExternalLink size={14} />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div>
-        <NotableCommunitiesTable />
-      </div>
+      {centralityQuery.isPending ? (
+        <LoadingState title="Loading centrality artifact" />
+      ) : centralityQuery.error ? (
+        <ErrorState error={centralityQuery.error} title="Centrality data could not be loaded" onRetry={() => void centralityQuery.refetch()} />
+      ) : (
+        <CentralityTable
+          response={centralityQuery.data}
+          onPrevious={() => setCentralityOffset(previousPageOffset(centralityOffset, CENTRALITY_LIMIT))}
+          onNext={() => setCentralityOffset(nextPageOffset(centralityOffset, centralityQuery.data?.total ?? 0, CENTRALITY_LIMIT))}
+        />
+      )}
     </div>
+  );
+}
+
+function MetricSummary({ icon: Icon, label, value, help }) {
+  return (
+    <section className="bg-panel border border-border rounded-xl p-4">
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary"><Icon size={20} /></div>
+        <div>
+          <p className="text-sm font-medium text-muted">{label}</p>
+          <p className="text-2xl font-bold text-text-heading">{value}</p>
+        </div>
+      </div>
+      <p className="mt-2 text-xs text-muted">{help}</p>
+    </section>
+  );
+}
+
+function NodeDetail({ node, onClose }) {
+  return (
+    <aside className="h-full rounded-xl border border-border bg-panel p-6">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted">Selected node</p>
+          <h2 className="mt-2 break-all text-xl font-bold text-text-heading">{node.id}</h2>
+        </div>
+        <button type="button" onClick={onClose} className="rounded border border-border px-2 py-1 text-xs text-muted hover:bg-panel-soft">Clear</button>
+      </div>
+      <dl className="mt-6 grid grid-cols-2 gap-4 text-sm">
+        <div><dt className="text-xs text-muted">In-degree within returned graph</dt><dd className="mt-1 font-semibold text-text-heading">{node.inDegree}</dd></div>
+        <div><dt className="text-xs text-muted">Out-degree within returned graph</dt><dd className="mt-1 font-semibold text-text-heading">{node.outDegree}</dd></div>
+      </dl>
+      <p className="mt-6 rounded-lg border border-border bg-panel-soft/40 p-3 text-sm text-muted">This node has no community ID in the returned bounded graph, so no community was inferred.</p>
+    </aside>
   );
 }

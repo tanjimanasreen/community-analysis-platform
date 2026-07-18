@@ -1,104 +1,113 @@
-import { MoreHorizontal } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight } from 'lucide-react';
+import { formatCount } from '../features/overview/overviewUtils';
+import { sortCommunityPage } from '../features/communities/communityUtils';
+import { pageRange } from '../utils/pagination';
 
-export default function NotableCommunitiesTable() {
-  const data = [
-    { rank: 1, id: 'C-1124', theme: 'Personal Support', themeColor: '#bb9af7', platform: 'Telegram', size: 1892, messages: 320154, persistence: 0.82, trend: 15.3, avgDegree: 13.4, topLinked: 'Current Events (C-0789)', linkStrength: 0.74, starred: true },
-    { rank: 2, id: 'C-0789', theme: 'Current Events', themeColor: '#7aa2f7', platform: 'Twitter/X', size: 2145, messages: 410982, persistence: 0.63, trend: 8.7, avgDegree: 14.1, topLinked: 'Personal Support (C-1124)', linkStrength: 0.74, starred: false },
-    { rank: 3, id: 'C-0561', theme: 'Civic Discourse', themeColor: '#9ece6a', platform: 'Telegram', size: 1768, messages: 210443, persistence: 0.74, trend: 12.1, avgDegree: 11.8, topLinked: 'Education (C-0098)', linkStrength: 0.58, starred: false },
-    { rank: 4, id: 'C-0312', theme: 'News Discussion', themeColor: '#e0af68', platform: 'Twitter/X', size: 1216, messages: 198765, persistence: 0.58, trend: -3.6, avgDegree: 10.6, topLinked: 'Current Events (C-0789)', linkStrength: 0.62, starred: false },
-    { rank: 5, id: 'C-0098', theme: 'Education', themeColor: '#2ac3de', platform: 'Telegram', size: 1642, messages: 156332, persistence: 0.69, trend: 5.4, avgDegree: 11.2, topLinked: 'Civic Discourse (C-0561)', linkStrength: 0.58, starred: false },
-    { rank: 6, id: 'C-1433', theme: 'Emotional Topics', themeColor: '#f7768e', platform: 'Twitter/X', size: 1431, messages: 142781, persistence: 0.61, trend: 2.8, avgDegree: 9.9, topLinked: 'Personal Support (C-1124)', linkStrength: 0.49, starred: false },
-  ];
+const columns = [
+  ['community_id', 'Community ID'],
+  ['node_count', 'Nodes'],
+  ['edge_count', 'Edges'],
+  ['total_weight', 'Total weight'],
+];
+
+export default function NotableCommunitiesTable({
+  response,
+  metric,
+  selectedCommunityId,
+  onSelectCommunity,
+  onPrevious,
+  onNext,
+}) {
+  const [sortKey, setSortKey] = useState('total_weight');
+  const [sortDirection, setSortDirection] = useState('desc');
+  const rows = useMemo(
+    () => sortCommunityPage(response?.communities ?? [], sortKey, sortDirection),
+    [response?.communities, sortDirection, sortKey],
+  );
+  const offset = response?.offset ?? 0;
+  const limit = response?.limit ?? rows.length;
+  const total = response?.total ?? 0;
+
+  const handleSort = (key) => {
+    if (sortKey === key) {
+      setSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'));
+      return;
+    }
+    setSortKey(key);
+    setSortDirection(key === 'community_id' ? 'asc' : 'desc');
+  };
 
   return (
-    <div className="bg-panel border border-border rounded-xl flex flex-col overflow-hidden">
-      <div className="flex items-center justify-between p-5 border-b border-border">
-        <h2 className="text-lg font-bold text-text-heading flex items-center gap-2">
-          Notable Communities
-          <div className="w-4 h-4 rounded-full border border-border flex items-center justify-center text-muted text-[10px] cursor-help">
-            i
-          </div>
-        </h2>
+    <section className="bg-panel border border-border rounded-xl overflow-hidden">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-5 py-4 border-b border-border">
+        <div>
+          <h2 className="text-sm font-bold text-text-heading">Communities · {metric.toUpperCase()}</h2>
+          <p className="mt-1 text-[11px] text-muted">Sorting applies to this loaded page only.</p>
+        </div>
+        <span className="text-xs text-muted">{pageRange(offset, limit, total)}</span>
       </div>
-
-      <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse min-w-[1200px]">
-          <thead>
-            <tr className="border-b border-border bg-panel-soft/50 text-xs text-muted font-semibold">
-              <th className="px-5 py-3 font-medium">Rank</th>
-              <th className="px-5 py-3 font-medium">Community ID</th>
-              <th className="px-5 py-3 font-medium">Theme</th>
-              <th className="px-5 py-3 font-medium">Primary Platform</th>
-              <th className="px-5 py-3 font-medium">Size (Nodes)</th>
-              <th className="px-5 py-3 font-medium">Messages (May)</th>
-              <th className="px-5 py-3 font-medium">Persistence (WIF)</th>
-              <th className="px-5 py-3 font-medium">Trend (vs Apr)</th>
-              <th className="px-5 py-3 font-medium">Avg Degree</th>
-              <th className="px-5 py-3 font-medium">Top Linked Community</th>
-              <th className="px-5 py-3 font-medium">Link Strength</th>
-            </tr>
-          </thead>
-          <tbody className="text-sm">
-            {data.map((row, i) => {
-              const isPositive = row.trend > 0;
-              return (
-                <tr key={i} className="border-b border-border/50 hover:bg-panel-soft/30 transition-colors">
-                  <td className="px-5 py-3 font-medium flex items-center gap-2 text-muted">
-                    {row.rank}
-                    <span className={row.starred ? "text-warning" : "text-muted/30"}>
-                      {row.starred ? "★" : "☆"}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3 font-medium text-text-heading">
-                    {row.id}
-                  </td>
-                  <td className="px-5 py-3">
-                    <div className="flex items-center gap-2 text-muted">
-                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: row.themeColor }}></span>
-                      <span className="text-text-heading">{row.theme}</span>
-                    </div>
-                  </td>
-                  <td className="px-5 py-3 text-muted">
-                    <div className="flex items-center gap-1.5">
-                      {row.platform === 'Twitter/X' ? (
-                        <span className="font-bold text-text-heading">𝕏</span>
-                      ) : (
-                        <span className="text-primary text-base">✈</span>
-                      )}
-                      <span className="text-text-heading">{row.platform}</span>
-                    </div>
-                  </td>
-                  <td className="px-5 py-3 text-muted">{row.size.toLocaleString()}</td>
-                  <td className="px-5 py-3 text-muted">{row.messages.toLocaleString()}</td>
-                  <td className="px-5 py-3 text-muted">{row.persistence}</td>
-                  <td className="px-5 py-3">
-                    <div className="flex items-center gap-2">
-                      <span className={`flex items-center gap-1 font-medium ${isPositive ? 'text-success' : 'text-danger'} w-14`}>
-                        {isPositive ? '↑' : '↓'} {Math.abs(row.trend)}%
-                      </span>
-                      <svg width="30" height="15" viewBox="0 0 40 15" className="opacity-80">
-                        {isPositive ? (
-                          <path d="M0 12 Q 5 12, 10 8 T 20 8 T 30 2 T 40 0" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-success" />
-                        ) : (
-                          <path d="M0 2 Q 5 2, 10 6 T 20 6 T 30 12 T 40 15" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-danger" />
-                        )}
-                      </svg>
-                    </div>
-                  </td>
-                  <td className="px-5 py-3 text-muted">{row.avgDegree}</td>
-                  <td className="px-5 py-3 text-muted">{row.topLinked}</td>
-                  <td className="px-5 py-3 text-text-heading font-medium">{row.linkStrength}</td>
+      {rows.length === 0 ? (
+        <div className="p-8 text-center" aria-live="polite">
+          <p className="font-semibold text-text-heading">No communities available</p>
+          <p className="mt-2 text-sm text-muted">The selected metric returned no community records on this page.</p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className="border-b border-border bg-panel-soft/40 text-muted">
+                {columns.map(([key, label]) => (
+                  <th key={key} className="px-5 py-3 font-semibold">
+                    <button
+                      type="button"
+                      onClick={() => handleSort(key)}
+                      className="inline-flex items-center gap-1 hover:text-text-heading"
+                    >
+                      {label}
+                      {sortKey === key && (sortDirection === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
+                    </button>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr
+                  key={row.community_id}
+                  onClick={() => onSelectCommunity(row.community_id)}
+                  className={`cursor-pointer border-b border-border/40 transition-colors hover:bg-panel-soft/40 ${selectedCommunityId === row.community_id ? 'bg-primary/10' : ''}`}
+                >
+                  <td className="px-5 py-3 font-semibold text-text-heading">{row.community_id}</td>
+                  <td className="px-5 py-3 text-muted">{formatCount(row.node_count)}</td>
+                  <td className="px-5 py-3 text-muted">{formatCount(row.edge_count)}</td>
+                  <td className="px-5 py-3 text-muted">{formatCount(row.total_weight)}</td>
                 </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
-      <div className="p-3 flex justify-center mt-2 border-t border-border">
-        <button className="text-sm text-primary font-medium hover:text-primary/80 transition-colors flex items-center gap-1">
-          View all communities <span className="text-xs">↓</span>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-border">
+        <button
+          type="button"
+          aria-label="Previous community page"
+          disabled={offset <= 0}
+          onClick={onPrevious}
+          className="rounded-md border border-border p-1.5 text-muted hover:bg-panel-soft disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <ChevronLeft size={15} />
+        </button>
+        <button
+          type="button"
+          aria-label="Next community page"
+          disabled={offset + limit >= total}
+          onClick={onNext}
+          className="rounded-md border border-border p-1.5 text-muted hover:bg-panel-soft disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <ChevronRight size={15} />
         </button>
       </div>
-    </div>
+    </section>
   );
 }
