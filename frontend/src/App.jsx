@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Routes, Route, Outlet, BrowserRouter } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import Topbar from './components/Topbar';
@@ -104,6 +104,8 @@ function DashboardLayout() {
     selectedRunId,
     metric,
     health,
+    selectedRun,
+    verification,
     setSelectedRunId,
     setMetric,
   } = useDashboardContext();
@@ -130,8 +132,17 @@ function DashboardLayout() {
 
   return (
     <div className="flex h-screen w-full bg-bg overflow-hidden text-text font-sans">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[70] focus:rounded-lg focus:bg-primary focus:px-4 focus:py-2 focus:text-white"
+      >
+        Skip to main content
+      </a>
+
       {!isSidebarCollapsed && (
-        <div
+        <button
+          type="button"
+          aria-label="Close navigation"
           className="fixed inset-0 bg-black/50 z-40 lg:hidden"
           onClick={() => setIsSidebarCollapsed(true)}
         />
@@ -140,6 +151,11 @@ function DashboardLayout() {
       <Sidebar
         isCollapsed={isSidebarCollapsed}
         toggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+        onNavigate={() => {
+          if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+            setIsSidebarCollapsed(true);
+          }
+        }}
       />
 
       <div className="flex-1 flex flex-col transition-all duration-300 overflow-hidden relative w-full">
@@ -153,10 +169,12 @@ function DashboardLayout() {
           metric={metric}
           onMetricChange={setMetric}
           health={health}
+          selectedRun={selectedRun}
+          verification={verification}
           toggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
         />
 
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 z-10 w-full overflow-x-hidden">
+        <main id="main-content" tabIndex={-1} className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 z-10 w-full overflow-x-hidden">
           <DashboardContent />
         </main>
       </div>

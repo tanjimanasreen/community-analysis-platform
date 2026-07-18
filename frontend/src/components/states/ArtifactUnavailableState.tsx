@@ -1,11 +1,16 @@
 import { FileQuestion } from 'lucide-react';
+import type { ReactNode } from 'react';
 
 interface ArtifactUnavailableStateProps {
   artifactName?: string;
+  message?: string;
+  action?: ReactNode;
 }
 
 export default function ArtifactUnavailableState({
   artifactName = 'This optional artifact',
+  message,
+  action,
 }: ArtifactUnavailableStateProps) {
   return (
     <section
@@ -14,12 +19,11 @@ export default function ArtifactUnavailableState({
     >
       <div className="max-w-md text-center">
         <FileQuestion className="mx-auto text-muted" size={30} />
-        <h2 className="mt-4 text-lg font-semibold text-text-heading">
-          Artifact not generated
-        </h2>
+        <h2 className="mt-4 text-lg font-semibold text-text-heading">Artifact not generated</h2>
         <p className="mt-2 text-sm text-muted">
-          {artifactName} is not available for the selected run.
+          {message || `${artifactName} is not available for the selected run.`}
         </p>
+        {action && <div className="mt-4 text-sm">{action}</div>}
       </div>
     </section>
   );

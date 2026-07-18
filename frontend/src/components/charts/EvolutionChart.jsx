@@ -1,67 +1,91 @@
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import React from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { metricCommunityCount, runDate } from '../../features/overview/overviewUtils';
 
-export default function EvolutionChart({ data, title }) {
-  // Use mock data matching the mockup if real data isn't structured appropriately yet
-  const chartData = [
-    { name: 'May 1', total: 500, twitter: 300, telegram: 200 },
-    { name: 'May 6', total: 1100, twitter: 700, telegram: 400 },
-    { name: 'May 11', total: 1000, twitter: 600, telegram: 400 },
-    { name: 'May 16', total: 1500, twitter: 900, telegram: 600 },
-    { name: 'May 21', total: 1400, twitter: 800, telegram: 600 },
-    { name: 'May 26', total: 1200, twitter: 700, telegram: 500 },
-    { name: 'May 31', total: 1248, twitter: 742, telegram: 506 },
-  ];
+export default function EvolutionChart({ history, metric, selectedRunDetail }) {
+  const chartData = history
+    .map(({ run, overview }) => ({
+      name: runDate(run).slice(0, 10),
+      communities: metricCommunityCount(overview, metric),
+      users: overview.total_users,
+      messages: overview.total_messages,
+      runId: run.run_id,
+    }))
+    .filter((item) => item.communities !== null);
 
-  const CustomTooltip = ({ active, payload, label }) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-panel border border-border p-3 rounded-lg shadow-xl text-sm z-50">
-          <p className="font-bold mb-2 text-text-heading">{label}</p>
-          {payload.map((entry, index) => (
-            <p key={`item-${index}`} style={{ color: entry.color }} className="flex justify-between gap-4 font-medium">
-              <span>{entry.name}:</span>
-              <span>{entry.value}</span>
-            </p>
-          ))}
-        </div>
-      );
-    }
-    return null;
-  };
+  if (chartData.length < 2) {
+    return <RunConfigurationPanel selectedRunDetail={selectedRunDetail} />;
+  }
 
   return (
-    <div className="bg-panel border border-border rounded-xl p-5 flex flex-col h-full">
-      <div className="flex justify-between items-center mb-6">
-        <h3 className="text-sm font-bold text-text-heading flex items-center gap-2">
-          {title || "Evolution Over Time"}
-          <div className="w-4 h-4 rounded-full border border-border flex items-center justify-center text-muted text-[10px] cursor-help">
-            i
-          </div>
-        </h3>
-        <select className="bg-transparent border border-border rounded-lg text-xs text-text-heading font-medium focus:outline-none cursor-pointer py-1 px-2">
-          <option>Day</option>
-          <option>Week</option>
-          <option>Month</option>
-        </select>
+    <section className="bg-panel border border-border rounded-xl p-5 flex flex-col h-full">
+      <div className="mb-6">
+        <h3 className="text-sm font-bold text-text-heading">Compatible Run History</h3>
+        <p className="text-xs text-muted mt-1">Separate completed runs with matching platform and content type; not a continuous dynamic model.</p>
       </div>
-
       <div className="flex-grow w-full min-h-[250px]">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart
-            data={chartData}
-            margin={{ top: 5, right: 10, left: -20, bottom: 5 }}
-          >
+          <LineChart data={chartData} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
             <XAxis dataKey="name" stroke="var(--color-muted)" fontSize={11} tickLine={false} axisLine={false} />
-            <YAxis stroke="var(--color-muted)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(val) => val >= 1000000 ? `${(val/1000000).toFixed(1)}M` : val >= 1000 ? `${(val/1000).toFixed(1)}K` : val} />
-            <Tooltip content={<CustomTooltip />} />
-            <Legend iconType="circle" wrapperStyle={{ fontSize: '11px', color: 'var(--color-muted)', top: -10 }} verticalAlign="top" align="left" />
-            <Line type="monotone" dataKey="total" name="Total (Both)" stroke="var(--color-primary)" strokeWidth={2} dot={false} activeDot={{ r: 5 }} />
-            <Line type="monotone" dataKey="twitter" name="Twitter/X" stroke="#38bdf8" strokeWidth={2} dot={false} activeDot={{ r: 5 }} />
-            <Line type="monotone" dataKey="telegram" name="Telegram" stroke="var(--color-secondary)" strokeWidth={2} dot={false} activeDot={{ r: 5 }} />
+            <YAxis stroke="var(--color-muted)" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} />
+            <Tooltip content={<HistoryTooltip metric={metric} />} />
+            <Line
+              type="monotone"
+              dataKey="communities"
+              name={`${metric.toUpperCase()} communities`}
+              stroke="var(--color-primary)"
+              strokeWidth={2}
+              dot={{ r: 3 }}
+              activeDot={{ r: 5 }}
+              connectNulls={false}
+            />
           </LineChart>
         </ResponsiveContainer>
       </div>
+    </section>
+  );
+}
+
+function HistoryTooltip({ active, payload, label, metric }) {
+  if (!active || !payload?.length) return null;
+  const point = payload[0].payload;
+  return (
+    <div className="bg-panel border border-border p-3 rounded-lg shadow-xl text-xs">
+      <p className="font-bold text-text-heading">{label}</p>
+      <p className="mt-2 text-muted">{metric.toUpperCase()} communities: <span className="text-text-heading">{point.communities}</span></p>
+      <p className="text-muted">Users: <span className="text-text-heading">{point.users ?? 'Unavailable'}</span></p>
+      <p className="text-muted">Messages: <span className="text-text-heading">{point.messages ?? 'Unavailable'}</span></p>
+      <p className="mt-1 font-mono text-[10px] text-muted">{point.runId}</p>
     </div>
+  );
+}
+
+function RunConfigurationPanel({ selectedRunDetail }) {
+  const pipeline = selectedRunDetail?.pipeline ?? {};
+  const dataset = selectedRunDetail?.dataset ?? {};
+  const entries = [
+    ['Platform', dataset.platform],
+    ['Content type', dataset.content_type],
+    ['Date start', dataset.date_start],
+    ['Date end', dataset.date_end],
+    ['Completed at', pipeline.completed_at],
+    ['Artifact count', selectedRunDetail?.artifact_count],
+  ].filter(([, value]) => value !== null && value !== undefined);
+
+  return (
+    <section className="bg-panel border border-border rounded-xl p-5 flex flex-col h-full min-h-[300px]">
+      <h3 className="text-sm font-bold text-text-heading">Run Configuration</h3>
+      <p className="mt-1 text-xs text-muted">At least two compatible completed runs are required for a run-history chart.</p>
+      <dl className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {entries.map(([label, value]) => (
+          <div key={label} className="rounded-lg border border-border bg-panel-soft/50 p-3">
+            <dt className="text-xs text-muted">{label}</dt>
+            <dd className="mt-1 text-sm font-semibold text-text-heading break-words">{String(value)}</dd>
+          </div>
+        ))}
+        {entries.length === 0 && <p className="text-sm text-muted">Configuration metadata is unavailable for this run.</p>}
+      </dl>
+    </section>
   );
 }

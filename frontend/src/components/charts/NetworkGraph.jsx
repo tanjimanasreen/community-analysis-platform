@@ -1,119 +1,146 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
+import { Maximize2, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react';
+import ArtifactStatusBadge from '../ArtifactStatusBadge';
+import ErrorState from '../states/ErrorState';
+import LoadingState from '../states/LoadingState';
+import { formatCount } from '../../features/overview/overviewUtils';
 
-export default function NetworkGraph({ communities }) {
+export default function NetworkGraph({ network, metric, isLoading, error, onRetry }) {
   const containerRef = useRef(null);
-  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
-  const [graphData, setGraphData] = useState({ nodes: [], links: [] });
+  const graphRef = useRef(null);
+  const [dimensions, setDimensions] = useState({ width: 0, height: 320 });
 
   useEffect(() => {
-    // Resize observer to make the graph responsive
-    const observeTarget = containerRef.current;
-    if (!observeTarget) return;
-
-    const resizeObserver = new ResizeObserver((entries) => {
-      for (let entry of entries) {
-        setDimensions({
-          width: entry.contentRect.width,
-          height: entry.contentRect.height
-        });
-      }
+    const target = containerRef.current;
+    if (!target) return undefined;
+    const update = (width, height) => setDimensions({
+      width: Math.max(width, 320),
+      height: Math.max(height, 320),
     });
-
-    resizeObserver.observe(observeTarget);
-    return () => resizeObserver.disconnect();
-  }, []);
-
-  useEffect(() => {
-    // Generate mock graph data for the network visualization
-    const N = 120; // nodes
-    const colors = ['#7aa2f7', '#bb9af7', '#9ece6a', '#e0af68', '#f7768e', '#ff9e64', '#a9b1d6'];
-
-    // Create clusters
-    const nodes = Array.from({ length: N }).map((_, i) => ({
-      id: i,
-      group: Math.floor(i / (N / 6)),
-      color: colors[Math.floor(i / (N / 6)) % colors.length],
-      val: Math.random() * 5 + 1 // size
-    }));
-
-    // Create links between nodes in the same cluster mainly, some cross-cluster
-    const links = [];
-    for (let i = 0; i < N; i++) {
-      const numLinks = Math.floor(Math.random() * 3) + 1;
-      for (let j = 0; j < numLinks; j++) {
-        // 80% chance to link within same group
-        const targetGroup = Math.random() > 0.2 ? nodes[i].group : Math.floor(Math.random() * 6);
-        const groupNodes = nodes.filter(n => n.group === targetGroup);
-        if (groupNodes.length > 0) {
-          const target = groupNodes[Math.floor(Math.random() * groupNodes.length)].id;
-          if (target !== i) {
-            links.push({
-              source: i,
-              target: target,
-              value: Math.random()
-            });
-          }
-        }
-      }
+    if (typeof ResizeObserver === 'undefined') {
+      update(target.clientWidth || 800, target.clientHeight || 320);
+      return undefined;
     }
-
-    setGraphData({ nodes, links });
+    const observer = new ResizeObserver(([entry]) => {
+      update(entry.contentRect.width, entry.contentRect.height);
+    });
+    observer.observe(target);
+    return () => observer.disconnect();
   }, []);
+
+  const graphData = useMemo(() => {
+    if (!network) return { nodes: [], links: [] };
+    const degree = new Map();
+    for (const edge of network.edges) {
+      degree.set(edge.source, (degree.get(edge.source) || 0) + 1);
+      degree.set(edge.target, (degree.get(edge.target) || 0) + 1);
+    }
+    return {
+      nodes: network.nodes.map((node) => ({
+        ...node,
+        group: node.community_ids[0] || 'unassigned',
+        color: communityColor(node.community_ids[0] || 'unassigned'),
+        val: 2.5 + Math.sqrt(degree.get(node.id) || 0),
+      })),
+      links: network.edges.map((edge, index) => ({
+        id: `${edge.source}-${edge.target}-${index}`,
+        source: edge.source,
+        target: edge.target,
+        value: edge.weight,
+      })),
+    };
+  }, [network]);
+
+  if (isLoading) return <LoadingState title="Loading network preview" />;
+  if (error) return <ErrorState error={error} title="Network preview could not be loaded" onRetry={onRetry} />;
 
   return (
-    <div className="bg-panel border border-border rounded-xl p-5 flex flex-col h-full overflow-hidden relative">
-      <div className="flex justify-between items-start mb-2 relative z-10">
+    <section className="bg-panel border border-border rounded-xl p-5 flex flex-col min-h-[430px] overflow-hidden relative">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-4 relative z-10">
         <div>
-          <h3 className="text-sm font-bold text-text-heading flex items-center gap-2">
-            Community Network (WIF)
-            <div className="w-4 h-4 rounded-full border border-border flex items-center justify-center text-muted text-[10px] cursor-help">
-              i
-            </div>
-          </h3>
-          <div className="flex flex-col gap-1 mt-4">
-            <div className="flex items-center gap-2 text-xs text-muted"><span className="w-2 h-2 rounded-full bg-[#7aa2f7]"></span> Current Events</div>
-            <div className="flex items-center gap-2 text-xs text-muted"><span className="w-2 h-2 rounded-full bg-[#bb9af7]"></span> Personal Support</div>
-            <div className="flex items-center gap-2 text-xs text-muted"><span className="w-2 h-2 rounded-full bg-[#9ece6a]"></span> Civic Discourse</div>
-            <div className="flex items-center gap-2 text-xs text-muted"><span className="w-2 h-2 rounded-full bg-[#e0af68]"></span> Education</div>
-            <div className="flex items-center gap-2 text-xs text-muted"><span className="w-2 h-2 rounded-full bg-[#f7768e]"></span> Emotional Topics</div>
-            <div className="flex items-center gap-2 text-xs text-muted"><span className="w-2 h-2 rounded-full bg-[#ff9e64]"></span> News Discussion</div>
-            <div className="flex items-center gap-2 text-xs text-muted"><span className="w-2 h-2 rounded-full bg-[#a9b1d6]"></span> Other</div>
+          <div className="flex items-center flex-wrap gap-2">
+            <h3 className="text-sm font-bold text-text-heading">Community Network · {metric.toUpperCase()}</h3>
+            {network?.sampled && (
+              <ArtifactStatusBadge
+                label="Sampled preview"
+                status="warning"
+                title="The API returned a bounded subset of the available graph."
+              />
+            )}
           </div>
-          <div className="mt-4 text-xs font-medium text-muted">
-            <p>Nodes: <span className="text-text">12,458</span></p>
-            <p>Edges: <span className="text-text">78,932</span></p>
+          {network && (
+            <p className="mt-2 text-xs text-muted">
+              {formatCount(network.returned_nodes)} / {formatCount(network.available_nodes)} nodes ·{' '}
+              {formatCount(network.returned_edges)} / {formatCount(network.available_edges)} edges
+            </p>
+          )}
+          <p className="mt-1 text-[11px] text-muted">Node size encodes degree within this returned preview only.</p>
+        </div>
+        {network && graphData.nodes.length > 0 && (
+          <div className="flex border border-border rounded-lg overflow-hidden">
+            <GraphButton label="Zoom in" onClick={() => graphRef.current?.zoom?.(1.3, 300)} icon={ZoomIn} />
+            <GraphButton label="Zoom out" onClick={() => graphRef.current?.zoom?.(0.75, 300)} icon={ZoomOut} />
+            <GraphButton label="Fit graph" onClick={() => graphRef.current?.zoomToFit?.(400, 30)} icon={Maximize2} />
+            <GraphButton label="Reset graph" onClick={() => {
+              graphRef.current?.centerAt?.(0, 0, 300);
+              graphRef.current?.zoom?.(1, 300);
+            }} icon={RotateCcw} last />
           </div>
-        </div>
-
-        {/* Graph controls mockup */}
-        <div className="flex flex-col border border-border rounded-lg overflow-hidden z-10">
-          <button className="p-1.5 bg-panel hover:bg-panel-soft text-text border-b border-border transition-colors">⛶</button>
-          <button className="p-1.5 bg-panel hover:bg-panel-soft text-text border-b border-border transition-colors">+</button>
-          <button className="p-1.5 bg-panel hover:bg-panel-soft text-text border-b border-border transition-colors">-</button>
-          <button className="p-1.5 bg-panel hover:bg-panel-soft text-text transition-colors">⟲</button>
-        </div>
-      </div>
-
-      <div className="flex-grow w-full h-[300px] mt-[-180px] relative z-0" ref={containerRef}>
-        {dimensions.width > 0 && dimensions.height > 0 && (
-          <ForceGraph2D
-            width={dimensions.width}
-            height={dimensions.height + 180}
-            graphData={graphData}
-            nodeColor="color"
-            nodeRelSize={4}
-            linkColor={() => 'rgba(169, 177, 214, 0.15)'}
-            linkWidth={0.5}
-            backgroundColor="transparent"
-            d3AlphaDecay={0.02}
-            d3VelocityDecay={0.3}
-            cooldownTicks={100}
-            enableZoomInteraction={false}
-            enablePanInteraction={false}
-          />
         )}
       </div>
-    </div>
+
+      <div className="flex-grow w-full min-h-[320px] relative" ref={containerRef}>
+        {!network || graphData.nodes.length === 0 || graphData.links.length === 0 ? (
+          <div className="absolute inset-0 flex items-center justify-center text-center" aria-live="polite">
+            <div>
+              <p className="font-semibold text-text-heading">No network edges available</p>
+              <p className="mt-2 text-sm text-muted">The selected run and metric returned an empty graph preview.</p>
+            </div>
+          </div>
+        ) : dimensions.width > 0 ? (
+          <ForceGraph2D
+            ref={graphRef}
+            width={dimensions.width}
+            height={dimensions.height}
+            graphData={graphData}
+            nodeColor="color"
+            nodeVal="val"
+            nodeRelSize={4}
+            nodeLabel={(node) => `${node.id} · community ${node.group}`}
+            linkColor={() => 'rgba(148, 163, 184, 0.25)'}
+            linkWidth={(link) => Math.max(0.5, Math.min(3, Number(link.value) || 0.5))}
+            backgroundColor="rgba(0,0,0,0)"
+            d3AlphaDecay={0.03}
+            d3VelocityDecay={0.35}
+            cooldownTicks={80}
+            enableZoomInteraction
+            enablePanInteraction
+          />
+        ) : null}
+      </div>
+    </section>
   );
+}
+
+function GraphButton({ label, onClick, icon: Icon, last = false }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      className={`p-2 bg-panel hover:bg-panel-soft text-text transition-colors ${last ? '' : 'border-r border-border'}`}
+    >
+      <Icon size={15} />
+    </button>
+  );
+}
+
+function communityColor(value) {
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) % 360;
+  }
+  return `hsl(${hash} 68% 64%)`;
 }

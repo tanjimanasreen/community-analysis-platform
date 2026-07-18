@@ -1,88 +1,70 @@
-export default function TransitionsSankey() {
-  // Mock data for the transitions to look like the mockup
-  const themes = [
-    { name: 'Current Events', color: '#7aa2f7' },
-    { name: 'Personal Support', color: '#bb9af7' },
-    { name: 'Civic Discourse', color: '#9ece6a' },
-    { name: 'Education', color: '#e0af68' },
-    { name: 'Emotional Topics', color: '#f7768e' },
-    { name: 'News Discussion', color: '#ff9e64' },
-    { name: 'Other', color: '#a9b1d6' },
-  ];
+import React from 'react';
+import { Link } from 'react-router-dom';
+import ArtifactUnavailableState from '../states/ArtifactUnavailableState';
+import ErrorState from '../states/ErrorState';
+import LoadingState from '../states/LoadingState';
+import { formatCount } from '../../features/overview/overviewUtils';
 
-  const months = ['Feb \'24', 'Mar \'24', 'Apr \'24', 'May \'24'];
+export default function TransitionsSankey({ transitions, hasArtifact, isLoading, error, onRetry, search }) {
+  if (isLoading) return <LoadingState title="Loading community transitions" />;
+  if (!hasArtifact) {
+    return (
+      <ArtifactUnavailableState
+        artifactName="Community transitions"
+        message="The selected run does not list the community_transitions artifact."
+        action={<Link className="text-primary hover:underline" to={`/methodology${search}`}>Why this artifact is optional</Link>}
+      />
+    );
+  }
+  if (error) return <ErrorState error={error} title="Community transitions could not be loaded" onRetry={onRetry} />;
+  const records = transitions?.records ?? [];
+  if (records.length === 0) {
+    return (
+      <section className="bg-panel border border-border rounded-xl p-8 text-center min-h-[220px] flex items-center justify-center">
+        <div>
+          <p className="font-semibold text-text-heading">No transition records available</p>
+          <p className="mt-2 text-sm text-muted">The artifact exists but contains no transitions for this run.</p>
+        </div>
+      </section>
+    );
+  }
+  const average = records.reduce((sum, row) => sum + row.jaccard_score, 0) / records.length;
+  const strongest = [...records].sort((a, b) => b.jaccard_score - a.jaccard_score).slice(0, 6);
 
   return (
-    <div className="bg-panel border border-border rounded-xl p-5 flex flex-col h-full overflow-hidden">
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-sm font-bold text-text-heading flex items-center gap-2">
-          Community Transitions (Member Overlap)
-          <div className="w-4 h-4 rounded-full border border-border flex items-center justify-center text-muted text-[10px] cursor-help">
-            i
-          </div>
-        </h3>
+    <section className="bg-panel border border-border rounded-xl p-5 flex flex-col h-full">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-bold text-text-heading">Community Transitions</h3>
+          <p className="mt-1 text-xs text-muted">Top member-overlap links from the canonical transition artifact.</p>
+        </div>
+        <div className="rounded-lg border border-border bg-panel-soft px-3 py-2 text-right">
+          <p className="text-[10px] uppercase tracking-wider text-muted">Average Jaccard</p>
+          <p className="text-lg font-bold text-text-heading">{average.toFixed(2)}</p>
+        </div>
       </div>
-
-      <div className="flex-grow w-full relative min-h-[220px] flex">
-        {/* Y Axis Labels */}
-        <div className="flex flex-col justify-between py-8 pr-2 w-32 shrink-0">
-          {themes.map((theme, i) => (
-            <div key={i} className="text-xs font-medium" style={{ color: theme.color }}>
-              {theme.name}
+      <div className="mt-5 space-y-3">
+        {strongest.map((row, index) => (
+          <div key={`${row.start_month}-${row.start_month_community}-${row.end_month}-${row.end_month_community}-${index}`} className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
+            <div className="rounded-lg border border-border bg-panel-soft/50 px-3 py-2 text-xs text-text-heading truncate">
+              {row.start_month} · C{row.start_month_community}
             </div>
-          ))}
-        </div>
-
-        {/* Chart Area */}
-        <div className="flex-grow relative border-l border-border/30">
-          {/* X Axis Labels */}
-          <div className="absolute top-0 left-0 w-full flex justify-between px-8 text-xs font-medium text-text-heading">
-            {months.map(m => <span key={m}>{m}</span>)}
+            <div className="flex flex-col items-center gap-1 min-w-20">
+              <span className="text-[10px] text-muted">{row.jaccard_score.toFixed(2)}</span>
+              <div className="h-2 w-full rounded-full bg-border overflow-hidden" title={`Jaccard similarity ${row.jaccard_score}`}>
+                <div className="h-full rounded-full bg-primary" style={{ width: `${Math.max(2, Math.min(100, row.jaccard_score * 100))}%` }} />
+              </div>
+            </div>
+            <div className="rounded-lg border border-border bg-panel-soft/50 px-3 py-2 text-xs text-text-heading truncate text-right">
+              {row.end_month} · C{row.end_month_community}
+            </div>
           </div>
-
-          {/* SVG Ribbons Mockup */}
-          <svg className="absolute top-8 left-0 w-full h-[calc(100%-2rem)]" preserveAspectRatio="none" viewBox="0 0 1000 300">
-            {/* Ribbons */}
-            <path d="M 100 20 C 300 20, 300 100, 500 100 C 700 100, 700 20, 900 20" fill="none" stroke="#7aa2f7" strokeWidth="15" strokeOpacity="0.4" />
-            <path d="M 100 60 C 300 60, 300 20, 500 20 C 700 20, 700 140, 900 140" fill="none" stroke="#bb9af7" strokeWidth="12" strokeOpacity="0.4" />
-            <path d="M 100 100 C 300 100, 300 60, 500 60 C 700 60, 700 60, 900 60" fill="none" stroke="#9ece6a" strokeWidth="10" strokeOpacity="0.4" />
-            <path d="M 100 140 C 300 140, 300 220, 500 220 C 700 220, 700 100, 900 100" fill="none" stroke="#e0af68" strokeWidth="18" strokeOpacity="0.4" />
-            <path d="M 100 180 C 300 180, 300 180, 500 180 C 700 180, 700 180, 900 180" fill="none" stroke="#f7768e" strokeWidth="14" strokeOpacity="0.4" />
-            <path d="M 100 220 C 300 220, 300 140, 500 140 C 700 140, 700 260, 900 260" fill="none" stroke="#ff9e64" strokeWidth="8" strokeOpacity="0.4" />
-            <path d="M 100 260 C 300 260, 300 260, 500 260 C 700 260, 700 220, 900 220" fill="none" stroke="#a9b1d6" strokeWidth="12" strokeOpacity="0.4" />
-
-            {/* Bars at columns */}
-            {[100, 500, 900].map(x => (
-              <g key={x}>
-                <rect x={x-6} y={12} width={12} height={15} fill="#7aa2f7" />
-                <rect x={x-6} y={54} width={12} height={12} fill="#bb9af7" />
-                <rect x={x-6} y={95} width={12} height={10} fill="#9ece6a" />
-                <rect x={x-6} y={131} width={12} height={18} fill="#e0af68" />
-                <rect x={x-6} y={173} width={12} height={14} fill="#f7768e" />
-                <rect x={x-6} y={216} width={12} height={8} fill="#ff9e64" />
-                <rect x={x-6} y={254} width={12} height={12} fill="#a9b1d6" />
-              </g>
-            ))}
-          </svg>
-
-          {/* X Axis Line */}
-          <div className="absolute bottom-0 left-8 right-8 border-t border-border flex items-center mt-2 pt-2 text-xs text-muted">
-            <span className="mx-auto">% of Members Retained</span>
-            <span className="text-right">→</span >
-          </div>
-        </div>
-
-        {/* Right Percentages */}
-        <div className="flex flex-col justify-between py-8 pl-4 w-12 shrink-0 border-l border-border/30">
-          <div className="text-xs font-medium text-muted">22%</div>
-          <div className="text-xs font-medium text-muted">18%</div>
-          <div className="text-xs font-medium text-muted">16%</div>
-          <div className="text-xs font-medium text-muted">13%</div>
-          <div className="text-xs font-medium text-muted">11%</div>
-          <div className="text-xs font-medium text-muted">9%</div>
-          <div className="text-xs font-medium text-muted">11%</div>
-        </div>
+        ))}
       </div>
-    </div>
+      <div className="mt-4 flex justify-between text-xs text-muted">
+        <span>{formatCount(records.length)} transition records</span>
+        <Link className="text-primary hover:underline" to={`/transitions${search}`}>Open transitions</Link>
+      </div>
+    </section>
   );
 }
