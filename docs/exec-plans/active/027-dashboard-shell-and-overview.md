@@ -256,6 +256,7 @@ feature plan rather than reintroducing fabricated data.
 | 2026-07-18 | Replaced the shell's mock controls with run/metric selectors, verification and health badges, query-preserving navigation, a skip link, and a neutral read-only footer. |
 | 2026-07-18 | Added run-scoped Overview queries, canonical KPI mapping, deterministic network rendering, compatible-run history, provenance, top themes, optional transition handling, real community pagination/sorting/export, and traceable insights. |
 | 2026-07-18 | Added 15 new frontend tests covering shell states, verification gating, selectors, query keys, graph sampling, empty states, theme mapping, CSV export, and navigation. Final frontend result: 27 tests passed; typecheck, lint, and build passed. Backend API result: 10 tests passed. |
+| 2026-07-18 | Plan 031 quality integration added canonical fixture coverage, strict source guards, route-level lazy loading, zero-warning lint, focused coverage, bundle budgets, real-service Playwright/axe workflow definitions, and release documentation. Browser execution remains pending in a browser-capable environment. |
 
 
 ## Implementation Decisions

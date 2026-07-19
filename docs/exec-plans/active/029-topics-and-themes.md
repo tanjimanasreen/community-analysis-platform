@@ -178,7 +178,7 @@ Tasks:
 | 2026-07-18 | Use `semanticMetric` separately from the global `metric` URL parameter. | The semantic route needs a side-by-side display mode while the global structural metric remains exactly `if` or `wif`. |
 | 2026-07-18 | Cap complete theme-frequency summaries at 500 records and suppress partial aggregation above the cap. | The themes endpoint hard-caps pages at 500; withholding a partial chart is more accurate than presenting a page as the full distribution. |
 | 2026-07-18 | Render theme similarity only from the API matrix or manifest-key download URLs. | This preserves saved pipeline outputs and prevents browser-side embedding or similarity recomputation. |
-| 2026-07-18 | Limit Vitest to four workers. | The expanded offline component suite exhausted the high default worker count in the execution environment; the bounded pool makes the documented test command deterministic without changing test behavior. |
+| 2026-07-18 | Initially limit Vitest to four workers; Plan 031 later supersedes this with one isolated fork. | The bounded configuration prevents resource exhaustion, and excluding Playwright specs from Vitest makes the full unit suite deterministic without changing test behavior. |
 | 2026-07-18 | Make no backend route, schema, metric, topic-model, or provider changes. | All Plan 029 requirements were satisfied through the existing read-only API contract. |
 
 ## Risks
@@ -207,3 +207,4 @@ heatmap.
 | 2026-07-18 | Added independent topic/theme pagination, complete-result theme-frequency summaries, provider/model provenance, accessible saved similarity matrices, artifact-only fallbacks, and metric-aware structural deep links in both directions. |
 | 2026-07-18 | Added adapter, normalization, control, pagination, provider, matrix, artifact-fallback, empty-state, and deep-link tests. No browser-side LDA, clustering, theme generation, embeddings, or backend changes were introduced. |
 | 2026-07-18 | Validation: backend API tests 10 passed; frontend typecheck passed; 25 frontend test files / 59 tests passed; lint completed with 0 errors and 3 pre-existing unused-import warnings in Reports and Comparative Analysis; production build passed. The existing Vite main-chunk size warning remains deferred to the frontend quality/performance plan. |
+| 2026-07-18 | Plan 031 quality integration added canonical fixture coverage, strict source guards, route-level lazy loading, zero-warning lint, focused coverage, bundle budgets, real-service Playwright/axe workflow definitions, and release documentation. Browser execution remains pending in a browser-capable environment. |

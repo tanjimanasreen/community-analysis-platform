@@ -168,3 +168,35 @@ pytest tests/integration/test_orchestration_smoke.py
 - API requests do not import or execute pipeline, NetworkX, Louvain, LDA,
   provider, TEI, or visualization-generation modules.
 - `python -m pytest tests/unit/test_backend_api.py` passes offline.
+
+## Dashboard Frontend Quality And Release Gate
+
+Required:
+
+- A deterministic canonical fixture is generated through artifact models and
+  passes manifest validation.
+- Vitest uses exact offline MSW handlers, rejects unhandled requests, and meets
+  focused adapter/state/view-model coverage thresholds.
+- Playwright starts the real FastAPI API and Vite app against the fixture and
+  covers run/metric state, deep links, semantic controls, longitudinal views,
+  comparison, reports, integrity failures, mobile navigation, and history.
+- Representative routes have axe checks and keyboard/mobile coverage.
+- All route pages are lazy and graph/chart vendors are split from the initial
+  entry.
+- Lint has zero warnings; typecheck, production build, and bundle budget pass.
+- Production frontend source contains no obsolete endpoint, analytical mock,
+  credential, absolute path, database client, or provider call.
+
+Validation:
+
+```bash
+make dashboard-fixture
+python -m pytest -q tests/unit/test_dashboard_fixture.py tests/unit/test_backend_api.py
+make frontend-check
+make frontend-e2e
+```
+
+`frontend-e2e` is offline after the Playwright Chromium binary has been
+installed. Visual baselines are updated only through the documented reviewed
+snapshot command; an absent baseline is an explicit skip and is not evidence of
+a passing visual gate.

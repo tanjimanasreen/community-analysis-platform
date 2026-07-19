@@ -1,130 +1,122 @@
 # Final Handoff
 
-This handoff summarizes the current community-analysis project state for the
-next maintainer or presenter.
+## Architecture and state ownership
 
-## Architecture Summary
+- The CLI pipeline remains under `src.cli`; its analytical metrics, defaults,
+  public artifacts, and offline sample workflows are unchanged.
+- FastAPI is a read-only adapter over verified `runs/<run_id>/manifest.json`
+  bundles. It never executes ingestion, NetworkX, Louvain, LDA, providers, TEI,
+  or visualization generation in request paths.
+- The Vite/React dashboard consumes only `/api/v1`. The typed API boundary is
+  under `frontend/src/api/`.
+- `DashboardProvider` owns only global run, IF/WIF metric, health, selected-run
+  metadata, and verification state. Run and metric are URL search parameters.
+- Each route owns its filters, pagination, TanStack Query keys, and canonical
+  record adapters. Community IDs remain strings and IF/WIF identifiers stay
+  distinct.
+- Route pages are lazy-loaded. Graph, chart, React, and data vendors are split
+  into separate chunks.
 
-- CLI pipeline: `src.cli` exposes ingestion, network/community, topic, theme,
-  output verification, and report-index commands.
-- Network/community stage: `run-social-network` writes public thesis CSVs and
-  internal topic-input artifacts.
-- Topic-only stage: `run-topics` loads
-  `_intermediate/topic_inputs/...` and runs only LDA/topic export.
-- Theme-only stage: `run-theme-analysis` loads
-  `_intermediate/theme_inputs/...` and runs only theme intelligence.
-- Output verifier: `verify-output-contract` validates public output schemas,
-  internal manifests, and theme-input hashes without rerunning the pipeline.
-- Artifact index: `build-report` writes a lightweight Markdown index of
-  generated outputs.
-- Read-only API: FastAPI serves generated artifacts under `/api/v1`; it does
-  not run or mutate pipeline stages.
-- Read-only dashboard: Vite/React consumes only `/api/v1` and has no controls
-  that run ingestion, analysis, models, databases, or visualization rendering.
+## API-to-route map
 
-## Main Commands
+| Route | Canonical API data |
+|---|---|
+| Overview | overview, bounded network, communities, themes, optional transitions |
+| Community Network | network, communities, community detail, centrality, optional topics/themes |
+| Thematic Analysis | overview, matched/partial topics, themes, optional theme similarity |
+| Evolution | run catalog plus compatible-run overviews |
+| Community Transitions | transitions, persistent communities, membership changes, theme similarity |
+| Comparative Analysis | explicit Twitter/X and Telegram run overviews and theme labels |
+| Top Communities | communities, community detail, optional topic/theme enrichment |
+| Data Explorer | communities, centrality, topics, themes, transitions, artifacts |
+| Reports | artifacts, verified inline report, manifest-key downloads |
+| Methodology | run detail, overview config/model metadata, verification, artifact categories |
 
-Fresh setup:
+## Deterministic dashboard fixture
 
 ```bash
-make install-dev
-make frontend-install
+make dashboard-fixture
 ```
 
-Offline proof:
+This writes `/tmp/community-dashboard-fixture` through canonical artifact
+models and manifest validation. It includes real API shapes plus no-run,
+missing-optional, empty-table, sampled-graph, and tampered-checksum variants.
+The generator does not call databases, providers, TEI, models, or pipeline
+analysis.
+
+## Quality commands
 
 ```bash
-make demo
+make api-smoke-test
+make frontend-typecheck
 make frontend-lint
+make frontend-test
+make frontend-coverage
 make frontend-build
+make frontend-check
 ```
 
-Manual demo:
+Install Playwright Chromium once, then execute the real integration workflows:
 
 ```bash
-make demo-api
-make demo-frontend
+cd frontend && npx playwright install chromium && cd ..
+make frontend-e2e
 ```
 
-Cleanup:
+The browser suite starts its own fixture-backed API and Vite servers. Use
+`PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` only to opt into a trusted system browser.
+Use `PLAYWRIGHT_HOST` only when loopback is unavailable in a controlled test
+environment.
+
+Intentional visual changes require:
 
 ```bash
-make clean-generated
-make clean-cache
+cd frontend
+npm run test:e2e:update
 ```
 
-## Generated Outputs
+Review and commit the resulting route snapshots. Missing baselines are skipped
+with an explicit reason; they are never manufactured by the test harness.
 
-One-month sample:
+## Troubleshooting
 
-```text
-/tmp/community-analysis-sample/
-/tmp/community-analysis-theme-sample/
-/tmp/community-analysis-sample-interactions.csv
-/tmp/community-analysis-artifact-index.md
-```
+- **No runs**: generate the canonical fixture or a canonical pipeline run and
+  confirm `COMMUNITY_ANALYSIS_ARTIFACT_ROOT` points at the directory containing
+  `runs/`.
+- **Verification failure**: inspect the error code and regenerate or restore the
+  manifest-listed artifact. Do not bypass checksum/schema validation.
+- **API unavailable**: check `/api/v1/health`, port 8000, and the Vite `/api`
+  proxy.
+- **Playwright browser missing**: run `npx playwright install chromium`; the
+  browser tests make no network calls after installation.
+- **Ports already in use**: stop services on 8000/4173. Playwright deliberately
+  refuses to reuse them so the fixture cannot be mixed with stale servers.
+- **Visual snapshot skipped**: run `npm run test:e2e:update` in a reviewed,
+  browser-capable environment and commit the generated baseline.
+- **Bundle budget failure**: inspect `frontend/dist/assets`; keep route code lazy
+  and do not move graph/chart imports into the shell.
 
-Longitudinal sample:
+## Known limitations
 
-```text
-/tmp/community-analysis-longitudinal-sample/
-/tmp/community-analysis-longitudinal-theme-sample/
-/tmp/community-analysis-longitudinal-artifact-index.md
-```
+- The dashboard is read-only and provides no authentication or cloud deployment.
+- Large network reads remain bounded by backend caps and presentation limits.
+- Sorting/filtering is labelled page-local where the API does not provide a
+  server-wide operation.
+- Theme-frequency charts are withheld when a complete safe result set cannot be
+  obtained.
+- Visual regression baselines must be generated and reviewed on each supported
+  browser/OS target before claiming a visual release gate for that target.
 
-The frozen artifact schema is documented in
-`docs/design-docs/output-artifact-contract.md`.
+## Commit hygiene
 
-## Commit Checklist
-
-Commit:
-
-- source code
-- configs
-- tests and fixtures
-- docs
-- `frontend/package-lock.json`
-- `.env.example` files
-
-Do not commit:
-
-- `.venv/`
-- `frontend/node_modules/`
-- `frontend/dist/`
-- `src/*.egg-info/`
-- `__pycache__/`
-- `.pytest_cache/`, `.mypy_cache/`, `.ruff_cache/`
-- generated sample outputs or report files
-- local `.env` files
-
-## Validation Summary
-
-Latest fresh-copy release-candidate validation passed:
-
-- `make install-dev`
-- `make frontend-install`
-- `make test`
-- `make demo`
-- `make frontend-lint`
-- `make frontend-build`
-- `make api-smoke-test`
-- `make clean-generated`
-- `make clean-cache`
-- `.venv/bin/python -m src.cli --help`
-
-See `docs/exec-plans/active/014-fresh-clone-release-candidate-validation.md`
-for exact commands, warnings, and cleanup checks.
-
-## Known Warnings
-
-- FastAPI/Starlette emits a TestClient deprecation warning related to `httpx`.
-- Tiny LDA fixtures can emit numerical warnings from Gensim, SciPy, Kneed, or
-  NumPy.
-- These warnings are non-blocking and were present during successful
-  validation.
+Commit source, tests, docs, lockfiles, and reviewed visual snapshots. Do not
+commit `.venv/`, `frontend/node_modules/`, `frontend/dist/`, coverage,
+Playwright reports/results, Python caches, generated dashboard fixtures, local
+`.env` files, credentials, or absolute machine paths.
 
 ## Guardrails
 
-Do not change thesis metric definitions, graph thresholds, Louvain defaults,
-LDA defaults, GPT defaults, public output schemas, API contracts, or dashboard
-behavior without a new documented plan and validation pass.
+Do not change `shared_post`, `weighted_post`, graph thresholds, Louvain defaults,
+LDA defaults, output categories, public schemas, API contracts, or the
+LDA-before-theme analytical order without an approved execution plan and
+behavior-preservation tests.

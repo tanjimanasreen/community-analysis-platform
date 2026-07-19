@@ -59,7 +59,7 @@ The typed API boundary lives under `src/api/` and mirrors the backend Pydantic
 schemas in `src/types/api.ts`. The frontend does not use legacy `/facets`,
 `/community-summary`, or `/files` routes.
 
-## Checks
+## Quality checks
 
 From the frontend directory:
 
@@ -67,29 +67,72 @@ From the frontend directory:
 npm run typecheck
 npm run lint
 npm run test -- --run
+npm run test:coverage
 npm run build
+npm run bundle:check
 npm run check
 ```
 
-Equivalent Make targets are available:
+Equivalent repository-level targets are available:
 
 ```bash
 make frontend-typecheck
 make frontend-lint
 make frontend-test
+make frontend-coverage
 make frontend-build
 make frontend-check
 ```
 
-Unit tests run without a backend or internet connection. The build is static
-and does not require the API to be running.
+Vitest uses exact MSW handlers, rejects unhandled requests, and never needs a
+running backend or internet connection. Coverage is intentionally focused on
+API/state adapters and feature view models rather than icon markup.
 
-Playwright is installed for later end-to-end coverage. Run its current suite
-with:
+The production build is route-split. The bundle gate keeps the initial entry
+below 300 KiB minified and non-route application chunks below 500 KiB. Graph,
+chart, React, and data libraries are emitted as separate chunks.
+
+## Canonical dashboard fixture and Playwright
+
+Build the deterministic artifact root without running the analytical pipeline:
 
 ```bash
-npm run test:e2e
+make dashboard-fixture
 ```
+
+The generator writes `/tmp/community-dashboard-fixture` by default. It uses the
+canonical manifest models and includes completed Twitter/X and Telegram runs,
+compatible monthly history, IF/WIF graph data, semantic and longitudinal
+artifacts, a report, and deliberate no-run, missing-artifact, empty-table,
+sampled-graph, and tampered-checksum variants.
+
+Install Chromium once for Playwright, then run the browser workflows:
+
+```bash
+cd frontend
+npx playwright install chromium
+cd ..
+make frontend-e2e
+```
+
+After the browser binary is installed, the suite is offline: Playwright starts
+the real FastAPI service against the generated fixture and a local Vite server.
+A managed/system Chromium can be selected explicitly with
+`PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`; the project never silently selects one.
+
+Generate or intentionally refresh visual baselines in a browser-capable
+environment with:
+
+```bash
+cd frontend
+npm run test:e2e:update
+```
+
+Commit the resulting `tests/e2e/visual-regression.spec.ts-snapshots/` files.
+Until a baseline exists for a route, that visual assertion is reported as
+skipped rather than accepting a fabricated image. Functional and axe workflows
+remain independent of visual baselines. Playwright traces and screenshots are
+kept only for failures, and generated reports are ignored by Git.
 
 ## Structural analysis routes
 

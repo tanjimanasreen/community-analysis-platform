@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useState } from 'react';
 import { Routes, Route, Outlet, BrowserRouter } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import Topbar from './components/Topbar';
@@ -9,17 +9,17 @@ import VerificationFailureState from './components/states/VerificationFailureSta
 import { DashboardProvider } from './app/DashboardProvider';
 import { useDashboardContext } from './hooks/useDashboardContext';
 
-// Pages
-import Overview from './pages/Overview';
-import CommunityNetworkPage from './pages/CommunityNetwork';
-import ThematicAnalysisPage from './pages/ThematicAnalysis';
-import EvolutionOverTimePage from './pages/EvolutionOverTime';
-import ComparativeAnalysisPage from './pages/ComparativeAnalysis';
-import CommunityTransitionsPage from './pages/CommunityTransitions';
-import TopCommunitiesPage from './pages/TopCommunities';
-import DataExplorerPage from './pages/DataExplorer';
-import ReportsPage from './pages/Reports';
-import MethodologyPage from './pages/Methodology';
+// Route pages are lazy so chart and graph vendors are not loaded on unrelated routes.
+const Overview = lazy(() => import('./pages/Overview'));
+const CommunityNetworkPage = lazy(() => import('./pages/CommunityNetwork'));
+const ThematicAnalysisPage = lazy(() => import('./pages/ThematicAnalysis'));
+const EvolutionOverTimePage = lazy(() => import('./pages/EvolutionOverTime'));
+const ComparativeAnalysisPage = lazy(() => import('./pages/ComparativeAnalysis'));
+const CommunityTransitionsPage = lazy(() => import('./pages/CommunityTransitions'));
+const TopCommunitiesPage = lazy(() => import('./pages/TopCommunities'));
+const DataExplorerPage = lazy(() => import('./pages/DataExplorer'));
+const ReportsPage = lazy(() => import('./pages/Reports'));
+const MethodologyPage = lazy(() => import('./pages/Methodology'));
 
 function DashboardContent() {
   const {
@@ -175,7 +175,7 @@ function DashboardLayout() {
         />
 
         <main id="main-content" tabIndex={-1} className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 z-10 w-full overflow-x-hidden">
-          <DashboardContent />
+          <Suspense fallback={<LoadingState title="Loading dashboard route" />}><DashboardContent /></Suspense>
         </main>
       </div>
     </div>

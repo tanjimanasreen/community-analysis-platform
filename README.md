@@ -23,16 +23,20 @@ The harness docs have been updated to reflect the actual implemented code featur
 
 ## Harness Start Point
 
-Ask your local agent to read:
+The current repository archive does not contain root `HARNESS.md` or
+`ARCHITECTURE.md`. Start with the available source-of-truth documents:
 
 1. `AGENTS.md`
-2. `HARNESS.md`
-3. `ARCHITECTURE.md`
-4. `docs/design-docs/current-code-feature-inventory.md`
-5. `docs/product-specs/project-spec.md`
+2. `docs/design-docs/current-code-feature-inventory.md`
+3. `docs/product-specs/project-spec.md`
+4. `docs/design-docs/data-contract.md`
+5. `docs/design-docs/database-contract.md`
 6. `docs/design-docs/metric-contract.md`
 7. `docs/design-docs/pipeline-contract.md`
 8. `docs/design-docs/theme-intelligence-contract.md`
+9. `docs/verification/quality-gates.md`
+10. `docs/verification/test-matrix.md`
+11. the relevant active execution plan
 
 Then implement plans in this order:
 
@@ -151,6 +155,29 @@ make test
 * **Reproduce CI locally**: The commands above run exactly what CI runs.
 * **API Credentials**: The full test suite runs entirely offline. Network guards in `tests/conftest.py` block outbound requests. No live API credentials are required to pass tests or CI.
 
+## Dashboard release-quality workflow
+
+The dashboard consumes canonical run artifacts through the read-only FastAPI
+API. A deterministic fixture is available for frontend quality gates and does
+not execute database, provider, model-download, or analytical pipeline code.
+
+```bash
+make dashboard-fixture
+make api-smoke-test
+make frontend-check
+```
+
+For browser workflows, install Playwright Chromium once and then run the real
+API/Vite integration suite:
+
+```bash
+cd frontend && npx playwright install chromium && cd ..
+make frontend-e2e
+```
+
+The browser suite is offline after the browser binary has been installed. See
+`frontend/README.md` for visual-baseline updates and environment overrides.
+
 ## Running The Offline Sample
 
 Start with the full offline sample pipeline:
@@ -214,6 +241,12 @@ make demo-api
 make demo-frontend
 make frontend-install
 make frontend-lint
+make frontend-typecheck
+make frontend-test
+make frontend-coverage
+make frontend-check
+make dashboard-fixture
+make frontend-e2e
 make frontend-build
 make clean-generated
 make clean-cache
@@ -237,8 +270,14 @@ What each command does:
 - `make demo-api`: starts the read-only artifact API for generated demo outputs.
 - `make demo-frontend`: starts the Vite dashboard.
 - `make frontend-install`: installs dashboard dependencies with `npm ci` when a lockfile is present.
-- `make frontend-lint`: lints the read-only dashboard.
-- `make frontend-build`: builds the dashboard without requiring the API to be running.
+- `make frontend-lint`: lints the read-only dashboard with zero-warning enforcement.
+- `make frontend-typecheck`: type-checks the TypeScript API/state boundary and touched components.
+- `make frontend-test`: runs offline unit and component tests with strict MSW request handling.
+- `make frontend-coverage`: applies focused adapter/state/view-model coverage thresholds.
+- `make frontend-check`: runs typecheck, lint, coverage, production build, and bundle-budget checks.
+- `make dashboard-fixture`: generates deterministic canonical dashboard runs and integrity variants.
+- `make frontend-e2e`: starts the fixture-backed FastAPI/Vite services and runs Chromium workflows.
+- `make frontend-build`: builds the route-split dashboard without requiring the API to be running.
 - `make clean-generated`: removes only known generated demo outputs and the frontend build output.
 - `make clean-cache`: removes Python/test/Vite caches and egg-info without deleting `.venv` or `frontend/node_modules`.
 - `make build-report`: writes `/tmp/community-analysis-artifact-index.md`.

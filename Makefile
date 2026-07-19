@@ -1,4 +1,4 @@
-.PHONY: help install install-dev test format lint mlflow-ui db-up db-down db-check validate-config ingest-sample run-network-sample run-topic-sample run-theme-sample run-pipeline-sample run-longitudinal-sample verify-output-contract verify-longitudinal-output-contract api-smoke-test run-api demo demo-api demo-frontend frontend-install frontend-build frontend-lint frontend-typecheck frontend-test frontend-check run-frontend clean-generated clean-cache build-report
+.PHONY: help install install-dev test format lint mlflow-ui db-up db-down db-check validate-config ingest-sample run-network-sample run-topic-sample run-theme-sample run-pipeline-sample run-longitudinal-sample verify-output-contract verify-longitudinal-output-contract api-smoke-test run-api demo demo-api demo-frontend frontend-install frontend-build frontend-lint frontend-typecheck frontend-test frontend-coverage frontend-e2e frontend-check dashboard-fixture run-frontend clean-generated clean-cache build-report
 
 PYTHON ?= .venv/bin/python
 PYTHON_BOOTSTRAP ?= python3
@@ -13,6 +13,7 @@ LONGITUDINAL_CONFIG_04 ?= configs/longitudinal/sample_twitter_reply_04.yml
 LONGITUDINAL_OUTPUT ?= /tmp/community-analysis-longitudinal-sample
 LONGITUDINAL_THEME_OUTPUT ?= /tmp/community-analysis-longitudinal-theme-sample
 LONGITUDINAL_REPORT ?= /tmp/community-analysis-longitudinal-artifact-index.md
+DASHBOARD_FIXTURE_ROOT ?= /tmp/community-dashboard-fixture
 API_ARTIFACT_ROOT ?= $(SAMPLE_OUTPUT)
 
 # Keep all sample/demo theme generation deterministic and offline.
@@ -48,7 +49,10 @@ help:
 	@echo "  frontend-lint        - Lint the read-only dashboard"
 	@echo "  frontend-typecheck   - Type-check frontend TypeScript boundaries"
 	@echo "  frontend-test        - Run frontend unit/component tests"
-	@echo "  frontend-check       - Run all frontend quality gates"
+	@echo "  frontend-coverage    - Run focused frontend coverage gate"
+	@echo "  frontend-e2e         - Run Chromium Playwright workflows against the canonical fixture"
+	@echo "  dashboard-fixture    - Build deterministic canonical dashboard artifacts"
+	@echo "  frontend-check       - Run typecheck, lint, coverage, build, and bundle budget"
 	@echo "  run-frontend         - Start the dashboard dev server"
 	@echo "  clean-generated      - Remove known demo outputs and frontend build output"
 	@echo "  clean-cache          - Remove Python/test/Vite caches and egg-info"
@@ -156,6 +160,15 @@ frontend-typecheck:
 frontend-test:
 	cd frontend && npm run test -- --run
 
+frontend-coverage:
+	cd frontend && npm run test:coverage
+
+frontend-e2e: dashboard-fixture
+	cd frontend && DASHBOARD_PYTHON=$(abspath $(PYTHON)) DASHBOARD_FIXTURE_ROOT=$(DASHBOARD_FIXTURE_ROOT) npm run test:e2e
+
+dashboard-fixture:
+	$(PYTHON) scripts/build_dashboard_fixture.py --out $(DASHBOARD_FIXTURE_ROOT)
+
 frontend-check:
 	cd frontend && npm run check
 
@@ -163,11 +176,11 @@ run-frontend:
 	cd frontend && npm run dev
 
 clean-generated:
-	rm -rf "$(SAMPLE_OUTPUT)" "$(SAMPLE_THEME_OUTPUT)" "$(SAMPLE_INTERACTIONS)" "$(SAMPLE_REPORT)" "$(LONGITUDINAL_OUTPUT)" "$(LONGITUDINAL_THEME_OUTPUT)" "$(LONGITUDINAL_REPORT)" frontend/dist
+	rm -rf "$(SAMPLE_OUTPUT)" "$(SAMPLE_THEME_OUTPUT)" "$(SAMPLE_INTERACTIONS)" "$(SAMPLE_REPORT)" "$(LONGITUDINAL_OUTPUT)" "$(LONGITUDINAL_THEME_OUTPUT)" "$(LONGITUDINAL_REPORT)" "$(DASHBOARD_FIXTURE_ROOT)" frontend/dist frontend/playwright-report frontend/test-results frontend/coverage
 
 clean-cache:
 	find . -path ./.venv -prune -o -path ./frontend/node_modules -prune -o -type d -name "__pycache__" -prune -exec rm -rf {} +
-	rm -rf .pytest_cache .mypy_cache .ruff_cache frontend/.vite
+	rm -rf .pytest_cache .mypy_cache .ruff_cache frontend/.vite frontend/playwright-report frontend/test-results frontend/coverage
 	find . -path ./.venv -prune -o -path ./frontend/node_modules -prune -o -type d -name "*.egg-info" -prune -exec rm -rf {} +
 
 build-report:

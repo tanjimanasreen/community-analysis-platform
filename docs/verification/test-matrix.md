@@ -95,3 +95,23 @@ visualization services.
 | Report/download serving | `src/api/routers/reports.py` | Manifest-only file resolution and no intermediate downloads. |
 | OpenAPI/error contract | `src/api/app.py`, `src/api/errors.py` | Stable route set and structured error envelopes. |
 | Analytical isolation | API test suite | Pipeline/model/NetworkX modules remain unimported during requests. |
+
+## Dashboard Frontend Quality Matrix
+
+| Feature | Implementation | Required tests |
+|---|---|---|
+| Canonical dashboard fixture | `scripts/build_dashboard_fixture.py` | Valid completed runs, compatible history, sampled graph, no runs, missing optional artifact, empty table, tampered checksum. |
+| API contract and errors | `frontend/src/api/`, MSW handlers | Exact routes/query names, structured errors, no unhandled request. |
+| URL/global state | `DashboardProvider`, search-param adapters | Default completed run, invalid recovery, reload, back/forward, IF/WIF switching. |
+| Request/integrity states | shared state components | Loading, API error, no runs, empty records, optional artifact unavailable, failed verification. |
+| Structural views | network/community/explorer adapters | Graph transform, sampling labels, metric weights, ID preservation, pagination, page-local filtering, downloads. |
+| Semantic views | topic/theme adapters | Safe normalization, matched/partial, unigram/bigram, IF/WIF links, provider metadata, similarity fallback. |
+| Longitudinal/comparison | evolution/transition/comparison models | Compatible grouping, missing values, config warnings, Sankey model, explicit cross-platform runs. |
+| Reports/methodology | artifact library and methodology model | Intermediate suppression, report URL, protected defaults, selected-run overrides, non-OpenAI metadata. |
+| Accessibility | Playwright axe and keyboard workflows | Serious/critical axe scan, names/labels, mobile navigation, 200% zoom, 320 CSS pixels. |
+| Performance | Vite route chunks and bundle script | Entry under 300 KiB, non-route application chunks under 500 KiB, separate graph/chart vendors. |
+| Mock/secret guard | `frontend/src/test/mockDataGuard.test.ts` plus source scans | No old mock IDs/dates/platforms, obsolete routes, secrets, direct provider/database calls, or machine paths in production source. |
+
+Playwright visual baselines are stored beside the visual spec and are updated
+only after review. The functional/axe suite must not depend on snapshot
+availability.

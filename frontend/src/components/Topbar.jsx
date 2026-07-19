@@ -116,7 +116,7 @@ export default function Topbar({
           )}
         </div>
         {selectedRun && (
-          <span className="text-xs text-muted" title={selectedRun.run_id}>
+          <span className="text-xs text-muted" title={selectedRun.run_id} aria-live="polite">
             Selected run: {conciseRunId(selectedRun.run_id)}
           </span>
         )}

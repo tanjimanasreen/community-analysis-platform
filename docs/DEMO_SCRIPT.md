@@ -1,74 +1,50 @@
 # Demo Script
 
-This script is for a local, offline-safe project demo. It shows the separated
-pipeline, output verification, read-only API, and read-only dashboard without
-requiring Neo4j, Memgraph, Docker, OpenAI, model downloads, or Kaleido.
+This walkthrough is local and offline-safe after dependencies and the browser
+binary are installed. It demonstrates the canonical artifact contract,
+read-only API, and functional dashboard without calling a database, OpenAI,
+TEI, model downloads, or analytical pipeline code during the dashboard demo.
 
-## 1. Setup
+## 1. Install
 
 From a fresh checkout:
 
 ```bash
 make install-dev
 make frontend-install
+cd frontend && npx playwright install chromium && cd ..
 ```
 
-Explain:
+Python dependencies come from `pyproject.toml`; frontend dependencies come from
+the checked-in lockfile. No credentials are required for the fixture or tests.
 
-- Python dependencies are installed from `pyproject.toml`.
-- Frontend dependencies are installed from `frontend/package-lock.json`.
-- Generated folders such as `.venv/`, `frontend/node_modules/`, and
-  `frontend/dist/` are not committed.
-
-## 2. Generate And Verify Demo Artifacts
-
-Run:
+## 2. Build and verify the canonical dashboard fixture
 
 ```bash
-make demo
+make dashboard-fixture
+python -m pytest -q tests/unit/test_dashboard_fixture.py tests/unit/test_backend_api.py
+make frontend-check
 ```
 
-Explain:
+The default fixture root is `/tmp/community-dashboard-fixture`. It contains:
 
-- The one-month sample is generated from checked-in fixtures.
-- The longitudinal sample generates March and April 2017 artifacts.
-- Output-contract verification checks public CSV schemas, internal manifests,
-  and theme-input hashes.
-- The API smoke test proves the read-only artifact API can browse generated
-  outputs.
+- completed Twitter/X and Telegram runs;
+- two compatible Twitter/X monthly snapshots;
+- canonical overview, IF/WIF network, community, centrality, topic, theme,
+  transition, membership, similarity, report, and artifact records;
+- deliberate no-run, optional-artifact-missing, empty-table, sampled-graph, and
+  tampered-checksum variants.
 
-Expected output locations:
+The generator uses canonical manifest models and validation. It does not run the
+pipeline or contact external services.
 
-```text
-/tmp/community-analysis-sample/
-/tmp/community-analysis-theme-sample/
-/tmp/community-analysis-artifact-index.md
-/tmp/community-analysis-longitudinal-sample/
-/tmp/community-analysis-longitudinal-theme-sample/
-/tmp/community-analysis-longitudinal-artifact-index.md
-```
-
-## 3. Start The Read-Only API
+## 3. Start the API and dashboard
 
 Terminal 1:
 
 ```bash
-make demo-api
+make run-api API_ARTIFACT_ROOT=/tmp/community-dashboard-fixture/default
 ```
-
-Explain:
-
-- The API serves generated artifacts under `/api/v1`.
-- It does not run ingestion, network analysis, LDA, theme generation,
-  visualization rendering, database clients, or external services.
-
-Useful endpoint to show:
-
-```text
-http://127.0.0.1:8000/api/v1/health
-```
-
-## 4. Start The Dashboard
 
 Terminal 2:
 
@@ -76,56 +52,76 @@ Terminal 2:
 make demo-frontend
 ```
 
-Open the Vite URL printed by the command.
+Open the Vite URL printed by the command. The dashboard uses `/api/v1` through
+the development proxy and remains read-only.
 
-Explain:
+## 4. Walk through the dashboard
 
-- The dashboard consumes only `/api/v1`.
-- It is read-only and has no pipeline-run buttons.
-- During local development, Vite proxies `/api` to the FastAPI server.
+1. **Shell and provenance** — show API health, run verification, the concrete
+   analysis-run selector, and IF/WIF metric selector. Reload to demonstrate URL
+   persistence.
+2. **Overview** — show canonical KPIs, top themes, bounded network preview,
+   compatible-run history, community table, deterministic insights, and CSV
+   export. Point out the sampled-graph badge on `twitter-2017-04`.
+3. **Community Network** — select a node/community, adjust minimum weight, toggle
+   labels, and show returned-versus-available graph counts. Degree is explicitly
+   labelled as a returned-subgraph presentation value.
+4. **Top Communities and Data Explorer** — demonstrate server pagination,
+   page-local filtering/sorting labels, real structural fields, semantic links,
+   and manifest-key downloads.
+5. **Thematic Analysis** — switch matched/partial records, unigram/bigram
+   evidence, and IF/WIF/side-by-side views. Explain that LDA keywords are the
+   analytical output and provider labels are downstream interpretations.
+6. **Evolution and Transitions** — show run-history dates, Jaccard-based
+   transitions, persistent communities, membership changes, accessible tables,
+   and independent unavailable states.
+7. **Comparative Analysis** — explicitly choose one Twitter/X and one Telegram
+   run. Review only shared overview fields, exact theme-label overlap, and
+   compatibility warnings; there is no fabricated message-overlap Venn.
+8. **Reports** — open the verified HTML report and show that intermediate
+   artifacts cannot be downloaded.
+9. **Methodology** — contrast protected thesis defaults with the selected run's
+   resolved configuration and provider/model metadata.
 
-## 5. Dashboard Walkthrough
+For integrity behavior, select `twitter-2017-07-tampered`: verification blocks
+analytical panels and exposes the checksum error. Select
+`twitter-2017-05-missing` to show optional semantic/longitudinal artifacts
+degrading explicitly rather than falling back to mock data.
 
-Show these areas in order:
+## 5. Automated browser proof
 
-1. API status badge: confirms the dashboard can reach the read-only backend.
-2. Run selector: switch between the one-month sample and the longitudinal run.
-3. Month selector: show exact backend month values such as `03` and `04`.
-4. Output Contract card: explain that generated artifacts are schema-checked.
-5. Summary cards: show high-level community artifact counts.
-6. Communities table: switch between matched and partial modes.
-7. LDA Topics table: show matched topics and explain that LDA remains the
-   source of topic keywords.
-8. GPT Themes table: explain that GPT themes are downstream of LDA keywords and
-   are mocked/offline-safe in the demo.
-9. Community Transitions table: show longitudinal month-to-month transition
-   rows from generated artifacts.
-10. Artifact Metadata table: show known generated files and relative paths.
-11. Optional Visualization Files: explain that missing optional files are
-    expected when visual rendering is disabled.
+```bash
+make frontend-e2e
+```
 
-## 6. How To Explain The Outputs
+The suite starts its own fixture-backed API and Vite servers. It covers run and
+metric history, deep links, semantic controls, transitions, comparison, report
+URLs, tampered verification, missing optional artifacts, mobile navigation,
+axe checks, and browser back/forward state.
 
-- Network/community outputs come from monthly user-user interaction graphs.
-- `shared_post` is the raw interaction count, and `weighted_post` is
-  `shared_post / total_post`.
-- `run-social-network` produces public network/community CSVs and internal
-  topic inputs.
-- `run-topics` is topic-only: it loads saved topic inputs and writes LDA
-  outputs plus internal theme inputs.
-- `run-theme-analysis` is theme-only: it loads saved LDA/theme inputs and
-  writes theme and transition outputs.
-- `verify-output-contract` is read-only and checks that generated artifacts
-  match the frozen contract.
+Refresh reviewed visual baselines only when the UI change is intentional:
+
+```bash
+cd frontend
+npm run test:e2e:update
+```
+
+## 6. Protected analytical behavior
+
+- `shared_post` remains the raw interaction count.
+- `weighted_post` remains `shared_post / total_post`.
+- Graph thresholds remain `min_total_post=10` and `min_shared_post=5`.
+- Louvain remains `resolution=1`, `seed=123`.
+- LDA remains 15 topics, random state 100, 100 iterations, chunksize 20,
+  80 passes, and automatic alpha/eta.
+- Theme labels remain downstream of saved LDA keywords.
 
 ## 7. Cleanup
-
-After the demo:
 
 ```bash
 make clean-generated
 make clean-cache
 ```
 
-These commands remove known generated demo outputs and caches. They do not
-remove `.venv/` or `frontend/node_modules/`.
+These targets remove known fixture/build/test outputs and caches, but retain
+`.venv/` and `frontend/node_modules/`.
