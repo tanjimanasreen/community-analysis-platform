@@ -22,6 +22,10 @@ TOKEN_RE = re.compile(r"\w+")
 _nlp = None
 
 
+import logging
+
+_log = logging.getLogger(__name__)
+
 def get_nlp():
     """Load the thesis spaCy model lazily, with an offline fallback for tests."""
     global _nlp
@@ -31,6 +35,13 @@ def get_nlp():
         try:
             _nlp = spacy.load(SPACY_MODEL, disable=["parser", "ner"])
         except OSError:
+            _log.warning(
+                "spaCy model '%s' is not installed; falling back to spacy.blank('en'). "
+                "Lemmatization will use raw tokens instead of morphological forms, "
+                "which may produce different LDA results from the thesis baseline. "
+                "Install the model with: python -m spacy download %s",
+                SPACY_MODEL, SPACY_MODEL,
+            )
             _nlp = spacy.blank("en")
         _nlp.max_length = SPACY_MAX_LENGTH
     return _nlp

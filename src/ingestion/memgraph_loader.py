@@ -20,10 +20,18 @@ def clean_dict_string(dict_str):
     return cleaned
 
 
+import logging as _logging
+_loader_log = _logging.getLogger(__name__)
+
 def generate_cypher(source_dict, target_dict, relation, platform):
     mapping = TELEGRAM_RELATION_MAP if platform == "telegram" else TWITTER_RELATION_MAP
     if relation not in mapping:
         # Fallback or skip if relation is not mapped
+        _loader_log.warning(
+            "Skipping edge: unrecognized platform=%r / relation=%r. "
+            "Check your config's creator_relation and spreader_relation values.",
+            platform, relation,
+        )
         return None, None
 
     source_label, target_label = mapping[relation]

@@ -17,6 +17,7 @@ import hashlib
 import json
 import os
 import pytest
+pytestmark = pytest.mark.requires_loopback
 from pathlib import Path
 from unittest.mock import MagicMock, call, patch
 

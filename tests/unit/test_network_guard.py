@@ -24,6 +24,7 @@ def test_network_guard_blocks_external_http():
     assert _contains_blocked_error(exc_info.value)
 
 
+@pytest.mark.requires_loopback
 def test_network_guard_allows_real_loopback_connection():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
         server_socket.bind(("127.0.0.1", 0))

@@ -1,9 +1,31 @@
+import socket as _socket_module
 import socket
 
 import pytest
 
 _orig_connect = socket.socket.connect
 _orig_connect_ex = socket.socket.connect_ex
+
+
+def _loopback_socket_available() -> bool:
+    """Return True if this process can bind a loopback TCP socket."""
+    try:
+        with _socket_module.socket(_socket_module.AF_INET, _socket_module.SOCK_STREAM) as s:
+            s.bind(("127.0.0.1", 0))
+        return True
+    except OSError:
+        return False
+
+
+_LOOPBACK_AVAILABLE: bool = _loopback_socket_available()
+
+
+@pytest.fixture(autouse=True)
+def _skip_if_no_loopback(request):
+    """Auto-skip tests marked requires_loopback when socket binding is unavailable."""
+    if request.node.get_closest_marker("requires_loopback") and not _LOOPBACK_AVAILABLE:
+        pytest.skip("loopback socket binding not available in this environment")
+
 
 
 class BlockedSocketError(Exception):

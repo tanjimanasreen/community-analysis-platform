@@ -1,3 +1,6 @@
+import pytest
+pytestmark = pytest.mark.requires_loopback
+
 import os
 from pathlib import Path
 

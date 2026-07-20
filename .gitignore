@@ -70,3 +70,8 @@ frontend/playwright-report/
 frontend/test-results/
 frontend/coverage/
 coverage/
+
+# Binary archives — never commit zips or tarballs
+*.zip
+*.tar.gz
+*.tgz

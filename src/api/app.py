@@ -1,7 +1,7 @@
 from __future__ import annotations
-
 from pathlib import Path
 
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi import APIRouter, FastAPI
 
 from src.api.dependencies import ApiSettings
@@ -58,6 +58,18 @@ def create_app(
             "Read-only access to validated community-analysis pipeline artifacts. "
             "This service never executes analytical stages."
         ),
+    )
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "http://127.0.0.1:4173",
+            "http://localhost:4173",
+            "http://127.0.0.1:5173",
+            "http://localhost:5173",
+        ],
+        allow_credentials=False,
+        allow_methods=["GET"],
+        allow_headers=["*"],
     )
     application.state.api_settings = resolved
     application.state.run_catalog = catalog

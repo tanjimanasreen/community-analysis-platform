@@ -24,7 +24,16 @@ def get_report(
     ]
     if not candidates:
         raise ArtifactUnavailableError(run_id, "report_html")
-    record = candidates[0]
+    
+    # Sort by priority: explicit key names before path-matched fallbacks
+    def _report_priority(r) -> int:
+        if r.key == "report_html":
+            return 0
+        if r.key == "report":
+            return 1
+        return 2
+    
+    record = sorted(candidates, key=_report_priority)[0]
     path = reader.verified_path(run_id, record)
     return FileResponse(
         path,

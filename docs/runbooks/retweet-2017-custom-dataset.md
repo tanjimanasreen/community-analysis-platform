@@ -1,3 +1,6 @@
+> Replace `<YOUR_DATA_DIR>` with the absolute path to your local data directory,
+> e.g. `export DATA_DIR=/path/to/data` and use `$DATA_DIR` in shell commands.
+
 # Retweet 2017 Custom Dataset Runbook
 
 This runbook records the commands for the Jan-April 2017 Twitter
@@ -6,10 +9,10 @@ retweet/quote dataset.
 ## Dataset Files
 
 ```text
-<LOCAL_PROJECT_PATH>/Projects/Telegram/cleaned_code/data/twitter-neo4j/monthly_retweet/retweet_january_2017.csv
-<LOCAL_PROJECT_PATH>/Projects/Telegram/cleaned_code/data/twitter-neo4j/monthly_retweet/retweet_february_2017.csv
-<LOCAL_PROJECT_PATH>/Projects/Telegram/cleaned_code/data/twitter-neo4j/monthly_retweet/retweet_march_2017.csv
-<LOCAL_PROJECT_PATH>/Projects/Telegram/cleaned_code/data/twitter-neo4j/monthly_retweet/retweet_april_2017.csv
+<YOUR_DATA_DIR>/twitter-neo4j/monthly_retweet/retweet_january_2017.csv
+<YOUR_DATA_DIR>/twitter-neo4j/monthly_retweet/retweet_february_2017.csv
+<YOUR_DATA_DIR>/twitter-neo4j/monthly_retweet/retweet_march_2017.csv
+<YOUR_DATA_DIR>/twitter-neo4j/monthly_retweet/retweet_april_2017.csv
 ```
 
 ## Config Files

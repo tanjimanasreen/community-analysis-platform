@@ -25,7 +25,7 @@ help:
 	@echo "  install              - Create .venv and install runtime dependencies"
 	@echo "  install-dev          - Create .venv and install runtime + dev dependencies"
 	@echo "  test                 - Run the full test suite"
-	@echo "  mlflow-ui            - Start the local MLflow UI on 127.0.0.1:5000"
+	@echo "  mlflow-ui            - Start the local MLflow UI on 127.0.0.1:5001"
 	@echo "  format               - Format code with black"
 	@echo "  lint                 - Lint code with flake8"
 	@echo "  db-up                - Start local Memgraph instance"
@@ -81,7 +81,7 @@ mlflow-ui:
 	@mkdir -p .mlflow/artifacts
 	uvx --from mlflow==3.14.0 mlflow ui \
 		--host 127.0.0.1 \
-		--port 5000 \
+		--port 5001 \
 		--backend-store-uri "sqlite:///$$(pwd)/.mlflow/mlflow.db" \
 		--default-artifact-root "file://$$(pwd)/.mlflow/artifacts"
 

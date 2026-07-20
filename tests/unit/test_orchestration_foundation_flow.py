@@ -1,4 +1,6 @@
 import pytest
+pytestmark = pytest.mark.requires_loopback
+
 import os
 from prefect.testing.utilities import prefect_test_harness
 from src.orchestration.foundation_flow import run_orchestration_foundation_flow

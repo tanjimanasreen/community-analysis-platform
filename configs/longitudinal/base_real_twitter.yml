@@ -1,0 +1,41 @@
+# Shared base configuration for real data twitter reply month configs.
+include:
+  - "../algorithms.yml"
+  - "../providers.yml"
+
+data_type: twitter
+content_type: reply
+year: "2017"
+output_base_path: ${LONGITUDINAL_OUTPUT}
+
+creator_relation: TWEETED
+spreader_relation: RETWEETED_BY
+creator_node_column: source
+spreader_node_column: target
+text_node_column: target
+date_column: created_at
+
+# Production-level thresholds for real data (AGENTS.md defaults)
+graph_thresholds:
+  min_total_post: 10
+  min_shared_post: 5
+  min_members: 3
+
+lda:
+  num_topics: 15
+  top_n_keywords: 50
+  random_state: 100
+  iterations: 100
+  chunksize: 20
+  passes: 80
+
+theme:
+  enable_gpt: false
+  fallback: true
+  fallback_chain:
+    - "llm7:fast"
+  sleep_seconds: 2
+  transition_threshold: 0.0
+  output_dir: ${LONGITUDINAL_THEME_OUTPUT}
+  render_visuals: false
+  similarity_model: paraphrase-MiniLM-L6-v2
