@@ -33,7 +33,7 @@ def create_test_artifact_task(content: str, output_path: str) -> ArtifactReferen
     )
 
 
-@flow(task_runner=ThreadPoolTaskRunner(max_workers=1))
+@flow()
 def run_orchestration_foundation_flow(
     config: Mapping[str, Any], dataset_metadata: Mapping[str, str], output_root: str
 ) -> dict[str, Any]:

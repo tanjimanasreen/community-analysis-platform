@@ -115,7 +115,7 @@ class ArtifactValidationError(ApiError):
         validation_message: str,
     ) -> None:
         normalized = validation_message.lower()
-        if "checksum mismatch" in normalized:
+        if "checksum mismatch" in normalized or "byte size mismatch" in normalized:
             code = "ARTIFACT_CHECKSUM_MISMATCH"
             message = "The requested artifact failed checksum verification."
         elif "schema" in normalized:

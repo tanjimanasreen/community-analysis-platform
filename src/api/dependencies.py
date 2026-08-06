@@ -20,24 +20,53 @@ class ApiSettings:
     max_graph_nodes: int = 1000
     max_graph_edges: int = 5000
     catalog_refresh_seconds: float = 1.0
+    parquet_cache_max_bytes: int = 16 * 1024 * 1024
+    cors_origins: tuple[str, ...] = (
+        "http://127.0.0.1:4173",
+        "http://localhost:4173",
+        "http://127.0.0.1:5173",
+        "http://localhost:5173",
+    )
+    allowed_hosts: tuple[str, ...] = ("127.0.0.1", "localhost", "testserver")
+    root_path: str = ""
+    docs_enabled: bool = True
+    gzip_minimum_size: int = 1024
 
     @classmethod
     def from_env(cls, artifact_root: str | Path | None = None) -> "ApiSettings":
-        root = artifact_root or os.environ.get(
-            "COMMUNITY_ANALYSIS_ARTIFACT_ROOT", "results"
+        from src.config.settings import get_api_settings
+
+        env_settings = get_api_settings()
+        root = artifact_root or env_settings.artifact_root or "local_output"
+
+        raw_origins = env_settings.cors_origins or ""
+        origins: tuple[str, ...] = (
+            tuple(o.strip() for o in raw_origins.split(",") if o.strip())
+            if raw_origins.strip()
+            else (
+                "http://127.0.0.1:4173",
+                "http://localhost:4173",
+                "http://127.0.0.1:5173",
+                "http://localhost:5173",
+            )
+        )
+        raw_hosts = env_settings.allowed_hosts or ""
+        allowed_hosts = (
+            tuple(host.strip() for host in raw_hosts.split(",") if host.strip())
+            if raw_hosts.strip()
+            else ("127.0.0.1", "localhost", "testserver")
         )
         return cls(
             artifact_root=Path(root).expanduser(),
-            max_graph_nodes=_positive_int(
-                os.environ.get("COMMUNITY_ANALYSIS_API_MAX_GRAPH_NODES"), 1000
-            ),
-            max_graph_edges=_positive_int(
-                os.environ.get("COMMUNITY_ANALYSIS_API_MAX_GRAPH_EDGES"), 5000
-            ),
-            catalog_refresh_seconds=_non_negative_float(
-                os.environ.get("COMMUNITY_ANALYSIS_API_CATALOG_REFRESH_SECONDS"),
-                1.0,
-            ),
+            max_graph_nodes=env_settings.max_graph_nodes,
+            max_graph_edges=env_settings.max_graph_edges,
+            catalog_refresh_seconds=env_settings.catalog_refresh_seconds,
+            parquet_cache_max_bytes=env_settings.parquet_cache_max_bytes,
+            cors_origins=origins,
+            allowed_hosts=allowed_hosts,
+            root_path=env_settings.root_path.strip(),
+            docs_enabled=env_settings.docs_enabled,
+            gzip_minimum_size=env_settings.gzip_minimum_size,
         )
 
 

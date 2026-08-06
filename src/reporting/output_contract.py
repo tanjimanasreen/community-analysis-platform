@@ -18,6 +18,23 @@ COMMUNITY_GRAPH_COLUMNS = [
     "direction",
     "weight",
 ]
+COMMUNITY_NODE_INDEX_COLUMNS = ["node_id"]
+COMMUNITY_SUMMARY_COLUMNS = [
+    "community_id",
+    "node_count",
+    "edge_count",
+    "total_weight",
+]
+COMMUNITY_INTERACTION_COLUMNS = [
+    "source_community_id",
+    "target_community_id",
+    "user_pair_count",
+    "interaction_count",
+    "total_weight",
+    "source_user_count",
+    "target_user_count",
+]
+MATCHED_COMMUNITY_NODE_INDEX_COLUMNS = ["node_id"]
 MATCHED_COMMUNITY_SUMMARY_COLUMNS = [
     "month",
     "total_matched",
@@ -48,7 +65,7 @@ MATCHED_LDA_COLUMNS = [
     "weighted_bigram_keywords",
     "members",
 ]
-PARTIAL_MATCHED_LDA_COLUMNS = MATCHED_LDA_COLUMNS + [
+PARTIAL_MATCHED_LDA_COLUMNS = [c for c in MATCHED_LDA_COLUMNS if c != "members"] + [
     "absolute_members",
     "weighted_members",
     "jaccard_score",
@@ -121,16 +138,24 @@ def verify_output_contract(
     skipped_optional: list[Path] = []
 
     for check in checks:
-        if not check.path.exists() and not check.required:
+        path_to_check = check.path
+        if not path_to_check.exists():
+            alt = path_to_check.with_suffix(
+                ".parquet" if path_to_check.suffix == ".csv" else ".csv"
+            )
+            if alt.exists():
+                path_to_check = alt
+        if not path_to_check.exists() and not check.required:
             skipped_optional.append(check.path)
             continue
-        _validate_csv_artifact(check)
+        _validate_artifact(check)
         checked.append(check.path)
 
+    run_dir_str = str(_get_latest_run_dir(Path(params["output_base_path"])))
     try:
         for month in months:
             load_topic_inputs(
-                output_base_path=params["output_base_path"],
+                output_base_path=run_dir_str,
                 data_type=params["data_type"],
                 content_type=params["content_type"],
                 month=month,
@@ -138,7 +163,7 @@ def verify_output_contract(
             )
 
         theme_bundle = load_theme_inputs(
-            output_base_path=params["output_base_path"],
+            output_base_path=run_dir_str,
             data_type=params["data_type"],
             content_type=params["content_type"],
             year=params["year"],
@@ -194,7 +219,7 @@ def get_output_contract_params(config: Mapping) -> dict[str, str]:
         "year": str(config.get("year", "2017")),
         "theme_output_dir": str(
             _theme_config(config).get("output_dir")
-            or Path(config.get("output_base_path", "results/"))
+            or _get_latest_run_dir(Path(config.get("output_base_path", "results/")))
             / str(config.get("data_type", "twitter"))
             / "theme_analysis"
             / str(config.get("content_type", "reply"))
@@ -225,6 +250,9 @@ def get_required_columns_by_artifact() -> dict[str, list[str]]:
         "network_data": NETWORK_DATA_COLUMNS,
         "absolute_community_graph": COMMUNITY_GRAPH_COLUMNS,
         "weighted_community_graph": COMMUNITY_GRAPH_COLUMNS,
+        "community_summary": COMMUNITY_SUMMARY_COLUMNS,
+        "community_node_index": COMMUNITY_NODE_INDEX_COLUMNS,
+        "community_interactions": COMMUNITY_INTERACTION_COLUMNS,
         "matched_communities": MATCHED_COMMUNITY_SUMMARY_COLUMNS,
         "partial_matched_communities": PARTIAL_MATCHED_COMMUNITY_COLUMNS,
         "user_centrality": USER_CENTRALITY_COLUMNS,
@@ -243,12 +271,25 @@ def _theme_config(config: Mapping) -> Mapping:
     return theme if isinstance(theme, Mapping) else {}
 
 
+def _get_latest_run_dir(base_path: Path) -> Path:
+    runs_dir = base_path / "runs"
+    if runs_dir.exists() and runs_dir.is_dir():
+        runs = [d for d in runs_dir.iterdir() if d.is_dir()]
+        if runs:
+            runs.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+            return runs[0]
+    return base_path
+
+
 def _months(config: Mapping, configured_month: str, longitudinal: bool) -> list[str]:
     if not longitudinal:
         return [configured_month]
 
+    base_path = Path(str(config.get("output_base_path", "results/")))
+    run_dir = _get_latest_run_dir(base_path)
+
     theme_input_dir = (
-        Path(str(config.get("output_base_path", "results/")))
+        run_dir
         / str(config.get("data_type", "twitter"))
         / "_intermediate"
         / "theme_inputs"
@@ -270,7 +311,9 @@ def _months(config: Mapping, configured_month: str, longitudinal: bool) -> list[
 
 
 def _base(params: Mapping[str, str]) -> Path:
-    return Path(params["output_base_path"]) / params["data_type"]
+    base_path = Path(params["output_base_path"])
+    run_dir = _get_latest_run_dir(base_path)
+    return run_dir / params["data_type"]
 
 
 def _public_artifact_checks(
@@ -310,6 +353,28 @@ def _public_artifact_checks(
                     / params["content_type"]
                     / f"{month}.csv",
                     COMMUNITY_GRAPH_COLUMNS,
+                ),
+                ArtifactCheck(
+                    "community_interactions_absolute",
+                    base
+                    / "communities"
+                    / "interactions"
+                    / "absolute"
+                    / params["content_type"]
+                    / f"{month}.csv",
+                    COMMUNITY_INTERACTION_COLUMNS,
+                    required=False,
+                ),
+                ArtifactCheck(
+                    "community_interactions_weighted",
+                    base
+                    / "communities"
+                    / "interactions"
+                    / "weighted"
+                    / params["content_type"]
+                    / f"{month}.csv",
+                    COMMUNITY_INTERACTION_COLUMNS,
+                    required=False,
                 ),
                 ArtifactCheck(
                     "matched_communities",
@@ -394,12 +459,25 @@ def _public_artifact_checks(
     return checks
 
 
-def _validate_csv_artifact(check: ArtifactCheck) -> None:
-    if not check.path.exists():
-        raise OutputContractError(
-            f"Missing required artifact {check.name}: {check.path}"
+def _validate_artifact(check: ArtifactCheck) -> None:
+    path_to_read = check.path
+    if not path_to_read.exists():
+        # Fallback to .parquet if .csv was requested and missing, or vice versa
+        alt_path = path_to_read.with_suffix(
+            ".parquet" if path_to_read.suffix == ".csv" else ".csv"
         )
-    frame = pd.read_csv(check.path, low_memory=False)
+        if alt_path.exists():
+            path_to_read = alt_path
+        else:
+            raise OutputContractError(
+                f"Missing required artifact {check.name}: {check.path}"
+            )
+
+    if path_to_read.suffix == ".parquet":
+        frame = pd.read_parquet(path_to_read)
+    else:
+        frame = pd.read_csv(path_to_read, low_memory=False)
+
     missing = [
         column for column in check.required_columns or [] if column not in frame.columns
     ]
@@ -414,11 +492,36 @@ def _validate_csv_artifact(check: ArtifactCheck) -> None:
 
 
 def _assert_same_columns(left: Path, right: Path) -> None:
-    if not right.exists():
+    left_path = left
+    if not left_path.exists():
+        alt_left = left_path.with_suffix(
+            ".parquet" if left_path.suffix == ".csv" else ".csv"
+        )
+        if alt_left.exists():
+            left_path = alt_left
+
+    right_path = right
+    if not right_path.exists():
+        alt_right = right_path.with_suffix(
+            ".parquet" if right_path.suffix == ".csv" else ".csv"
+        )
+        if alt_right.exists():
+            right_path = alt_right
+
+    if not right_path.exists():
         raise OutputContractError(f"Missing copied theme input artifact: {right}")
-    left_columns = list(pd.read_csv(left, nrows=0).columns)
-    right_columns = list(pd.read_csv(right, nrows=0).columns)
+
+    if left_path.suffix == ".parquet":
+        left_columns = list(pd.read_parquet(left_path).columns)
+    else:
+        left_columns = list(pd.read_csv(left_path, nrows=0).columns)
+
+    if right_path.suffix == ".parquet":
+        right_columns = list(pd.read_parquet(right_path).columns)
+    else:
+        right_columns = list(pd.read_csv(right_path, nrows=0).columns)
+
     if left_columns != right_columns:
         raise OutputContractError(
-            f"Copied theme input schema differs from public LDA output: {left} vs {right}"
+            f"Copied theme input schema differs from public LDA output: {left_path} vs {right_path}"
         )

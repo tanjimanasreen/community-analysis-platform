@@ -10,6 +10,7 @@ from importlib import metadata
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
+from src.config.settings import get_provider_settings
 from src.config.defaults import DEFAULT_CONFIG
 from src.themes.benchmark.contracts import (
     THEME_OUTPUT_JSON_SCHEMA,
@@ -79,9 +80,9 @@ class GeminiBenchmarkProvider(BaseLLMProvider):
         client: Any | None = None,
         api_key: str | None = None,
         sdk_version: str | None = None,
-        max_retries: int = 2,
+        max_retries: int = 6,
         timeout: float | None = None,
-        max_outbound_requests: int = 50,
+        max_outbound_requests: int = 10000,
         request_budget: GeminiRequestBudget | None = None,
         sleep_fn: Callable[[float], None] | None = None,
     ):
@@ -129,11 +130,11 @@ class GeminiBenchmarkProvider(BaseLLMProvider):
         self.sleep_fn(sleep_duration)
 
         attempts = 0
+        rate_limit_attempts = 0
         last_error: Exception | None = None
         while attempts <= self.config.max_retries:
-            attempts += 1
-            self.request_budget.consume()
             try:
+                self.request_budget.consume()
                 interaction = self.client.interactions.create(
                     model=self.model_id,
                     system_instruction=request.system_prompt,
@@ -148,11 +149,23 @@ class GeminiBenchmarkProvider(BaseLLMProvider):
                     timeout=self.config.timeout,
                 )
                 return _normalize_interaction(
-                    interaction, request, retries=attempts - 1
+                    interaction, request, retries=attempts + rate_limit_attempts
                 )
             except Exception as exc:
                 last_error = exc
                 error_type = classify_gemini_error(exc)
+                if error_type == "rate_limit":
+                    rate_limit_attempts += 1
+                    if rate_limit_attempts > 60:
+                        raise ThemeBenchmarkError(
+                            f"Gemini rate limit exceeded after {rate_limit_attempts} retries: {_safe_error_message(exc)}"
+                        ) from exc
+                    msg = str(exc)
+                    match = re.search(r"retry in ([0-9\.]+)s", msg, re.IGNORECASE)
+                    wait_sec = float(match.group(1)) + 3.0 if match else 60.0
+                    self.sleep_fn(max(wait_sec, 20.0))
+                    continue
+                attempts += 1
                 if (
                     error_type not in RETRYABLE_ERROR_TYPES
                     or attempts > self.config.max_retries
@@ -288,6 +301,18 @@ def build_gemini_model_catalog(
 def classify_gemini_error(exc: Exception) -> str:
     text = _safe_error_message(exc).lower()
     status = getattr(exc, "status_code", None) or getattr(exc, "code", None)
+
+    if any(
+        marker in text
+        for marker in (
+            "not allowed by policy",
+            "blocked by policy",
+            "network egress",
+            "outbound request blocked",
+        )
+    ):
+        return "network_policy"
+
     if "api key" in text or "credential" in text or status == 401:
         return "authentication"
     if "permission" in text or status == 403:
@@ -308,8 +333,11 @@ def classify_gemini_error(exc: Exception) -> str:
 
 
 def _create_gemini_client(*, api_key: str | None):
-    api_key = api_key or os.environ.get("GEMINI_API_KEY")
-    if not api_key:
+    settings = get_provider_settings()
+    resolved_api_key = api_key or (
+        settings.gemini_api_key.get_secret_value() if settings.gemini_api_key else None
+    )
+    if not resolved_api_key:
         raise ThemeBenchmarkError(
             "GEMINI_API_KEY must be set for live Gemini benchmark commands."
         )
@@ -317,7 +345,7 @@ def _create_gemini_client(*, api_key: str | None):
         from google import genai
     except ModuleNotFoundError as exc:
         raise ThemeBenchmarkError(GEMINI_INSTALL_MESSAGE) from exc
-    return genai.Client(api_key=api_key)
+    return genai.Client(api_key=resolved_api_key)
 
 
 def _installed_sdk_version_optional(client: Any | None = None) -> str | None:
@@ -351,9 +379,10 @@ def _normalize_interaction(
     allowed = set(request.keywords)
     normalized_themes = []
     for theme in parsed.get("themes", []):
+        name_val = theme.get("name") or theme.get("theme_name")
         normalized_themes.append(
             {
-                "name": str(theme["name"]),
+                "name": str(name_val),
                 "keywords": [
                     str(keyword)
                     for keyword in theme.get("keywords", [])
@@ -362,13 +391,16 @@ def _normalize_interaction(
             }
         )
     metadata_payload = _raw_metadata(interaction)
+
+    usage_dict = metadata_payload.get("usage", {}) or {}
+
     return {
         "themes": normalized_themes,
         "_benchmark_metadata": {
             "parsed_successfully": True,
             "schema_valid": True,
             "retries": retries,
-            "usage": metadata_payload.get("usage"),
+            "usage": usage_dict,
             "finish_reason": metadata_payload.get("finish_reason"),
             "safety_metadata": metadata_payload.get("safety_metadata"),
             "raw_metadata": metadata_payload,
@@ -381,6 +413,26 @@ def _raw_metadata(interaction: Any) -> dict[str, Any]:
         getattr(interaction, "usage_metadata", None)
         or getattr(interaction, "usage", None)
     )
+    if isinstance(usage, dict):
+        usage["prompt_tokens"] = (
+            usage.get("total_input_tokens")
+            or usage.get("prompt_token_count")
+            or usage.get("promptTokenCount")
+            or 0
+        )
+        usage["completion_tokens"] = (
+            usage.get("total_output_tokens")
+            or usage.get("candidates_token_count")
+            or usage.get("candidatesTokenCount")
+            or 0
+        )
+        usage["total_tokens"] = (
+            usage.get("total_tokens")
+            or usage.get("total_token_count")
+            or usage.get("totalTokenCount")
+            or usage["prompt_tokens"] + usage["completion_tokens"]
+        )
+
     finish_reason = _jsonable(getattr(interaction, "finish_reason", None))
     safety = _jsonable(
         getattr(interaction, "safety_metadata", None)
@@ -404,7 +456,8 @@ def _schema_valid(value: Any) -> bool:
     for theme in themes:
         if not isinstance(theme, Mapping):
             return False
-        if not isinstance(theme.get("name"), str):
+        name_val = theme.get("name") or theme.get("theme_name")
+        if not isinstance(name_val, str):
             return False
         if not isinstance(theme.get("keywords"), list):
             return False

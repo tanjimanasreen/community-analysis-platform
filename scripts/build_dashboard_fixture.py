@@ -68,6 +68,24 @@ RUN_SPECS = (
         sampled_graph=True,
     ),
     RunSpec(
+        run_id="twitter-2017-04-reply",
+        platform="twitter",
+        content_type="reply",
+        year=2017,
+        month=4,
+        started_at="2026-07-18T05:45:00+00:00",
+        sampled_graph=True,
+    ),
+    RunSpec(
+        run_id="twitter-2017-04-retweet",
+        platform="twitter",
+        content_type="retweet_quote",
+        year=2017,
+        month=4,
+        started_at="2026-07-18T05:30:00+00:00",
+        sampled_graph=True,
+    ),
+    RunSpec(
         run_id="twitter-2017-07-tampered",
         platform="twitter",
         content_type="reply",
@@ -117,9 +135,10 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _write_csv(path: Path, rows: list[dict], columns: list[str]) -> None:
+
+def _write_parquet(path: Path, rows: list[dict], columns: list[str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame(rows, columns=columns).to_csv(path, index=False)
+    pd.DataFrame(rows, columns=columns).to_parquet(path)
 
 
 def _write_json(path: Path, payload: dict) -> None:
@@ -137,7 +156,7 @@ def _artifact_record(
     stage: str,
 ) -> ArtifactRecord:
     path = root / relative_path
-    rows = len(pd.read_csv(path)) if path.suffix == ".csv" else None
+    rows = len(pd.read_parquet(path)) if path.suffix == ".parquet" else None
     return ArtifactRecord(
         key=key,
         path=relative_path,
@@ -152,7 +171,7 @@ def _artifact_record(
 
 
 def _graph_rows(spec: RunSpec, *, weighted: bool) -> list[dict]:
-    edge_count = 219 if spec.sampled_graph else 8
+    edge_count = 1005 if spec.sampled_graph else 8
     rows: list[dict] = []
     for index in range(1, edge_count + 1):
         community = 1 + ((index - 1) % 3)
@@ -323,19 +342,19 @@ def _build_run(artifact_root: Path, spec: RunSpec) -> Path:
         }
         for index in range(1, 11 + spec.month)
     ]
-    _write_csv(root / "data/network/network.csv", network_rows, contract.NETWORK_DATA_COLUMNS)
-    _write_csv(
-        root / "data/communities/absolute/communities.csv",
+    _write_parquet(root / "data/network/network.parquet", network_rows, contract.NETWORK_DATA_COLUMNS)
+    _write_parquet(
+        root / "data/communities/absolute/communities.parquet",
         _graph_rows(spec, weighted=False),
         contract.COMMUNITY_GRAPH_COLUMNS,
     )
-    _write_csv(
-        root / "data/communities/weighted/communities.csv",
+    _write_parquet(
+        root / "data/communities/weighted/communities.parquet",
         _graph_rows(spec, weighted=True),
         contract.COMMUNITY_GRAPH_COLUMNS,
     )
-    _write_csv(
-        root / "data/communities/matched/matched.csv",
+    _write_parquet(
+        root / "data/communities/matched/matched.parquet",
         [{
             "month": spec.month_text,
             "total_matched": 2,
@@ -344,8 +363,8 @@ def _build_run(artifact_root: Path, spec: RunSpec) -> Path:
         }],
         contract.MATCHED_COMMUNITY_SUMMARY_COLUMNS,
     )
-    _write_csv(
-        root / "data/metrics/count_user_messages/counts.csv",
+    _write_parquet(
+        root / "data/metrics/count_user_messages/counts.parquet",
         [{
             "month": spec.month_text,
             "user": repr({"absolute": 20 + spec.month, "weighted": 18 + spec.month}),
@@ -353,8 +372,8 @@ def _build_run(artifact_root: Path, spec: RunSpec) -> Path:
         }],
         contract.COUNT_USER_MESSAGES_COLUMNS,
     )
-    _write_csv(
-        root / "data/metrics/user_centrality/centrality.csv",
+    _write_parquet(
+        root / "data/metrics/user_centrality/centrality.parquet",
         [{
             "month": spec.month_text,
             "absolute": repr({"u1": 0.5, "u2": 0.25}),
@@ -362,21 +381,21 @@ def _build_run(artifact_root: Path, spec: RunSpec) -> Path:
         }],
         contract.USER_CENTRALITY_COLUMNS,
     )
-    _write_csv(
-        root / "data/topics/matched/topics.csv",
+    _write_parquet(
+        root / "data/topics/matched/topics.parquet",
         _topic_rows(spec, partial=False),
         contract.MATCHED_LDA_COLUMNS,
     )
 
     if spec.include_optional:
-        _write_csv(
-            root / "data/topics/partial/topics.csv",
+        _write_parquet(
+            root / "data/topics/partial/topics.parquet",
             _topic_rows(spec, partial=True),
             contract.PARTIAL_MATCHED_LDA_COLUMNS,
         )
 
-    _write_csv(
-        root / f"data/themes/monthly/{spec.month_text}.csv",
+    _write_parquet(
+        root / f"data/themes/monthly/{spec.month_text}.parquet",
         _theme_rows(spec),
         contract.THEMED_OUTPUT_COLUMNS,
     )
@@ -391,8 +410,8 @@ def _build_run(artifact_root: Path, spec: RunSpec) -> Path:
     )
 
     if spec.include_optional:
-        _write_csv(
-            root / "data/themes/community_transition.csv",
+        _write_parquet(
+            root / "data/themes/community_transition.parquet",
             _transition_rows(spec),
             contract.COMMUNITY_TRANSITION_COLUMNS,
         )
@@ -406,28 +425,28 @@ def _build_run(artifact_root: Path, spec: RunSpec) -> Path:
         f"<html><body><h1>{spec.run_id}</h1><p>Deterministic dashboard fixture report.</p></body></html>",
         encoding="utf-8",
     )
-    debug_path = root / "intermediate/debug.json"
+    debug_path = root / "_intermediate/debug.json"
     debug_path.parent.mkdir(parents=True, exist_ok=True)
     debug_path.write_text(json.dumps({"kind": "offline fixture intermediate data"}), encoding="utf-8")
 
     records = [
-        _artifact_record(root, key="network_data", relative_path="data/network/network.csv", category=ArtifactCategory.DATA, media_type="text/csv", stage="network_community"),
-        _artifact_record(root, key="communities_absolute", relative_path="data/communities/absolute/communities.csv", category=ArtifactCategory.DATA, media_type="text/csv", stage="network_community"),
-        _artifact_record(root, key="communities_weighted", relative_path="data/communities/weighted/communities.csv", category=ArtifactCategory.DATA, media_type="text/csv", stage="network_community"),
-        _artifact_record(root, key="communities_matched", relative_path="data/communities/matched/matched.csv", category=ArtifactCategory.DATA, media_type="text/csv", stage="network_community"),
-        _artifact_record(root, key="count_user_messages", relative_path="data/metrics/count_user_messages/counts.csv", category=ArtifactCategory.DATA, media_type="text/csv", stage="network_community"),
-        _artifact_record(root, key="user_centrality", relative_path="data/metrics/user_centrality/centrality.csv", category=ArtifactCategory.DATA, media_type="text/csv", stage="network_community"),
-        _artifact_record(root, key="matched_communities_topics", relative_path="data/topics/matched/topics.csv", category=ArtifactCategory.DATA, media_type="text/csv", stage="topic"),
-        _artifact_record(root, key=f"themes_{spec.month_text}", relative_path=f"data/themes/monthly/{spec.month_text}.csv", category=ArtifactCategory.DATA, media_type="text/csv", stage="theme"),
+        _artifact_record(root, key="network_data", relative_path="data/network/network.parquet", category=ArtifactCategory.DATA, media_type="application/vnd.apache.parquet", stage="network_community"),
+        _artifact_record(root, key="communities_absolute", relative_path="data/communities/absolute/communities.parquet", category=ArtifactCategory.DATA, media_type="application/vnd.apache.parquet", stage="network_community"),
+        _artifact_record(root, key="communities_weighted", relative_path="data/communities/weighted/communities.parquet", category=ArtifactCategory.DATA, media_type="application/vnd.apache.parquet", stage="network_community"),
+        _artifact_record(root, key="communities_matched", relative_path="data/communities/matched/matched.parquet", category=ArtifactCategory.DATA, media_type="application/vnd.apache.parquet", stage="network_community"),
+        _artifact_record(root, key="count_user_messages", relative_path="data/metrics/count_user_messages/counts.parquet", category=ArtifactCategory.DATA, media_type="application/vnd.apache.parquet", stage="network_community"),
+        _artifact_record(root, key="user_centrality", relative_path="data/metrics/user_centrality/centrality.parquet", category=ArtifactCategory.DATA, media_type="application/vnd.apache.parquet", stage="network_community"),
+        _artifact_record(root, key="matched_communities_topics", relative_path="data/topics/matched/topics.parquet", category=ArtifactCategory.DATA, media_type="application/vnd.apache.parquet", stage="topic"),
+        _artifact_record(root, key=f"themes_{spec.month_text}", relative_path=f"data/themes/monthly/{spec.month_text}.parquet", category=ArtifactCategory.DATA, media_type="application/vnd.apache.parquet", stage="theme"),
         _artifact_record(root, key="provider_run_summary", relative_path="data/themes/provider_run_summary.json", category=ArtifactCategory.DATA, media_type="application/json", stage="theme"),
         _artifact_record(root, key="report_html", relative_path="reports/report.html", category=ArtifactCategory.REPORT, media_type="text/html", stage="report"),
-        _artifact_record(root, key="fixture_debug", relative_path="intermediate/debug.json", category=ArtifactCategory.INTERMEDIATE, media_type="application/json", stage="fixture"),
+        _artifact_record(root, key="fixture_debug", relative_path="_intermediate/debug.json", category=ArtifactCategory.INTERMEDIATE, media_type="application/json", stage="fixture"),
     ]
     if spec.include_optional:
         records.extend(
             [
-                _artifact_record(root, key="partial_matched_communities_topics", relative_path="data/topics/partial/topics.csv", category=ArtifactCategory.DATA, media_type="text/csv", stage="topic"),
-                _artifact_record(root, key="community_transitions", relative_path="data/themes/community_transition.csv", category=ArtifactCategory.DATA, media_type="text/csv", stage="theme"),
+                _artifact_record(root, key="partial_matched_communities_topics", relative_path="data/topics/partial/topics.parquet", category=ArtifactCategory.DATA, media_type="application/vnd.apache.parquet", stage="topic"),
+                _artifact_record(root, key="community_transitions", relative_path="data/themes/community_transition.parquet", category=ArtifactCategory.DATA, media_type="application/vnd.apache.parquet", stage="theme"),
                 _artifact_record(root, key="visualization_theme_similarity_general.png", relative_path="reports/figures/theme_similarity/general.png", category=ArtifactCategory.REPORT, media_type="image/png", stage="theme"),
             ]
         )
@@ -455,8 +474,10 @@ def _build_run(artifact_root: Path, spec: RunSpec) -> Path:
     validate_run_manifest(root)
 
     if spec.tamper_after_validation:
-        target = root / "data/communities/absolute/communities.csv"
-        target.write_text(target.read_text(encoding="utf-8") + "tampered,row\n", encoding="utf-8")
+        # Tamper with the artifact
+        target = root / "data/communities/absolute/communities.parquet"
+        with open(target, "ab") as f:
+            f.write(b"tampered_row\n")
         try:
             validate_run_manifest(root)
         except ValueError:
@@ -505,7 +526,7 @@ def build_fixture(output_root: Path) -> dict[str, str]:
     _copy_selected_runs(
         default_root,
         output_root / "variants/sampled-graph",
-        ["twitter-2017-04"],
+        ["twitter-2017-04-reply"],
     )
 
     summary = {

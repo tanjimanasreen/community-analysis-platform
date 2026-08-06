@@ -12,7 +12,14 @@ from src.orchestration.artifact_validation import (
     validate_artifact,
     validate_artifact_output,
 )
-from src.orchestration.hashing import hash_file, hash_mapping, topic_cache_key_fn
+from src.orchestration.hashing import (
+    hash_file,
+    hash_mapping,
+    network_cache_key_fn,
+    theme_cache_key_fn,
+    topic_cache_key_fn,
+)
+import datetime
 from src.orchestration.models import (
     ArtifactReference,
     DatasetIdentity,
@@ -94,9 +101,24 @@ def _current_run_root(context: PipelineRunContext) -> str:
     return str(run_root_path(context.output_root, context.pipeline_run_id))
 
 
-def _csv_row_count(path: str) -> int:
-    """Return an exact CSV row count for a validated analytical artifact."""
-    return int(len(pd.read_csv(path)))
+def _artifact_row_count(path: str) -> int:
+    """Return an exact row count for a validated analytical artifact (CSV or Parquet)."""
+    suffix = Path(path).suffix.lower()
+    if suffix == ".parquet":
+        try:
+            import pyarrow.parquet as pq
+
+            return int(pq.ParquetFile(path).metadata.num_rows)
+        except ImportError:
+            return int(len(pd.read_parquet(path)))
+    if suffix == ".csv":
+        import csv
+
+        with Path(path).open("r", encoding="utf-8-sig", newline="") as handle:
+            reader = csv.reader(handle)
+            next(reader, None)
+            return sum(1 for _ in reader)
+    raise ValueError(f"Unsupported tabular artifact format: {path}")
 
 
 def _read_dvc_pointer_metadata(dataset_path: str) -> tuple[str | None, str | None]:
@@ -161,10 +183,11 @@ def validate_run_configuration_task(
             ErrorCategory.INVALID_CONFIGURATION,
         )
 
-    try:
-        _ = normalize_month(config["month"])
-    except (KeyError, ValueError) as e:
-        raise PipelineError(str(e), ErrorCategory.INVALID_CONFIGURATION) from e
+    if "longitudinal_datasets" not in config or "month" in config:
+        try:
+            _ = normalize_month(config["month"])
+        except (KeyError, ValueError) as e:
+            raise PipelineError(str(e), ErrorCategory.INVALID_CONFIGURATION) from e
 
     # Persist only a recursively sanitized configuration. Runtime credentials
     # remain environment/provider-factory concerns and never enter Prefect results.
@@ -246,6 +269,8 @@ def resolve_dataset_identity_task(
     name="run-monthly-network-community-phase",
     retries=0,
     persist_result=True,
+    cache_key_fn=network_cache_key_fn,
+    cache_expiration=datetime.timedelta(days=30),
 )
 def run_monthly_network_community_phase_task(
     dataset_identity: DatasetIdentity,
@@ -259,9 +284,19 @@ def run_monthly_network_community_phase_task(
     """
     from src.pipelines.social_network_pipeline import run_network_community_pipeline
 
-    df = pd.read_csv(dataset_identity.path)
+    if hasattr(dataset_identity, "result"):
+        dataset_identity = dataset_identity.result()
 
-    raw = config.raw_config
+    val_config = config
+    if hasattr(config, "result"):
+        val_config = config.result()
+
+    if dataset_identity.path.endswith(".parquet"):
+        df = pd.read_parquet(dataset_identity.path)
+    else:
+        df = pd.read_csv(dataset_identity.path)
+
+    raw = val_config.raw_config
     isolated_output = _current_run_root(context)
     os.makedirs(isolated_output, exist_ok=True)
 
@@ -287,6 +322,11 @@ def run_monthly_network_community_phase_task(
             "min_members", raw.get("min_members", 3)
         ),
         output_dir=isolated_output,
+        dashboard_graph_sample_max_edges=max(
+            0, int(raw.get("dashboard", {}).get("graph_sample_max_edges", 50_000))
+        ),
+        louvain_resolution=float(raw.get("louvain", {}).get("resolution", 1.0)),
+        louvain_seed=int(raw.get("louvain", {}).get("seed", 123)),
     )
 
     artifacts = []
@@ -296,41 +336,67 @@ def run_monthly_network_community_phase_task(
     year = str(raw.get("year", "2017"))
 
     expected_paths = {
-        "network_data": f"{data_type}/network_data/{content_type}/{month}{year}.csv",
-        "user_centrality": f"{data_type}/user_centrality/{content_type}/{month}.csv",
-        "count_user_messages": f"{data_type}/count_user_messages/{content_type}/{month}.csv",
-        "daily_messages_stat": f"{data_type}/daily_messages_stat/{content_type}/{month}.csv",
-        "communities_matched": f"{data_type}/communities/matched/{content_type}/{month}.csv",
-        "topic_manifest": (
-            f"{data_type}/_intermediate/topic_inputs/{content_type}/{month}_{year}/manifest.json"
+        "network_data": f"{data_type}/network_data/{content_type}/{month}{year}.parquet",
+        "user_centrality": f"{data_type}/user_centrality/{content_type}/{month}.parquet",
+        "count_user_messages": f"{data_type}/count_user_messages/{content_type}/{month}.parquet",
+        "daily_messages_stat": f"{data_type}/daily_messages_stat/{content_type}/{month}.parquet",
+        "communities_matched": (
+            f"{data_type}/communities/matched/{content_type}/{month}.parquet"
         ),
         "topic_absolute_messages": (
             f"{data_type}/_intermediate/topic_inputs/{content_type}/{month}_{year}"
-            "/absolute_community_messages.csv"
+            "/absolute_community_messages.parquet"
         ),
         "topic_weighted_messages": (
             f"{data_type}/_intermediate/topic_inputs/{content_type}/{month}_{year}"
-            "/weighted_community_messages.csv"
+            "/weighted_community_messages.parquet"
         ),
-        "topic_matched": (
+        "topic_matched_communities": (
             f"{data_type}/_intermediate/topic_inputs/{content_type}/{month}_{year}"
-            "/matched_communities.csv"
+            "/matched_communities.parquet"
+        ),
+        "topic_manifest": (
+            f"{data_type}/_intermediate/topic_inputs/{content_type}/{month}_{year}/manifest.json"
         ),
     }
 
     optional_paths = {
         "communities_absolute": (
-            f"{data_type}/communities/graphs/absolute/{content_type}/{month}.csv"
+            f"{data_type}/communities/graphs/absolute/{content_type}/{month}.parquet"
         ),
         "communities_weighted": (
-            f"{data_type}/communities/graphs/weighted/{content_type}/{month}.csv"
+            f"{data_type}/communities/graphs/weighted/{content_type}/{month}.parquet"
         ),
         "communities_partially_matched": (
-            f"{data_type}/communities/partially_matched/{content_type}/{month}.csv"
+            f"{data_type}/communities/partially_matched/{content_type}/{month}.parquet"
+        ),
+        "community_summary_absolute": (
+            f"{data_type}/communities/summary/absolute/{content_type}/{month}.parquet"
+        ),
+        "community_summary_weighted": (
+            f"{data_type}/communities/summary/weighted/{content_type}/{month}.parquet"
+        ),
+        "community_graph_sample_absolute": (
+            f"{data_type}/communities/graph_samples/absolute/{content_type}/{month}.parquet"
+        ),
+        "community_graph_sample_weighted": (
+            f"{data_type}/communities/graph_samples/weighted/{content_type}/{month}.parquet"
+        ),
+        "community_node_index_absolute": (
+            f"{data_type}/communities/node_index/absolute/{content_type}/{month}.parquet"
+        ),
+        "community_node_index_weighted": (
+            f"{data_type}/communities/node_index/weighted/{content_type}/{month}.parquet"
+        ),
+        "community_interactions_absolute": (
+            f"{data_type}/communities/interactions/absolute/{content_type}/{month}.parquet"
+        ),
+        "community_interactions_weighted": (
+            f"{data_type}/communities/interactions/weighted/{content_type}/{month}.parquet"
         ),
         "topic_partial_matched": (
             f"{data_type}/_intermediate/topic_inputs/{content_type}/{month}_{year}"
-            "/partial_matched_communities.csv"
+            "/partial_matched_communities.parquet"
         ),
     }
 
@@ -342,13 +408,21 @@ def run_monthly_network_community_phase_task(
                 path=filepath,
                 sha256=hash_file(filepath),
                 media_type=(
-                    "application/json" if filepath.endswith(".json") else "text/csv"
+                    "application/json"
+                    if filepath.endswith(".json")
+                    else (
+                        "application/octet-stream"
+                        if filepath.endswith(".parquet")
+                        else "application/octet-stream"
+                    )
                 ),
                 byte_size=os.path.getsize(filepath),
                 row_count=(
-                    _csv_row_count(filepath) if filepath.endswith(".csv") else None
+                    _artifact_row_count(filepath)
+                    if filepath.endswith((".parquet", ".csv"))
+                    else None
                 ),
-                asset_key=key,
+                asset_key=f"{key}_{month}",
             )
         )
 
@@ -360,13 +434,21 @@ def run_monthly_network_community_phase_task(
                     path=filepath,
                     sha256=hash_file(filepath),
                     media_type=(
-                        "application/json" if filepath.endswith(".json") else "text/csv"
+                        "application/json"
+                        if filepath.endswith(".json")
+                        else (
+                            "application/octet-stream"
+                            if filepath.endswith(".parquet")
+                            else "application/octet-stream"
+                        )
                     ),
                     byte_size=os.path.getsize(filepath),
                     row_count=(
-                        _csv_row_count(filepath) if filepath.endswith(".csv") else None
+                        _artifact_row_count(filepath)
+                        if filepath.endswith((".parquet", ".csv"))
+                        else None
                     ),
-                    asset_key=key,
+                    asset_key=f"{key}_{month}",
                 )
             )
 
@@ -382,7 +464,8 @@ def run_monthly_network_community_phase_task(
     name="run-monthly-topic-phase",
     retries=0,
     persist_result=True,
-    cache_key_fn=None,  # Deliberately disabled; deterministic helper exists for future use.
+    cache_key_fn=topic_cache_key_fn,
+    cache_expiration=datetime.timedelta(days=30),
 )
 def run_monthly_topic_phase_task(
     input_bundle: TopicInputBundle,
@@ -412,7 +495,8 @@ def run_monthly_topic_phase_task(
         Input row ordering is preserved by the CSV save/load cycle.
         Vocabulary ordering is determined by Gensim's Dictionary which processes
         documents in iteration order — stable when input rows are stable.
-        Worker count is not configurable (single-threaded Gensim LDA).
+        The domain implementation uses Gensim LdaMulticore. Longitudinal month
+        jobs remain sequential by default to avoid nesting multiple process pools.
         Reproducibility is limited to the same Gensim/NumPy/BLAS version.
 
     Caching:
@@ -447,7 +531,6 @@ def run_monthly_topic_phase_task(
         input_bundle.absolute_community_messages,
         allowed_roots,
         required=True,
-        expected_media_type="text/csv",
         required_csv_columns=COMMUNITY_MESSAGE_COLUMNS,
         label="absolute_community_messages",
     )
@@ -455,7 +538,6 @@ def run_monthly_topic_phase_task(
         input_bundle.weighted_community_messages,
         allowed_roots,
         required=True,
-        expected_media_type="text/csv",
         required_csv_columns=COMMUNITY_MESSAGE_COLUMNS,
         label="weighted_community_messages",
     )
@@ -463,7 +545,6 @@ def run_monthly_topic_phase_task(
         input_bundle.matched_communities,
         allowed_roots,
         required=True,
-        expected_media_type="text/csv",
         required_csv_columns=MATCHED_COMMUNITY_COLUMNS,
         label="matched_communities",
     )
@@ -472,35 +553,64 @@ def run_monthly_topic_phase_task(
             input_bundle.partial_matched_communities,
             allowed_roots,
             required=False,
-            expected_media_type="text/csv",
-            required_csv_columns=PARTIAL_MATCHED_COMMUNITY_COLUMNS,
             label="partial_matched_communities",
         )
 
     # --- Load DataFrames inside the task (never serialised to Prefect state) ---
-    def _load_community_messages(path):
+    def _parse_lists_in_df(df, list_cols):
         import ast
+        import json
 
-        df = pd.read_csv(path)
-        if "messages" in df.columns:
-            df["messages"] = df["messages"].apply(
-                lambda x: (
-                    ast.literal_eval(x)
-                    if isinstance(x, str) and x.startswith("[")
-                    else x
-                )
-            )
+        def _parse(x):
+            import numpy as np
+
+            if isinstance(x, (list, np.ndarray)):
+                return list(x)
+            try:
+                if pd.isna(x):
+                    return []
+            except ValueError:
+                pass
+            if isinstance(x, str) and x == "":
+                return []
+            if isinstance(x, str):
+                try:
+                    return json.loads(x)
+                except json.JSONDecodeError:
+                    try:
+                        return ast.literal_eval(x)
+                    except Exception:
+                        return []
+            return [x]
+
+        for col in list_cols:
+            if col in df.columns:
+                df[col] = df[col].apply(_parse)
         return df
+
+    def _load_community_messages(path):
+        df = pd.read_parquet(path)
+        return _parse_lists_in_df(df, ["messages", "messages_ids"])
 
     abs_df = _load_community_messages(input_bundle.absolute_community_messages.path)
     per_df = _load_community_messages(input_bundle.weighted_community_messages.path)
-    matched_df = pd.read_csv(input_bundle.matched_communities.path)
+    matched_df = _parse_lists_in_df(
+        pd.read_parquet(input_bundle.matched_communities.path), ["members"]
+    )
 
     partial_df = pd.DataFrame()
     if input_bundle.partial_matched_communities is not None and os.path.exists(
         input_bundle.partial_matched_communities.path
     ):
-        partial_df = pd.read_csv(input_bundle.partial_matched_communities.path)
+        partial_df = _parse_lists_in_df(
+            pd.read_parquet(input_bundle.partial_matched_communities.path),
+            [
+                "absolute_members",
+                "weighted_members",
+                "common_members",
+                "uncommon_members",
+            ],
+        )
 
     # --- Execute domain logic ---
     run_topic_phase(
@@ -513,20 +623,21 @@ def run_monthly_topic_phase_task(
         data_type=data_type,
         content_type=content_type,
         output_dir=isolated_output,
+        lda_config=raw.get("lda", {}),
     )
 
     # --- Collect outputs using explicit expected paths ---
     scores_path = os.path.join(
-        isolated_output, data_type, "LDA", "scores", content_type, f"{month}.csv"
+        isolated_output, data_type, "LDA", "scores", content_type, f"{month}.parquet"
     )
     validate_artifact_output(scores_path, isolated_output, label="lda_scores")
     lda_scores = ArtifactReference(
         path=scores_path,
         sha256=hash_file(scores_path),
-        media_type="text/csv",
+        media_type="application/octet-stream",
         byte_size=os.path.getsize(scores_path),
-        row_count=_csv_row_count(scores_path),
-        asset_key="lda_scores",
+        row_count=_artifact_row_count(scores_path),
+        asset_key=f"lda_scores_{month}",
     )
 
     matched_topics = None
@@ -536,16 +647,16 @@ def run_monthly_topic_phase_task(
         "LDA",
         "matched",
         content_type,
-        f"{month}_{year}.csv",
+        f"{month}_{year}.parquet",
     )
     if os.path.exists(matched_path) and os.path.isfile(matched_path):
         matched_topics = ArtifactReference(
             path=matched_path,
             sha256=hash_file(matched_path),
-            media_type="text/csv",
+            media_type="application/octet-stream",
             byte_size=os.path.getsize(matched_path),
-            row_count=_csv_row_count(matched_path),
-            asset_key="matched_communities_topics",
+            row_count=_artifact_row_count(matched_path),
+            asset_key=f"matched_communities_topics_{month}",
         )
 
     partial_matched_topics = None
@@ -555,16 +666,16 @@ def run_monthly_topic_phase_task(
         "LDA",
         "partial_matched",
         content_type,
-        f"{month}_{year}.csv",
+        f"{month}_{year}.parquet",
     )
     if os.path.exists(partial_path) and os.path.isfile(partial_path):
         partial_matched_topics = ArtifactReference(
             path=partial_path,
             sha256=hash_file(partial_path),
-            media_type="text/csv",
+            media_type="application/octet-stream",
             byte_size=os.path.getsize(partial_path),
-            row_count=_csv_row_count(partial_path),
-            asset_key="partial_matched_communities_topics",
+            row_count=_artifact_row_count(partial_path),
+            asset_key=f"partial_matched_communities_topics_{month}",
         )
 
     # Theme-input preparation manifest (written by save_pipeline_theme_inputs)
@@ -575,7 +686,7 @@ def run_monthly_topic_phase_task(
         "_intermediate",
         "theme_inputs",
         content_type,
-        f"{month}_{year}",
+        str(year),
         "manifest.json",
     )
     if os.path.exists(manifest_path) and os.path.isfile(manifest_path):
@@ -617,7 +728,9 @@ _VISUALIZATION_MEDIA_TYPES = {
 }
 
 
-def _build_provider_summary(raw: Mapping[str, Any]) -> dict:
+def _build_provider_summary(
+    raw: Mapping[str, Any], run_metrics: Mapping[str, Any] | None = None
+) -> dict:
     """Build a small, secret-free provider lineage record."""
     theme_cfg = raw.get("theme_provider", {})
     if isinstance(theme_cfg, str):
@@ -629,6 +742,9 @@ def _build_provider_summary(raw: Mapping[str, Any]) -> dict:
 
     # Build a deterministic digest of the provider config (secrets already
     # stripped from raw_config in validate_run_configuration_task).
+    theme_settings = raw.get("theme", {})
+    if not isinstance(theme_settings, Mapping):
+        theme_settings = {}
     provider_cfg_safe = {
         "primary": primary,
         "fallback_chain": fallback_chain,
@@ -636,30 +752,43 @@ def _build_provider_summary(raw: Mapping[str, Any]) -> dict:
     }
     from src.orchestration.hashing import hash_mapping as _hash
 
-    return {
+    configured_model = str(raw.get("theme_model", ""))
+    if not configured_model and isinstance(primary, str) and ":" in primary:
+        configured_model = primary.split(":", 1)[1]
+
+    summary = {
         "schema_version": "1.0",
         "configured_primary_provider": primary,
-        "configured_primary_model": raw.get("theme_model", ""),
+        "configured_primary_model": configured_model,
         "configured_fallback_chain": fallback_chain,
         "provider_config_digest": _hash(provider_cfg_safe),
         "prompt_version": raw.get("prompt_version", "v1"),
         "generation_settings_digest": _hash(
             {
-                "render_visuals": raw.get("render_visuals", True),
-                "similarity_model_name": raw.get(
-                    "similarity_model_name", "paraphrase-MiniLM-L6-v2"
+                "render_visuals": theme_settings.get(
+                    "render_visuals", raw.get("render_visuals", True)
+                ),
+                "similarity_model_name": theme_settings.get(
+                    "similarity_model",
+                    raw.get("similarity_model_name", "paraphrase-MiniLM-L6-v2"),
                 ),
             }
         ),
-        "semantic_task_version": "1.0.0",
+        "semantic_task_version": "1.1.0",
     }
+    if run_metrics:
+        safe_metrics = dict(run_metrics)
+        safe_metrics.pop("prompts_and_responses", None)
+        summary["run_metrics"] = safe_metrics
+    return summary
 
 
 @task(
     name="run-monthly-themes-phase",
     retries=0,
     persist_result=True,
-    cache_key_fn=None,
+    cache_key_fn=theme_cache_key_fn,
+    cache_expiration=datetime.timedelta(days=30),
 )
 def run_monthly_themes_task(
     input_bundle: ThemeInputBundle,
@@ -686,6 +815,7 @@ def run_monthly_themes_task(
     from src.pipelines.theme_pipeline import run_theme_pipeline_from_monthly_data
 
     raw = config.raw_config
+    data_type = str(raw.get("data_type", "twitter"))
     content_type = str(_required_config_value(raw, "content_type"))
     year = str(_required_config_value(raw, "year"))
 
@@ -710,7 +840,7 @@ def run_monthly_themes_task(
             artifact_ref,
             allowed_roots,
             required=True,
-            expected_media_type="text/csv",
+            expected_media_type="application/octet-stream",
             required_csv_columns=REQUIRED_COLUMNS,
             label=f"theme_input[{month}]",
         )
@@ -719,8 +849,10 @@ def run_monthly_themes_task(
     import ast
 
     def _parse_list(value: Any) -> list[Any]:
-        if isinstance(value, list):
-            return value
+        if isinstance(value, (list, tuple)):
+            return list(value)
+        if hasattr(value, "__len__") and not isinstance(value, (str, bytes)):
+            return list(value)
         if pd.isna(value) or value == "":
             return []
         if isinstance(value, str):
@@ -737,65 +869,90 @@ def run_monthly_themes_task(
 
     monthly_data_dict: dict[str, pd.DataFrame] = {}
     for month, ref in input_bundle.monthly_topic_outputs.items():
-        frame = pd.read_csv(ref.path)
+        frame = pd.read_parquet(ref.path)
         for column in LIST_COLUMNS:
             frame[column] = frame[column].apply(_parse_list)
         monthly_data_dict[month] = frame
 
     # --- 3. Delegate to domain (provider constructed once inside the domain) ---
+    vis_dir_name = os.path.join(data_type, "theme_analysis", content_type)
+    vis_dir = os.path.join(isolated_output, vis_dir_name)
+    os.makedirs(vis_dir, exist_ok=True)
+
+    theme_settings = raw.get("theme", {})
+    if not isinstance(theme_settings, Mapping):
+        theme_settings = {}
+    orchestration_settings = raw.get("orchestration", {})
+    if not isinstance(orchestration_settings, Mapping):
+        orchestration_settings = {}
+
     run_theme_pipeline_from_monthly_data(
         monthly_data_dict=monthly_data_dict,
         year=year,
         content_type=content_type,
-        output_dir=isolated_output,
+        output_dir=vis_dir,
         config=raw,
         provider=None,  # Domain constructs provider exactly once via build_theme_provider
-        render_visuals=bool(raw.get("render_visuals", True)),
+        render_visuals=bool(
+            theme_settings.get("render_visuals", raw.get("render_visuals", True))
+        ),
         similarity_model_name=str(
-            raw.get("similarity_model_name", "paraphrase-MiniLM-L6-v2")
+            theme_settings.get(
+                "similarity_model",
+                raw.get("similarity_model_name", "paraphrase-MiniLM-L6-v2"),
+            )
+        ),
+        max_theme_workers=max(
+            1,
+            int(
+                theme_settings.get(
+                    "max_workers", orchestration_settings.get("max_workers", 4)
+                )
+            ),
         ),
     )
 
     # --- 4. Collect theme CSV outputs (explicit expected paths) ---
     themes_artifacts = []
     for month in monthly_data_dict:
-        theme_path = os.path.join(isolated_output, f"{month}_{year}_with_themes.csv")
-        validate_artifact_output(theme_path, isolated_output, label=f"themes_{month}")
+        theme_path = os.path.join(vis_dir, f"{month}_{year}_with_themes.parquet")
+        validate_artifact_output(theme_path, vis_dir, label=f"themes_{month}")
         themes_artifacts.append(
             ArtifactReference(
                 path=theme_path,
                 sha256=hash_file(theme_path),
-                media_type="text/csv",
+                media_type="application/octet-stream",
                 byte_size=os.path.getsize(theme_path),
-                row_count=_csv_row_count(theme_path),
+                row_count=_artifact_row_count(theme_path),
                 asset_key=f"themes_{month}",
             )
         )
 
     # --- 5. Community transition artifact (explicit expected path) ---
-    transition_path = os.path.join(isolated_output, "community_transition.csv")
-    transition_artifact = None
-    if os.path.exists(transition_path) and os.path.isfile(transition_path):
-        transition_artifact = ArtifactReference(
-            path=transition_path,
-            sha256=hash_file(transition_path),
-            media_type="text/csv",
-            byte_size=os.path.getsize(transition_path),
-            row_count=_csv_row_count(transition_path),
-            asset_key="community_transitions",
-        )
+    transitions_path = os.path.join(vis_dir, "community_transition.parquet")
+    validate_artifact_output(
+        transitions_path, isolated_output, label="community_transition"
+    )
+    transition_ref = ArtifactReference(
+        path=transitions_path,
+        sha256=hash_file(transitions_path),
+        media_type="application/octet-stream",
+        byte_size=os.path.getsize(transitions_path),
+        row_count=_artifact_row_count(transitions_path),
+        asset_key="community_transitions",
+    )
 
     # --- 6. Visualization artifacts (bounded, allowlisted, non-recursive) ---
     visualizations = []
-    for vis_dir_name in ("sankey", "membership_changes", "theme_similarity"):
-        vis_dir = os.path.join(isolated_output, vis_dir_name)
-        if not os.path.exists(vis_dir) or not os.path.isdir(vis_dir):
+    for sub_dir_name in ("sankey", "membership_changes", "theme_similarity"):
+        sub_dir = os.path.join(vis_dir, sub_dir_name)
+        if not os.path.exists(sub_dir) or not os.path.isdir(sub_dir):
             continue
-        filename_pattern = _VISUALIZATION_NAME_PATTERNS[vis_dir_name]
-        for filename in sorted(os.listdir(vis_dir)):  # sorted for determinism
+        filename_pattern = _VISUALIZATION_NAME_PATTERNS[sub_dir_name]
+        for filename in sorted(os.listdir(sub_dir)):  # sorted for determinism
             if not filename_pattern.fullmatch(filename):
                 continue
-            file_path = os.path.join(vis_dir, filename)
+            file_path = os.path.join(sub_dir, filename)
             if not os.path.isfile(file_path):
                 continue
             ext = Path(filename).suffix.lower()
@@ -817,8 +974,18 @@ def run_monthly_themes_task(
                 )
             )
 
-    # --- 7. Provider lineage summary (safe metadata only) ---
-    summary_data = _build_provider_summary(raw)
+    # --- 7. Provider lineage and aggregate metrics (safe metadata only) ---
+    provider_metrics_path = os.path.join(vis_dir, "run_metrics.json")
+    provider_metrics = None
+    if os.path.isfile(provider_metrics_path):
+        try:
+            with open(provider_metrics_path, encoding="utf-8") as handle:
+                payload = json.load(handle)
+            if isinstance(payload, Mapping):
+                provider_metrics = payload
+        except (OSError, json.JSONDecodeError):
+            provider_metrics = None
+    summary_data = _build_provider_summary(raw, provider_metrics)
     provider_run_summary_path = os.path.join(
         isolated_output, "provider_run_summary.json"
     )
@@ -835,7 +1002,7 @@ def run_monthly_themes_task(
 
     return ThemeOutputBundle(
         themes=tuple(themes_artifacts),
-        community_transitions=transition_artifact,
+        community_transitions=transition_ref,
         visualizations=tuple(visualizations),
         provider_run_summary=provider_run_summary,
     )

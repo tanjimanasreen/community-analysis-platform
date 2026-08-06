@@ -1,69 +1,80 @@
-import requests
-import numpy as np
+from __future__ import annotations
+
 from typing import List, Union
+
+import numpy as np
+import requests
 
 
 class TEIClient:
+    """Small connection-reusing client for Hugging Face TEI embeddings."""
+
     def __init__(
         self,
         base_url: str = "http://127.0.0.1:8080",
-        api_key: str = None,
+        api_key: str | None = None,
         client_batch_size: int = 32,
         timeout_seconds: float = 60.0,
+        session: requests.Session | None = None,
     ):
-        # Normalize trailing slashes and construct TEI endpoint paths safely.
         self.base_url = base_url.rstrip("/")
         self.embed_endpoint = f"{self.base_url}/embed"
         self.predict_endpoint = f"{self.base_url}/predict"
-
         self.headers = {"Content-Type": "application/json"}
         if api_key:
             self.headers["Authorization"] = f"Bearer {api_key}"
+        self.client_batch_size = max(1, int(client_batch_size))
+        self.timeout_seconds = float(timeout_seconds)
+        self._session = session or requests.Session()
 
-        self.client_batch_size = client_batch_size
-        self.timeout_seconds = timeout_seconds
+    def _post(self, endpoint: str, payload: dict):
+        return self._session.post(
+            endpoint,
+            json=payload,
+            headers=self.headers,
+            timeout=self.timeout_seconds,
+        )
+
+    @staticmethod
+    def _parse_embeddings(payload) -> list:
+        if isinstance(payload, dict) and "embeddings" in payload:
+            return list(payload["embeddings"])
+        if isinstance(payload, dict) and "data" in payload:
+            return [item["embedding"] for item in payload["data"]]
+        if isinstance(payload, list):
+            return payload
+        raise RuntimeError("TEI returned an unsupported embedding response shape")
 
     def encode(self, sentences: Union[str, List[str]]) -> np.ndarray:
         if isinstance(sentences, str):
             sentences = [sentences]
+        if not sentences:
+            return np.empty((0, 0), dtype=float)
 
-        all_embeddings = []
-
-        # Process in batches to respect TEI client_batch_size
-        for i in range(0, len(sentences), self.client_batch_size):
-            batch = sentences[i : i + self.client_batch_size]
+        all_embeddings: list = []
+        for start in range(0, len(sentences), self.client_batch_size):
+            batch = sentences[start : start + self.client_batch_size]
             payload = {"inputs": batch, "normalize": True}
-
-            response = requests.post(
-                self.embed_endpoint,
-                json=payload,
-                headers=self.headers,
-                timeout=self.timeout_seconds,
-            )
-
+            response = self._post(self.embed_endpoint, payload)
+            if response.status_code == 404:
+                response = self._post(self.predict_endpoint, payload)
             if response.status_code != 200:
-                # Fallback to feature extraction route if /embed fails with 404
-                if response.status_code == 404:
-                    response = requests.post(
-                        self.predict_endpoint,
-                        json=payload,
-                        headers=self.headers,
-                        timeout=self.timeout_seconds,
-                    )
+                body = response.text[:1000]
+                raise RuntimeError(
+                    f"TEI request failed with status {response.status_code}: {body}"
+                )
+            embeddings = self._parse_embeddings(response.json())
+            if len(embeddings) != len(batch):
+                raise RuntimeError(
+                    "TEI embedding count mismatch: "
+                    f"expected {len(batch)}, received {len(embeddings)}"
+                )
+            all_embeddings.extend(embeddings)
 
-                if response.status_code != 200:
-                    raise RuntimeError(
-                        f"TEI Request failed with status {response.status_code}: {response.text}"
-                    )
+        matrix = np.asarray(all_embeddings, dtype=float)
+        if matrix.ndim != 2 or not np.isfinite(matrix).all():
+            raise RuntimeError("TEI returned invalid or non-finite embeddings")
+        return matrix
 
-            embeddings = response.json()
-
-            if isinstance(embeddings, dict) and "embeddings" in embeddings:
-                all_embeddings.extend(embeddings["embeddings"])
-            elif isinstance(embeddings, dict) and "data" in embeddings:
-                vectors = [item["embedding"] for item in embeddings["data"]]
-                all_embeddings.extend(vectors)
-            else:
-                all_embeddings.extend(embeddings)
-
-        return np.array(all_embeddings, dtype=float)
+    def close(self) -> None:
+        self._session.close()

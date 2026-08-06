@@ -4,6 +4,7 @@ import ast
 import hashlib
 import json
 import shutil
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
@@ -35,6 +36,9 @@ LIST_COLUMNS = {
 
 class ThemeInputError(ValueError):
     """Raised when saved theme-input artifacts are missing or invalid."""
+
+
+_MANIFEST_LOCK = threading.Lock()
 
 
 @dataclass(frozen=True)
@@ -85,7 +89,10 @@ def save_theme_inputs(
     if not source_path.exists():
         raise ThemeInputError(f"Matched LDA CSV not found: {source_path}")
 
-    frame = pd.read_csv(source_path, low_memory=False)
+    if source_path.name.endswith(".parquet"):
+        frame = pd.read_parquet(source_path)
+    else:
+        frame = pd.read_csv(source_path)
     validate_theme_dataframe(frame, source_path.name)
 
     output_dir = build_theme_input_dir(
@@ -96,36 +103,41 @@ def save_theme_inputs(
     )
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    filename = f"{month}_{year}.csv"
+    filename = f"{month}_{year}.parquet"
     destination = output_dir / filename
-    shutil.copyfile(source_path, destination)
+    frame.to_parquet(destination, index=False)
 
     manifest_path = output_dir / MANIFEST_FILE
-    existing_manifest = _read_manifest_if_present(manifest_path)
-    filenames = dict(existing_manifest.get("filenames", {}))
-    hashes = dict(existing_manifest.get("hashes", {}))
-    filenames[str(month)] = filename
-    hashes[filename] = _sha256_file(destination)
-    months = sorted(filenames.keys(), key=_month_sort_key)
 
-    manifest = {
-        "schema_version": SCHEMA_VERSION,
-        "data_type": str(data_type),
-        "content_type": str(content_type),
-        "year": str(year),
-        "months": months,
-        "filenames": {month_key: filenames[month_key] for month_key in months},
-        "hashes": hashes,
-        "created_by": "run-topics",
-        "lda": {
-            "num_topics": DEFAULT_CONFIG.lda.num_topics,
-            "random_state": DEFAULT_CONFIG.lda.random_state,
-            "passes": DEFAULT_CONFIG.lda.passes,
-            "iterations": DEFAULT_CONFIG.lda.iterations,
-            "chunksize": DEFAULT_CONFIG.lda.chunksize,
-        },
-    }
-    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    with _MANIFEST_LOCK:
+        existing_manifest = _read_manifest_if_present(manifest_path)
+        filenames = dict(existing_manifest.get("filenames", {}))
+        hashes = dict(existing_manifest.get("hashes", {}))
+        filenames[str(month)] = filename
+        hashes[filename] = _sha256_file(destination)
+        months = sorted(filenames.keys(), key=_month_sort_key)
+
+        manifest = {
+            "schema_version": SCHEMA_VERSION,
+            "data_type": str(data_type),
+            "content_type": str(content_type),
+            "year": str(year),
+            "months": months,
+            "filenames": {month_key: filenames[month_key] for month_key in months},
+            "hashes": hashes,
+            "created_by": "run-topics",
+            "lda": {
+                "num_topics": DEFAULT_CONFIG.lda.num_topics,
+                "random_state": DEFAULT_CONFIG.lda.random_state,
+                "passes": DEFAULT_CONFIG.lda.passes,
+                "iterations": DEFAULT_CONFIG.lda.iterations,
+                "chunksize": DEFAULT_CONFIG.lda.chunksize,
+            },
+        }
+        manifest_path.write_text(
+            json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
+        )
+
     return output_dir
 
 
@@ -183,7 +195,7 @@ def load_theme_inputs(
             raise ThemeInputError(
                 f"Theme input hash mismatch for {path}: expected {expected_hash}, got {actual_hash}"
             )
-        frame = pd.read_csv(path, low_memory=False)
+        frame = pd.read_parquet(path)
         validate_theme_dataframe(frame, filename)
         monthly_data[str(month)] = _parse_list_columns(frame)
     return ThemeInputBundle(
@@ -215,10 +227,10 @@ def _load_csvs_without_manifest(base: Path, year: str) -> dict[str, pd.DataFrame
         return {}
     monthly_data: dict[str, pd.DataFrame] = {}
     for path in sorted(
-        base.glob(f"*_{year}.csv"),
+        base.glob(f"*_{year}.parquet"),
         key=lambda item: _month_sort_key(_month_from_filename(item, year)),
     ):
-        frame = pd.read_csv(path, low_memory=False)
+        frame = pd.read_parquet(path)
         validate_theme_dataframe(frame, path.name)
         monthly_data[_month_from_filename(path, year)] = _parse_list_columns(frame)
     return monthly_data
@@ -234,7 +246,16 @@ def _parse_list_columns(frame: pd.DataFrame) -> pd.DataFrame:
 def _parse_list(value: Any) -> list:
     if isinstance(value, list):
         return value
-    if pd.isna(value) or value == "":
+    if hasattr(value, "tolist"):
+        return value.tolist()
+
+    try:
+        if pd.isna(value):
+            return []
+    except ValueError:
+        pass
+
+    if isinstance(value, str) and value == "":
         return []
     if isinstance(value, str):
         text = value.strip()

@@ -36,14 +36,14 @@ def load_prepare_data(input_dir: str, year: str) -> dict[str, pd.DataFrame]:
         return {}
 
     monthly_files = sorted(
-        base.glob(f"*_{year}.csv"),
+        base.glob(f"*_{year}.parquet"),
         key=lambda path: _month_sort_key(_month_from_filename(path, year)),
     )
 
     monthly_data: dict[str, pd.DataFrame] = {}
     for path in monthly_files:
         month = _month_from_filename(path, year)
-        df = pd.read_csv(path)
+        df = pd.read_parquet(path)
         for column in KEYWORD_COLUMNS:
             if column not in df.columns:
                 df[column] = [[] for _ in range(len(df))]

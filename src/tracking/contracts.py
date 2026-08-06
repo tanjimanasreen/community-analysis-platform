@@ -93,6 +93,14 @@ STAGE_METRIC_KEYS = frozenset(
         "theme_output_count",
         "theme_generation_success_count",
         "visualization_count",
+        "llm_prompt_tokens",
+        "llm_completion_tokens",
+        "llm_tokens_per_second",
+        "llm_total_cost",
+        "llm_calls",
+        "llm_avg_latency_ms",
+        "llm_avg_ttft_ms",
+        "llm_avg_tpot_ms",
     }
 )
 METRIC_KEYS = PARENT_METRIC_KEYS | STAGE_METRIC_KEYS
@@ -159,6 +167,14 @@ class ExperimentTracker(Protocol):
         filename: str,
         payload: Mapping[str, Any],
         artifact_path: str = "summaries",
+    ) -> None: ...
+
+    def log_table(
+        self,
+        run_id: str,
+        *,
+        filename: str,
+        df: Any,
     ) -> None: ...
 
     def finish_run(self, run_id: str, status: str) -> None: ...

@@ -1,7 +1,12 @@
+import json
+import logging
 import os
+import time
 from pathlib import Path
+from typing import Any
+
+import numpy as np
 import pandas as pd
-from typing import List, Dict, Tuple, Any
 
 from src.ingestion.network_data_extractor import (
     get_creator_spreader,
@@ -18,28 +23,169 @@ from src.communities.louvain import (
     get_prominent_communities,
 )
 from src.communities.messages import (
+    build_community_message_index,
     get_community_messages,
     get_overall_community_messages_stat,
 )
+from src.communities.interactions import build_prominent_community_interactions
 from src.communities.similarity import find_matching_communities
+
+logger = logging.getLogger(__name__)
 
 
 def save_csv_to_directory(
     base_dir: str, subfolder: str, filename: str, data: pd.DataFrame
 ):
-    """
-    Creates a directory if not present and saves a CSV file inside it.
-    """
-    if data is None or data.empty:
+    """Persist a pipeline dataframe as Parquet under the legacy directory layout."""
+    if data is None:
         return
 
     path = Path(base_dir) / subfolder
     path.mkdir(parents=True, exist_ok=True)
 
-    csv_path = path / filename
-    data.to_csv(csv_path, index=False)
-    print(f"CSV saved at: {csv_path.resolve()}")
-    return csv_path
+    parquet_path = path / filename.replace(".csv", ".parquet")
+    data.to_parquet(parquet_path, index=False)
+    logger.info("artifact_saved path=%s rows=%d", parquet_path.resolve(), len(data))
+    return parquet_path
+
+
+def _dashboard_graph_sample(frame: pd.DataFrame, *, max_edges: int) -> pd.DataFrame:
+    """Return a deterministic, weight-ranked graph sample for dashboard reads.
+
+    The complete community graph remains the authoritative thesis artifact. This
+    additive sample prevents the global dashboard graph endpoint from scanning and
+    sorting millions of edges for every request.
+    """
+    if frame is None:
+        return pd.DataFrame(
+            columns=["source", "target", "community_number", "direction", "weight"]
+        )
+    if max_edges <= 0 or frame.empty:
+        return frame.head(0).copy()
+
+    sampled = frame.copy()
+    sampled["weight"] = pd.to_numeric(sampled["weight"], errors="coerce").fillna(0.0)
+    sampled["source"] = sampled["source"].astype(str)
+    sampled["target"] = sampled["target"].astype(str)
+    sampled["community_number"] = sampled["community_number"].astype(str)
+    return (
+        sampled.sort_values(
+            ["weight", "community_number", "source", "target"],
+            ascending=[False, True, True, True],
+            kind="stable",
+        )
+        .head(int(max_edges))
+        .reset_index(drop=True)
+    )
+
+
+def _community_summary(
+    frame: pd.DataFrame, interactions: pd.DataFrame | None = None
+) -> pd.DataFrame:
+    columns = ["community_id", "node_count", "edge_count", "total_weight"]
+    if interactions is not None:
+        columns.extend(["x", "y"])
+        
+    if frame is None or frame.empty:
+        return pd.DataFrame(columns=columns)
+
+    normalized = frame[["community_number", "source", "target", "weight"]].copy()
+    normalized["weight"] = pd.to_numeric(normalized["weight"], errors="coerce").fillna(
+        0.0
+    )
+    aggregate = (
+        normalized.groupby("community_number", sort=True, observed=True)
+        .agg(edge_count=("source", "size"), total_weight=("weight", "sum"))
+        .reset_index()
+    )
+    nodes = pd.concat(
+        [
+            normalized[["community_number", "source"]].rename(
+                columns={"source": "node"}
+            ),
+            normalized[["community_number", "target"]].rename(
+                columns={"target": "node"}
+            ),
+        ],
+        ignore_index=True,
+    )
+    node_counts = (
+        nodes.assign(node=nodes["node"].astype(str))
+        .drop_duplicates(["community_number", "node"])
+        .groupby("community_number", sort=True, observed=True)
+        .size()
+        .rename("node_count")
+        .reset_index()
+    )
+    summary = aggregate.merge(node_counts, on="community_number", how="left")
+    summary = summary.rename(columns={"community_number": "community_id"})
+    summary["community_id"] = summary["community_id"].astype(str)
+    summary["node_count"] = summary["node_count"].fillna(0).astype(int)
+    summary["edge_count"] = summary["edge_count"].astype(int)
+    summary["total_weight"] = summary["total_weight"].astype(float)
+    
+    if interactions is not None:
+        if not interactions.empty:
+            import networkx as nx
+            
+            G = nx.from_pandas_edgelist(
+                interactions,
+                source="source_community_id",
+                target="target_community_id",
+                edge_attr=["total_weight"],
+                create_using=nx.Graph()
+            )
+            G.add_nodes_from(summary["community_id"])
+            layout = nx.spring_layout(G, seed=42)
+            
+            coords = [
+                (str(node), float(layout[node][0] * 1000), float(layout[node][1] * 1000))
+                if node in layout else (str(node), 0.0, 0.0)
+                for node in summary["community_id"]
+            ]
+            
+            coords_df = pd.DataFrame(coords, columns=["community_id", "x", "y"])
+            summary = summary.merge(coords_df, on="community_id", how="left")
+        else:
+            summary["x"] = 0.0
+            summary["y"] = 0.0
+
+    return summary[columns]
+
+
+def _community_node_index(frame: pd.DataFrame) -> pd.DataFrame:
+    """Return unique graph node IDs and their pre-calculated layout coordinates."""
+    if frame is None or frame.empty:
+        return pd.DataFrame(columns=["node_id", "x", "y"])
+
+    # Extract unique nodes
+    nodes = pd.concat(
+        [frame["source"], frame["target"]],
+        ignore_index=True,
+    ).dropna().astype(str).drop_duplicates().sort_values().reset_index(drop=True)
+
+    # Calculate layout using networkx
+    import networkx as nx
+    G = nx.from_pandas_edgelist(
+        frame, "source", "target", ["weight"], create_using=nx.Graph()
+    )
+    # Ensure all nodes are present in G
+    G.add_nodes_from(nodes)
+
+    # spring_layout provides good results for force-directed graphs
+    # We use a fixed seed for reproducibility
+    layout = nx.spring_layout(G, seed=42)
+
+    # Default coordinates to 0.0 if missing (shouldn't happen, but safe)
+    # We scale coordinates up slightly to match the expected ForceGraph space
+    coords = [
+        (str(node), float(layout[node][0] * 1000), float(layout[node][1] * 1000))
+        if node in layout else (str(node), 0.0, 0.0)
+        for node in nodes
+    ]
+
+    df = pd.DataFrame(coords, columns=["node_id", "x", "y"])
+    return df
 
 
 def run_network_phase(
@@ -57,7 +203,13 @@ def run_network_phase(
     min_total_post: int = 10,
     min_shared_post: int = 5,
 ):
-    print("Running network extraction...")
+    phase_started = time.perf_counter()
+    logger.info(
+        "network_extraction_started data_type=%s content_type=%s rows=%d",
+        data_type,
+        content_type,
+        len(df_data),
+    )
 
     if data_type == "telegram":
         df_network = df_data.copy()
@@ -86,13 +238,31 @@ def run_network_phase(
         df_network,
     )
 
-    print("Creating graphs...")
+    logger.info(
+        "network_extraction_completed network_rows=%d users=%d " "elapsed_seconds=%.2f",
+        len(df_network),
+        len(df_user),
+        time.perf_counter() - phase_started,
+    )
+    graph_started = time.perf_counter()
+    logger.info(
+        "graph_construction_started interaction_rows=%d", len(followee_follower_df)
+    )
     G_absolute, G_percentage = get_network_graph(
         followee_follower_df,
         min_total_post=min_total_post,
         min_shared_post=min_shared_post,
     )
 
+    logger.info(
+        "graph_construction_completed absolute_nodes=%d absolute_edges=%d "
+        "weighted_nodes=%d weighted_edges=%d elapsed_seconds=%.2f",
+        G_absolute.number_of_nodes(),
+        G_absolute.number_of_edges(),
+        G_percentage.number_of_nodes(),
+        G_percentage.number_of_edges(),
+        time.perf_counter() - graph_started,
+    )
     return G_absolute, G_percentage, df_network, df_user
 
 
@@ -107,27 +277,104 @@ def run_community_phase(
     data_type: str,
     content_type: str,
     output_dir: str,
+    dashboard_graph_sample_max_edges: int = 50_000,
+    louvain_resolution: float = 1.0,
+    louvain_seed: int = 123,
 ):
-    print("Applying Louvain...")
-    abs_com, abs_part = get_louvain_community(G_absolute, "shared_post")
-    per_com, per_part = get_louvain_community(G_percentage, "weighted_post")
+    logger.info(
+        "louvain_started resolution=%s seed=%s", louvain_resolution, louvain_seed
+    )
+    abs_com, abs_part = get_louvain_community(
+        G_absolute,
+        "shared_post",
+        resolution=louvain_resolution,
+        seed=louvain_seed,
+    )
+    per_com, per_part = get_louvain_community(
+        G_percentage,
+        "weighted_post",
+        resolution=louvain_resolution,
+        seed=louvain_seed,
+    )
 
-    print("Filtering prominent communities...")
+    logger.info(
+        "louvain_completed absolute_communities=%d weighted_communities=%d",
+        len(abs_com),
+        len(per_com),
+    )
+    logger.info("prominent_community_filter_started min_members=%d", min_members)
     prominent_communities_abs = detect_prominent_communities(abs_com, min_members)
     prominent_communities_per = detect_prominent_communities(per_com, min_members)
 
-    abs_community = get_prominent_communities(prominent_communities_abs, G_absolute)
-    per_community = get_prominent_communities(prominent_communities_per, G_percentage)
+    abs_community = get_prominent_communities(
+        prominent_communities_abs, G_absolute, "shared_post"
+    )
+    per_community = get_prominent_communities(
+        prominent_communities_per, G_percentage, "weighted_post"
+    )
 
-    print("Extracting community messages...")
+    # Additive dashboard read models preserve the metric-local Louvain
+    # memberships while aggregating only genuine cross-community user
+    # interactions from the already-filtered monthly graph.
+    abs_community_interactions = build_prominent_community_interactions(
+        G_absolute,
+        prominent_communities_abs,
+        weight_attribute="shared_post",
+    )
+    per_community_interactions = build_prominent_community_interactions(
+        G_percentage,
+        prominent_communities_per,
+        weight_attribute="weighted_post",
+        interaction_graph=G_absolute,
+    )
+
+    message_index_started = time.perf_counter()
+    logger.info(
+        "community_message_index_started network_rows=%d absolute_communities=%d weighted_communities=%d",
+        len(df_network),
+        len(prominent_communities_abs),
+        len(prominent_communities_per),
+    )
+    message_index = build_community_message_index(
+        df_network, df_user, date_columns=(date_column,)
+    )
+    logger.info(
+        "community_message_index_completed indexed_edges=%d elapsed_seconds=%.2f",
+        len(message_index.edge_positions),
+        time.perf_counter() - message_index_started,
+    )
     abs_community_messages = get_community_messages(
-        prominent_communities_abs, abs_community, df_network, df_user
+        prominent_communities_abs,
+        abs_community,
+        df_network,
+        df_user,
+        message_index=message_index,
+        progress_label="absolute_community_messages",
     )
     per_community_messages = get_community_messages(
-        prominent_communities_per, per_community, df_network, df_user
+        prominent_communities_per,
+        per_community,
+        df_network,
+        df_user,
+        message_index=message_index,
+        progress_label="weighted_community_messages",
     )
 
-    print("Calculating user centrality...")
+    logger.info(
+        "community_message_extraction_completed absolute_messages=%d "
+        "weighted_messages=%d",
+        (
+            int(abs_community_messages["total_messages"].sum())
+            if not abs_community_messages.empty
+            else 0
+        ),
+        (
+            int(per_community_messages["total_messages"].sum())
+            if not per_community_messages.empty
+            else 0
+        ),
+    )
+    logger.info("centrality_started")
     abs_degree = get_prominent_communities_stat(
         prominent_communities_abs, G_absolute, df_user
     )
@@ -136,7 +383,11 @@ def run_community_phase(
     )
 
     df_user_centrality = pd.DataFrame(
-        {"month": [month], "absolute": [abs_degree], "weighted": [per_degree]}
+        {
+            "month": [month],
+            "absolute": [json.dumps(abs_degree)],
+            "weighted": [json.dumps(per_degree)],
+        }
     )
     save_csv_to_directory(
         os.path.join(output_dir, data_type, "user_centrality"),
@@ -145,7 +396,7 @@ def run_community_phase(
         df_user_centrality,
     )
 
-    print("Saving community graphs for frontend visualization...")
+    logger.info("dashboard_community_artifacts_started")
     if not abs_community.empty:
         save_csv_to_directory(
             os.path.join(output_dir, data_type, "communities", "graphs", "absolute"),
@@ -161,7 +412,72 @@ def run_community_phase(
             per_community,
         )
 
-    print("Calculating user message counts...")
+    # Additive, deterministic samples make the global dashboard graph bounded.
+    # Community detail requests continue to use the complete graph artifact.
+    save_csv_to_directory(
+        os.path.join(output_dir, data_type, "communities", "graph_samples", "absolute"),
+        content_type,
+        f"{month}.csv",
+        _dashboard_graph_sample(
+            abs_community, max_edges=dashboard_graph_sample_max_edges
+        ),
+    )
+    save_csv_to_directory(
+        os.path.join(output_dir, data_type, "communities", "graph_samples", "weighted"),
+        content_type,
+        f"{month}.csv",
+        _dashboard_graph_sample(
+            per_community, max_edges=dashboard_graph_sample_max_edges
+        ),
+    )
+
+    # Small dashboard-ready summaries avoid grouping every graph edge for each
+    # communities API request.  They are additive and do not replace thesis
+    # graph outputs.
+    save_csv_to_directory(
+        os.path.join(output_dir, data_type, "communities", "summary", "absolute"),
+        content_type,
+        f"{month}.csv",
+        _community_summary(abs_community, abs_community_interactions),
+    )
+    save_csv_to_directory(
+        os.path.join(output_dir, data_type, "communities", "summary", "weighted"),
+        content_type,
+        f"{month}.csv",
+        _community_summary(per_community, per_community_interactions),
+    )
+    save_csv_to_directory(
+        os.path.join(
+            output_dir, data_type, "communities", "interactions", "absolute"
+        ),
+        content_type,
+        f"{month}.csv",
+        abs_community_interactions,
+    )
+    save_csv_to_directory(
+        os.path.join(
+            output_dir, data_type, "communities", "interactions", "weighted"
+        ),
+        content_type,
+        f"{month}.csv",
+        per_community_interactions,
+    )
+    # Compact one-column indexes let the API calculate exact cross-month node
+    # counts without loading every authoritative graph edge.
+    save_csv_to_directory(
+        os.path.join(output_dir, data_type, "communities", "node_index", "absolute"),
+        content_type,
+        f"{month}.csv",
+        _community_node_index(abs_community),
+    )
+    save_csv_to_directory(
+        os.path.join(output_dir, data_type, "communities", "node_index", "weighted"),
+        content_type,
+        f"{month}.csv",
+        _community_node_index(per_community),
+    )
+
+    logger.info("community_counts_started")
     total_abs_users = (
         len(set(abs_community["source"].to_list() + abs_community["target"].to_list()))
         if not abs_community.empty
@@ -176,20 +492,24 @@ def run_community_phase(
     df_user_messages_count = pd.DataFrame(
         {
             "month": [month],
-            "user": [{"absolute": total_abs_users, "weighted": total_per_users}],
+            "user": [
+                json.dumps({"absolute": total_abs_users, "weighted": total_per_users})
+            ],
             "messages": [
-                {
-                    "absolute": (
-                        abs_community_messages["total_messages"].sum()
-                        if not abs_community_messages.empty
-                        else 0
-                    ),
-                    "weighted": (
-                        per_community_messages["total_messages"].sum()
-                        if not per_community_messages.empty
-                        else 0
-                    ),
-                }
+                json.dumps(
+                    {
+                        "absolute": int(
+                            abs_community_messages["total_messages"].sum()
+                            if not abs_community_messages.empty
+                            else 0
+                        ),
+                        "weighted": int(
+                            per_community_messages["total_messages"].sum()
+                            if not per_community_messages.empty
+                            else 0
+                        ),
+                    }
+                )
             ],
         }
     )
@@ -200,16 +520,37 @@ def run_community_phase(
         df_user_messages_count,
     )
 
-    print("Calculating daily message stats...")
+    logger.info("daily_message_stats_started")
     abs_msg_stat = get_overall_community_messages_stat(
-        date_column, prominent_communities_abs, abs_community, df_network
+        date_column,
+        prominent_communities_abs,
+        abs_community,
+        df_network,
+        message_index=message_index,
     )
     per_msg_stat = get_overall_community_messages_stat(
-        date_column, prominent_communities_per, per_community, df_network
+        date_column,
+        prominent_communities_per,
+        per_community,
+        df_network,
+        message_index=message_index,
     )
 
+    def _json_default(obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            return float(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return str(obj)
+
     df_daily_messages_stat = pd.DataFrame(
-        {"month": [month], "absolute": [abs_msg_stat], "weighted": [per_msg_stat]}
+        {
+            "month": [month],
+            "absolute": [json.dumps(abs_msg_stat, default=_json_default)],
+            "weighted": [json.dumps(per_msg_stat, default=_json_default)],
+        }
     )
     save_csv_to_directory(
         os.path.join(output_dir, data_type, "daily_messages_stat"),
@@ -218,7 +559,7 @@ def run_community_phase(
         df_daily_messages_stat,
     )
 
-    print("Finding matching communities...")
+    logger.info("community_matching_started")
     matched_df, partial_matched, unmatched_abs, unmatched_per = (
         find_matching_communities(abs_community, per_community)
     )
@@ -268,42 +609,72 @@ def run_topic_phase(
     data_type: str,
     content_type: str,
     output_dir: str,
+    lda_config: dict[str, Any] | None = None,
 ):
+    from src.topics.lda import get_bigram_lda, get_unigram_lda
     from src.topics.text_preprocessor import message_preprocess
-    from src.topics.lda import get_unigram_lda, get_bigram_lda
     from src.topics.topic_matching import get_matched_topic_df
 
-    print("Preprocessing messages for topic modeling...")
+    phase_started = time.perf_counter()
+    logger.info(
+        "topic_phase_started month=%s absolute_communities=%d "
+        "weighted_communities=%d",
+        month,
+        len(abs_community_messages),
+        len(per_community_messages),
+    )
+
+    preprocessing_started = time.perf_counter()
     if not abs_community_messages.empty:
+        abs_community_messages = abs_community_messages.copy()
         abs_community_messages["messages_processed"] = message_preprocess(
             abs_community_messages
         )
     if not per_community_messages.empty:
+        per_community_messages = per_community_messages.copy()
         per_community_messages["messages_processed"] = message_preprocess(
             per_community_messages
         )
-
-    print("Running LDA models...")
-    uni_doc_topics_abs, lda_abs, perplexity_abs, coherence_abs = (
-        get_unigram_lda(abs_community_messages)
-        if not abs_community_messages.empty
-        else (pd.DataFrame(), None, 0, 0)
-    )
-    uni_doc_topics_per, lda_per, perplexity_per, coherence_per = (
-        get_unigram_lda(per_community_messages)
-        if not per_community_messages.empty
-        else (pd.DataFrame(), None, 0, 0)
+    logger.info(
+        "topic_preprocessing_completed elapsed_seconds=%.2f",
+        time.perf_counter() - preprocessing_started,
     )
 
-    bi_doc_topics_abs, bi_lda_abs, perplexity_bi_abs, coherence_bi_abs = (
-        get_bigram_lda(abs_community_messages)
-        if not abs_community_messages.empty
-        else (pd.DataFrame(), None, 0, 0)
+    def _run_lda_model(label: str, function, frame: pd.DataFrame):
+        if frame.empty:
+            logger.info("lda_model_skipped model=%s reason=empty_input", label)
+            return pd.DataFrame(), None, 0.0, 0.0
+
+        started = time.perf_counter()
+        logger.info(
+            "lda_model_started model=%s communities=%d",
+            label,
+            len(frame),
+        )
+        result = function(frame, lda_config=lda_config)
+        document_topics, model, perplexity, coherence = result
+        logger.info(
+            "lda_model_completed model=%s documents=%d perplexity=%.6f "
+            "coherence=%.6f elapsed_seconds=%.2f",
+            label,
+            len(document_topics),
+            float(perplexity),
+            float(coherence),
+            time.perf_counter() - started,
+        )
+        return document_topics, model, perplexity, coherence
+
+    uni_doc_topics_abs, lda_abs, perplexity_abs, coherence_abs = _run_lda_model(
+        "unigram_absolute", get_unigram_lda, abs_community_messages
     )
-    bi_doc_topics_per, bi_lda_per, perplexity_bi_per, coherence_bi_per = (
-        get_bigram_lda(per_community_messages)
-        if not per_community_messages.empty
-        else (pd.DataFrame(), None, 0, 0)
+    uni_doc_topics_per, lda_per, perplexity_per, coherence_per = _run_lda_model(
+        "unigram_weighted", get_unigram_lda, per_community_messages
+    )
+    bi_doc_topics_abs, bi_lda_abs, perplexity_bi_abs, coherence_bi_abs = _run_lda_model(
+        "bigram_absolute", get_bigram_lda, abs_community_messages
+    )
+    bi_doc_topics_per, bi_lda_per, perplexity_bi_per, coherence_bi_per = _run_lda_model(
+        "bigram_weighted", get_bigram_lda, per_community_messages
     )
 
     df_lda_scores = pd.DataFrame(
@@ -322,14 +693,14 @@ def run_topic_phase(
         df_lda_scores,
     )
 
-    print("Extracting topics for matched communities...")
-    matched_communities = []
-    if not matched_df.empty:
-        for ind, row in matched_df.iterrows():
-            matched_communities.append(
-                tuple(row[["abs_community", "per_community"]].values)
-            )
-
+    matched_communities = [
+        (row.abs_community, row.per_community)
+        for row in matched_df.itertuples(index=False)
+    ]
+    logger.info(
+        "matched_topic_extraction_started matched_pairs=%d",
+        len(matched_communities),
+    )
     if matched_communities and lda_abs is not None and lda_per is not None:
         matched_topic_df = get_matched_topic_df(
             lda_models=[lda_abs, lda_per, bi_lda_abs, bi_lda_per],
@@ -365,14 +736,14 @@ def run_topic_phase(
                 output_dir=output_dir,
             )
 
-    print("Extracting topics for partially matched communities...")
-    partial_communities = []
-    if not partial_matched.empty:
-        for ind, row in partial_matched.iterrows():
-            partial_communities.append(
-                tuple(row[["abs_community", "per_community"]].values)
-            )
-
+    partial_communities = [
+        (row.abs_community, row.per_community)
+        for row in partial_matched.itertuples(index=False)
+    ]
+    logger.info(
+        "partial_topic_extraction_started partial_pairs=%d",
+        len(partial_communities),
+    )
     if partial_communities and lda_abs is not None and lda_per is not None:
         partial_matched_topic_df = get_matched_topic_df(
             lda_models=[lda_abs, lda_per, bi_lda_abs, bi_lda_per],
@@ -410,6 +781,11 @@ def run_topic_phase(
                 merge_partial,
             )
 
+    logger.info(
+        "topic_phase_completed month=%s elapsed_seconds=%.2f",
+        month,
+        time.perf_counter() - phase_started,
+    )
     return df_lda_scores
 
 
@@ -437,7 +813,7 @@ def save_pipeline_topic_inputs(
         month=month,
         year=year,
     )
-    print(f"Topic input artifacts saved at: {topic_input_dir.resolve()}")
+    logger.info("topic_inputs_saved path=%s", topic_input_dir.resolve())
     return topic_input_dir
 
 
@@ -459,7 +835,7 @@ def save_pipeline_theme_inputs(
         month=month,
         year=year,
     )
-    print(f"Theme input artifacts saved at: {theme_input_dir.resolve()}")
+    logger.info("theme_inputs_saved path=%s", theme_input_dir.resolve())
     return theme_input_dir
 
 
@@ -469,6 +845,7 @@ def run_topic_phase_from_saved_inputs(
     content_type: str,
     month: str,
     year: str,
+    lda_config: dict[str, Any] | None = None,
 ):
     from src.topics.topic_inputs import load_topic_inputs
 
@@ -489,6 +866,7 @@ def run_topic_phase_from_saved_inputs(
         data_type=data_type,
         content_type=content_type,
         output_dir=output_dir,
+        lda_config=lda_config,
     )
 
 
@@ -509,6 +887,10 @@ def run_full_pipeline(
     min_members: int = 3,
     output_dir: str = "results",
     include_topics: bool = True,
+    dashboard_graph_sample_max_edges: int = 50_000,
+    louvain_resolution: float = 1.0,
+    louvain_seed: int = 123,
+    lda_config: dict[str, Any] | None = None,
 ):
     """Orchestrates the entire thesis pipeline."""
     # 1. Network
@@ -540,6 +922,9 @@ def run_full_pipeline(
         data_type=data_type,
         content_type=content_type,
         output_dir=output_dir,
+        dashboard_graph_sample_max_edges=dashboard_graph_sample_max_edges,
+        louvain_resolution=louvain_resolution,
+        louvain_seed=louvain_seed,
     )
 
     save_pipeline_topic_inputs(
@@ -561,9 +946,10 @@ def run_full_pipeline(
             content_type=content_type,
             month=month,
             year=year,
+            lda_config=lda_config,
         )
 
-    print("Full pipeline completed successfully!")
+    logger.info("full_pipeline_completed")
     return True
 
 
@@ -583,6 +969,9 @@ def run_network_community_pipeline(
     min_shared_post: int = 5,
     min_members: int = 3,
     output_dir: str = "results",
+    dashboard_graph_sample_max_edges: int = 50_000,
+    louvain_resolution: float = 1.0,
+    louvain_seed: int = 123,
 ):
     """Run network and community stages without LDA/topic modeling."""
     return run_full_pipeline(
@@ -602,4 +991,7 @@ def run_network_community_pipeline(
         min_members=min_members,
         output_dir=output_dir,
         include_topics=False,
+        dashboard_graph_sample_max_edges=dashboard_graph_sample_max_edges,
+        louvain_resolution=louvain_resolution,
+        louvain_seed=louvain_seed,
     )

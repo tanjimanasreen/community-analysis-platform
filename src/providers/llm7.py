@@ -10,6 +10,7 @@ from importlib import metadata
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
+from src.config.settings import get_provider_settings
 from src.config.defaults import DEFAULT_CONFIG
 from src.themes.benchmark.contracts import (
     ProviderMetadata,
@@ -20,7 +21,6 @@ from src.themes.benchmark.contracts import (
 from src.themes.benchmark.live import LiveRequestBudget
 
 LLM7_PROVIDER_PREFIX = "llm7"
-LLM7_BASE_URL = "https://api.llm7.io/v1"
 LLM7_SELECTOR_IDS = {"default", "fast", "turbo", "pro"}
 LLM7_RATE_LIMIT_NOTES = {
     "anonymous": {"per_second": 1, "per_minute": 10, "per_hour": 60},
@@ -58,7 +58,11 @@ class LLM7GenerationConfig:
             "max_outbound_requests": self.max_outbound_requests,
             "sdk_version": sdk_version,
             "api": "chat.completions.create",
-            "base_url": LLM7_BASE_URL,
+            "base_url": (
+                str(get_provider_settings().llm7_base_url)
+                if get_provider_settings().llm7_base_url
+                else None
+            ),
         }
 
 
@@ -281,7 +285,11 @@ def build_llm7_model_catalog(
         "provider": "llm7",
         "sdk": "openai",
         "sdk_version": sdk_version,
-        "base_url": LLM7_BASE_URL,
+        "base_url": (
+            str(get_provider_settings().llm7_base_url)
+            if get_provider_settings().llm7_base_url
+            else None
+        ),
         "retrieved_at": retrieval_time,
         "models_api_accessible": True,
         "rate_limit_notes": LLM7_RATE_LIMIT_NOTES,
@@ -300,6 +308,18 @@ def build_llm7_model_catalog(
 def classify_llm7_error(exc: Exception) -> str:
     text = _safe_error_message(exc).lower()
     status = getattr(exc, "status_code", None) or getattr(exc, "code", None)
+
+    if any(
+        marker in text
+        for marker in (
+            "not allowed by policy",
+            "blocked by policy",
+            "network egress",
+            "outbound request blocked",
+        )
+    ):
+        return "network_policy"
+
     if "api key" in text or "credential" in text or status == 401:
         return "authentication"
     if "permission" in text or status == 403:
@@ -346,11 +366,18 @@ def estimate_llm7_cost(
 
 
 def _create_llm7_client(*, api_key: str | None):
-    api_key = api_key or os.environ.get("LLM7_API_KEY")
-    if not api_key:
+    settings = get_provider_settings()
+    resolved_api_key = api_key or (
+        settings.llm7_api_key.get_secret_value() if settings.llm7_api_key else None
+    )
+    if not resolved_api_key:
         raise ThemeBenchmarkError(
             "LLM7_API_KEY must be set for live LLM7 benchmark commands."
         )
+    resolved_base_url = str(settings.llm7_base_url) if settings.llm7_base_url else None
+    if not resolved_base_url:
+        raise ThemeBenchmarkError("LLM7_BASE_URL must be set in .env")
+
     try:
         import openai
     except (
@@ -359,7 +386,7 @@ def _create_llm7_client(*, api_key: str | None):
         raise ThemeBenchmarkError(
             "LLM7 benchmark support requires the project OpenAI dependency."
         ) from exc
-    return openai.OpenAI(base_url=LLM7_BASE_URL, api_key=api_key)
+    return openai.OpenAI(base_url=resolved_base_url, api_key=resolved_api_key)
 
 
 def _installed_openai_sdk_version_optional() -> str | None:
@@ -382,10 +409,22 @@ def _normalize_completion(
         raise ThemeBenchmarkError(
             "LLM7 empty_response: response did not include message content"
         )
+
+    clean_content = content.strip()
+    if clean_content.startswith("```json"):
+        clean_content = clean_content[7:]
+    elif clean_content.startswith("```"):
+        clean_content = clean_content[3:]
+    if clean_content.endswith("```"):
+        clean_content = clean_content[:-3]
+    clean_content = clean_content.strip()
+
     try:
-        parsed = json.loads(content)
+        parsed = json.loads(clean_content)
     except json.JSONDecodeError as exc:
-        raise ThemeBenchmarkError(f"LLM7 invalid_json: {exc}") from exc
+        raise ThemeBenchmarkError(
+            f"LLM7 invalid_json: {exc} | Raw content: {content!r}"
+        ) from exc
     normalized = _normalize_theme_payload(parsed, request)
     usage = _jsonable(_attr(completion, "usage", None))
     pricing = (
@@ -394,14 +433,17 @@ def _normalize_completion(
         else None
     )
     metadata_payload = _raw_metadata(completion, choice)
+
+    usage_dict = usage or {}
+
     return {
         "themes": normalized,
         "_benchmark_metadata": {
             "parsed_successfully": True,
             "schema_valid": True,
             "retries": retries,
-            "usage": usage,
-            "estimated_cost": estimate_llm7_cost(usage, pricing),
+            "usage": usage_dict,
+            "estimated_cost": estimate_llm7_cost(usage_dict, pricing),
             "finish_reason": _jsonable(_attr(choice, "finish_reason", None)),
             "safety_metadata": None,
             "raw_metadata": metadata_payload,
@@ -417,7 +459,8 @@ def _normalize_theme_payload(
         allowed = set(request.keywords)
         normalized = []
         for theme in source_themes:
-            if not isinstance(theme, Mapping) or not isinstance(theme.get("name"), str):
+            name_val = theme.get("name") or theme.get("theme_name")
+            if not isinstance(theme, Mapping) or not isinstance(name_val, str):
                 raise ThemeBenchmarkError(
                     "LLM7 schema_invalid: response did not match normalized theme schema"
                 )
@@ -428,7 +471,7 @@ def _normalize_theme_payload(
                 )
             normalized.append(
                 {
-                    "name": str(theme["name"]),
+                    "name": str(name_val),
                     "keywords": [
                         str(keyword) for keyword in keywords if str(keyword) in allowed
                     ],

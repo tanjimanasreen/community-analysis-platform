@@ -1,10 +1,13 @@
+import json
+import logging
 import os
+import time
+
 import pandas as pd
-import ast
 
 from src.providers.cached import CachedProvider
 from src.providers import factory
-from src.themes.gpt_themes import generate_llm_themes
+from src.themes.theme_generation import generate_llm_themes
 
 # Future imports from Milestone 4, 5, 6 will go here:
 # from src.themes.community_transition import calculate_jaccard_transitions
@@ -19,30 +22,19 @@ from src.visualization.membership_changes import draw_members_transition_diagram
 from src.themes.theme_similarity import extract_themes
 from src.visualization.theme_similarity import draw_theme_similarity_heatmap
 
+logger = logging.getLogger(__name__)
 
-def process_single_file_themes(df: pd.DataFrame, provider) -> pd.DataFrame:
-    # Ensure correct lists
-    for col in [
-        "absolute_unigram_keywords",
-        "absolute_bigram_keywords",
-        "weighted_unigram_keywords",
-        "weighted_bigram_keywords",
-    ]:
-        if col in df.columns:
-            if df[col].dtype == object and isinstance(df[col].iloc[0], str):
-                df[col] = df[col].apply(
-                    lambda x: ast.literal_eval(x) if x.startswith("[") else x
-                )
-        else:
-            df[col] = [[] for _ in range(len(df))]
 
-    if "absolute_community" not in df.columns:
-        df["absolute_community"] = -1
-    if "weighted_community" not in df.columns:
-        df["weighted_community"] = -1
+def process_single_file_themes(
+    df: pd.DataFrame, provider, *, max_workers: int = 6
+) -> pd.DataFrame:
+    frame = df.copy()
+    if "absolute_community" not in frame.columns:
+        frame["absolute_community"] = -1
+    if "weighted_community" not in frame.columns:
+        frame["weighted_community"] = -1
 
-    themed_df = generate_llm_themes(provider, df)
-    return themed_df
+    return generate_llm_themes(provider, frame, max_workers=max_workers)
 
 
 def run_theme_pipeline(
@@ -54,6 +46,7 @@ def run_theme_pipeline(
     provider=None,
     render_visuals: bool = True,
     similarity_model_name: str = "paraphrase-MiniLM-L6-v2",
+    max_theme_workers: int = 6,
 ):
     """
     Runs the full theme intelligence pipeline on the LDA outputs directory.
@@ -63,7 +56,7 @@ def run_theme_pipeline(
     os.makedirs(output_dir, exist_ok=True)
 
     # Milestone 1: Data Loading
-    print(f"Loading data from {input_dir} for year {year}...")
+    logger.info("theme_inputs_loading input_dir=%s year=%s", input_dir, year)
     monthly_data_dict = load_prepare_data(input_dir, year)
     return run_theme_pipeline_from_monthly_data(
         monthly_data_dict=monthly_data_dict,
@@ -74,6 +67,7 @@ def run_theme_pipeline(
         provider=provider,
         render_visuals=render_visuals,
         similarity_model_name=similarity_model_name,
+        max_theme_workers=max_theme_workers,
     )
 
 
@@ -86,6 +80,7 @@ def run_theme_pipeline_from_bundle(
     provider=None,
     render_visuals: bool = True,
     similarity_model_name: str = "paraphrase-MiniLM-L6-v2",
+    max_theme_workers: int = 6,
 ):
     return run_theme_pipeline_from_monthly_data(
         monthly_data_dict=bundle.monthly_data,
@@ -96,6 +91,7 @@ def run_theme_pipeline_from_bundle(
         provider=provider,
         render_visuals=render_visuals,
         similarity_model_name=similarity_model_name,
+        max_theme_workers=max_theme_workers,
     )
 
 
@@ -108,103 +104,132 @@ def run_theme_pipeline_from_monthly_data(
     provider=None,
     render_visuals: bool = True,
     similarity_model_name: str = "paraphrase-MiniLM-L6-v2",
+    max_theme_workers: int = 6,
 ):
-    import ast
-
     os.makedirs(output_dir, exist_ok=True)
     if not monthly_data_dict:
-        print(
-            "No monthly matched LDA files found. Theme pipeline will emit empty transition output."
+        logger.warning(
+            "No monthly matched LDA files found; emitting empty transition output"
         )
 
-    # Milestone 2: GPT Theme Generation
-    print("Generating themes via LLM for all months...")
+    tracking_settings = (config or {}).get("tracking", {})
+    if isinstance(tracking_settings, dict) and tracking_settings.get("enabled", False):
+        from src.themes.benchmark.dataset import register_theme_prompt_to_mlflow
+
+        register_theme_prompt_to_mlflow()
+
+    logger.info(
+        "theme_pipeline_started months=%d content_type=%s render_visuals=%s",
+        len(monthly_data_dict),
+        content_type,
+        render_visuals,
+    )
     if provider is not None:
         # Test injection — wrap in CachedProvider if not already wrapped
         if not isinstance(provider, CachedProvider):
-            provider = CachedProvider(provider)
+            from src.providers.cache_backends import InMemoryThemeResponseCache
+
+            provider = CachedProvider(provider, cache=InMemoryThemeResponseCache())
     else:
         # Production path — build provider from config (reads providers.yml via factory)
         provider = factory.build_theme_provider(config or {})
 
     themed_monthly_dict = {}
     for month, df in monthly_data_dict.items():
-        print(f"Processing themes for {month}...")
-        themed_df = process_single_file_themes(df, provider)
+        month_started = time.perf_counter()
+        logger.info("theme_month_started month=%s rows=%d", month, len(df))
+        themed_df = process_single_file_themes(
+            df, provider, max_workers=max_theme_workers
+        )
         themed_monthly_dict[month] = themed_df
         # Save themed output
-        output_path = os.path.join(output_dir, f"{month}_{year}_with_themes.csv")
-        themed_df.to_csv(output_path, index=False)
-        print(f"Themes generated and saved to {output_path}")
+        output_path = os.path.join(output_dir, f"{month}_{year}_with_themes.parquet")
+        themed_df.to_parquet(output_path, index=False)
+        logger.info(
+            "theme_month_completed month=%s rows=%d path=%s elapsed_seconds=%.2f",
+            month,
+            len(themed_df),
+            output_path,
+            time.perf_counter() - month_started,
+        )
 
-    # Milestone 3: Community Transition
-    print("Calculating community transitions...")
-    matched_df = get_community_transition(themed_monthly_dict, content_type)
-    transitions_path = os.path.join(output_dir, "community_transition.csv")
-    matched_df.to_csv(transitions_path, index=False)
-    print(f"Community transitions saved to {transitions_path}")
+    theme_settings = (config or {}).get("theme", {})
+    if not isinstance(theme_settings, dict):
+        theme_settings = {}
+    threshold_key = (
+        "reply_transition_threshold"
+        if content_type == "reply"
+        else "transition_threshold"
+    )
+    transition_threshold = theme_settings.get(threshold_key)
+    logger.info(
+        "community_transition_started threshold=%s",
+        "default" if transition_threshold is None else transition_threshold,
+    )
+    matched_df = get_community_transition(
+        themed_monthly_dict,
+        content_type,
+        threshold=(
+            float(transition_threshold) if transition_threshold is not None else None
+        ),
+    )
+    transitions_path = os.path.join(output_dir, "community_transition.parquet")
+    matched_df.to_parquet(transitions_path, index=False)
+    logger.info(
+        "community_transition_completed rows=%d path=%s",
+        len(matched_df),
+        transitions_path,
+    )
 
-    # Milestone 4: Sankey Diagrams
-    print("Generating Sankey diagrams...")
-    source_ind, target_ind, score, all_community = get_path_info(matched_df)
-    sankey_dir = os.path.join(output_dir, "sankey")
     if render_visuals:
+        logger.info("theme_visualizations_started")
+        source_ind, target_ind, score, all_community = get_path_info(matched_df)
+        sankey_dir = os.path.join(output_dir, "sankey")
         draw_community_transition_diagram(
             sankey_dir, source_ind, target_ind, score, all_community, matched_df
         )
 
-    # Milestone 5: Membership Changes
-    print("Calculating membership changes and diagrams...")
-    paths_detected = find_all_sankey_paths(source_ind, target_ind, all_community)
-    members_dir = os.path.join(output_dir, "membership_changes")
-    if render_visuals:
+        paths_detected = find_all_sankey_paths(source_ind, target_ind, all_community)
+        members_dir = os.path.join(output_dir, "membership_changes")
         draw_members_transition_diagram(members_dir, paths_detected, matched_df)
 
-    # Milestone 6: Theme Similarity Heatmaps
-    print("Generating theme similarity heatmaps...")
-    similarity_dir = os.path.join(output_dir, "theme_similarity")
+        similarity_dir = os.path.join(output_dir, "theme_similarity")
+        for file_name, start_column, end_column in (
+            (
+                "absolute_theme",
+                "start_month_absolute_theme",
+                "end_month_absolute_theme",
+            ),
+            (
+                "weighted_theme",
+                "start_month_weighted_theme",
+                "end_month_weighted_theme",
+            ),
+            (
+                "general_theme",
+                "start_month_general_theme",
+                "end_month_general_theme",
+            ),
+        ):
+            community_themes = extract_themes(
+                matched_df, paths_detected, start_column, end_column
+            )
+            draw_theme_similarity_heatmap(
+                community_themes,
+                similarity_dir,
+                file_name,
+                model_name=similarity_model_name,
+            )
+        logger.info("theme_visualizations_completed")
+    else:
+        logger.info("theme_visualizations_skipped render_visuals=false")
 
-    community_absolute_themes = extract_themes(
-        matched_df,
-        paths_detected,
-        "start_month_absolute_theme",
-        "end_month_absolute_theme",
-    )
-    if render_visuals:
-        draw_theme_similarity_heatmap(
-            community_absolute_themes,
-            similarity_dir,
-            "absolute_theme",
-            model_name=similarity_model_name,
-        )
+    # Save run metrics
+    if provider is not None and hasattr(provider, "run_metrics"):
+        metrics_path = os.path.join(output_dir, "run_metrics.json")
+        with open(metrics_path, "w", encoding="utf-8") as handle:
+            json.dump(provider.run_metrics, handle, indent=2, ensure_ascii=False)
+        logger.info("provider_run_metrics_saved path=%s", metrics_path)
 
-    community_weighted_themes = extract_themes(
-        matched_df,
-        paths_detected,
-        "start_month_weighted_theme",
-        "end_month_weighted_theme",
-    )
-    if render_visuals:
-        draw_theme_similarity_heatmap(
-            community_weighted_themes,
-            similarity_dir,
-            "weighted_theme",
-            model_name=similarity_model_name,
-        )
-
-    community_general_themes = extract_themes(
-        matched_df,
-        paths_detected,
-        "start_month_general_theme",
-        "end_month_general_theme",
-    )
-    if render_visuals:
-        draw_theme_similarity_heatmap(
-            community_general_themes,
-            similarity_dir,
-            "general_theme",
-            model_name=similarity_model_name,
-        )
-
-    print("Full theme intelligence pipeline completed successfully!")
+    logger.info("theme_pipeline_completed")
     return matched_df

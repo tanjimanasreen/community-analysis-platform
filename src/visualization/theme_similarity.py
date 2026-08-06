@@ -1,9 +1,13 @@
+import logging
+
 import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import os
 
 from src.themes.theme_similarity import calculate_sentence_similarity
+
+logger = logging.getLogger(__name__)
 
 
 def draw_theme_similarity_heatmap(
@@ -13,7 +17,9 @@ def draw_theme_similarity_heatmap(
     model_name: str = "paraphrase-MiniLM-L6-v2",
 ):
     if not all_community_theme:
-        print(f"No themes to calculate similarity for {file_name}.")
+        logger.info(
+            "theme_similarity_visualization_skipped file=%s reason=no_themes", file_name
+        )
         return
 
     num_sets = len(all_community_theme)
@@ -97,11 +103,11 @@ def draw_theme_similarity_heatmap(
     os.makedirs(output_dir, exist_ok=True)
     html_file = os.path.join(output_dir, f"{file_name}.html")
     fig.write_html(html_file)
-    print(f"Saved Heatmap HTML to {html_file}")
+    logger.info("theme_similarity_html_saved path=%s", html_file)
 
     try:
         png_file = os.path.join(output_dir, f"{file_name}.png")
         fig.write_image(png_file, scale=2)
-        print(f"Saved Heatmap PNG to {png_file}")
-    except Exception as e:
-        print(f"Skipping PNG export (requires kaleido): {e}")
+        logger.info("theme_similarity_png_saved path=%s", png_file)
+    except Exception as exc:
+        logger.warning("theme_similarity_png_skipped error_type=%s", type(exc).__name__)

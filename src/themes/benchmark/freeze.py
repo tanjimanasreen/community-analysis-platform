@@ -54,11 +54,11 @@ def freeze_dataset(
     run_id: str,
     source_configs: Sequence[Mapping[str, Any]] | None = None,
     target_examples: int = 100,
-    min_examples: int = 40,
+    min_examples: int = 1,
     max_examples: int = 120,
     seed: int = DEFAULT_FREEZE_SEED,
-    development_count: int = 20,
-    pilot_count: int = 30,
+    development_count: int = 0,
+    pilot_count: int = 1,
     overwrite: bool = False,
 ) -> dict[str, Any]:
     if min_examples < 1:

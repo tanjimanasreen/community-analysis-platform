@@ -1,3 +1,0 @@
-members,absolute_community,weighted_community,absolute_unigram_keywords,absolute_bigram_keywords,weighted_unigram_keywords,weighted_bigram_keywords
-"[1, 2, 3]",0,10,"['apple', 'banana', 'apple']","['big apple']","['orange']","['big orange']"
-"[4, 5]",1,11,"['policy']","['public health']","['election', 'policy']","['vote count']"

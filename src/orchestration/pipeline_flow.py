@@ -1,3 +1,4 @@
+import logging
 import uuid
 from typing import Any, Mapping, Optional
 
@@ -20,10 +21,11 @@ from src.orchestration.tasks import (
     validate_run_configuration_task,
 )
 
+logger = logging.getLogger(__name__)
+
 
 @flow(
     name="run-monthly-network-foundation-flow",
-    task_runner=ThreadPoolTaskRunner(max_workers=1),
     persist_result=True,
 )
 def run_monthly_network_foundation_flow(
@@ -90,6 +92,10 @@ def run_monthly_network_foundation_flow(
                 failure_category=classify_error(exc).value,
                 artifacts=artifacts,
             )
-        except Exception:
-            pass
+        except Exception as manifest_exc:
+            logger.exception(
+                "failed_run_manifest_write_failed run_id=%s stage=network_community error_type=%s",
+                context.pipeline_run_id,
+                type(manifest_exc).__name__,
+            )
         raise

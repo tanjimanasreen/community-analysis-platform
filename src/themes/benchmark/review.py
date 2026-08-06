@@ -50,19 +50,19 @@ def export_blinded_review(output_base_path: str | Path, run_id: str) -> Path:
                     **{column: "" for column in REVIEW_SCORE_COLUMNS},
                 }
             )
-    out_path = root / "review" / "blinded_export.csv"
+    out_path = root / "review" / "blinded_export.parquet"
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame(rows).to_csv(out_path, index=False)
+    pd.DataFrame(rows).to_parquet(out_path, index=False)
 
-    template_path = root / "review" / "review_import_template.csv"
-    pd.DataFrame(columns=["review_id", *REVIEW_SCORE_COLUMNS, "notes"]).to_csv(
+    template_path = root / "review" / "review_import_template.parquet"
+    pd.DataFrame(columns=["review_id", *REVIEW_SCORE_COLUMNS, "notes"]).to_parquet(
         template_path, index=False
     )
     return out_path
 
 
 def validate_review_import(path: str | Path) -> None:
-    frame = pd.read_csv(path)
+    frame = pd.read_parquet(path)
     required = {"review_id", *REVIEW_SCORE_COLUMNS}
     missing = sorted(required.difference(frame.columns))
     if missing:
@@ -77,7 +77,7 @@ def validate_review_import(path: str | Path) -> None:
         raise ThemeBenchmarkError(
             f"Review import must not include provider identity columns: {leaked_columns}"
         )
-    provider_tokens = ("keyword_baseline", "gemini", "llm7", "gpt4o", "gpt-4o", "mock")
+    provider_tokens = ("keyword_baseline", "gemini", "llm7", "gpt-5-nano", "mock")
     searchable = frame.astype(str).to_string(index=False).lower()
     leaked = [token for token in provider_tokens if token in searchable]
     if leaked:

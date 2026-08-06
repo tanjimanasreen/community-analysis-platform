@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import re
 from pathlib import Path
 from typing import Any, Union
@@ -31,7 +30,10 @@ _DEFAULT_ALGORITHMS_CONFIG = _PROJECT_ROOT / "configs" / "algorithms.yml"
 
 def interpolate_env(value: Any) -> Any:
     if isinstance(value, str):
-        return ENV_VAR_RE.sub(lambda match: os.environ.get(match.group(1), ""), value)
+        from src.config.settings import get_interpolated_env_vars
+
+        env_vars = get_interpolated_env_vars()
+        return ENV_VAR_RE.sub(lambda match: env_vars.get(match.group(1), ""), value)
     if isinstance(value, dict):
         return {key: interpolate_env(val) for key, val in value.items()}
     if isinstance(value, list):
@@ -124,6 +126,21 @@ def load_config(config_path: PathLike) -> dict[str, Any]:
     # Current config wins over included defaults
     _deep_merge(merged_config, config)
 
+    # Ensure orchestration defaults are populated
+    orch = merged_config.setdefault("orchestration", {})
+    orch.setdefault("cache_expiration_days", 30)
+    # Keep expensive monthly LDA jobs sequential by default. Each job already
+    # uses LdaMulticore; running several months concurrently otherwise creates
+    # nested process pools, memory spikes, and CPU oversubscription.
+    orch.setdefault("month_workers", 1)
+    # Theme-provider concurrency is I/O-bound and remains independently tunable.
+    orch.setdefault("max_workers", 4)
+
+    dashboard = merged_config.setdefault("dashboard", {})
+    # The complete graph remains a thesis artifact; this bounded additive sample
+    # is used only for the global dashboard visualization endpoint.
+    dashboard.setdefault("graph_sample_max_edges", 50_000)
+
     return interpolate_env(merged_config)
 
 
@@ -152,9 +169,7 @@ def validate_run_config(config: dict[str, Any]) -> None:
     required = (
         "data_type",
         "content_type",
-        "month",
         "year",
-        "input_path",
         "output_base_path",
         "creator_relation",
         "spreader_relation",
@@ -163,6 +178,9 @@ def validate_run_config(config: dict[str, Any]) -> None:
         "text_node_column",
         "date_column",
     )
+    if "longitudinal_datasets" not in config:
+        required += ("month", "input_path")
+
     missing = [key for key in required if key not in config]
     if missing:
         raise ValueError(f"Missing required config keys: {', '.join(missing)}")

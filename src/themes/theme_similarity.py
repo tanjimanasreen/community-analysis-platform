@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
+import logging
 import os
 
 # Reduce parallelism for tokenizers to avoid warnings
@@ -8,53 +9,81 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 # Global model cache to avoid reloading for every path
 _GLOBAL_MODEL = None
+logger = logging.getLogger(__name__)
 
 
 def get_similarity_model(model_name="paraphrase-MiniLM-L6-v2"):
     global _GLOBAL_MODEL
     if _GLOBAL_MODEL is None:
-        from sentence_transformers import SentenceTransformer
+        from src.config.settings import get_tei_client_settings
+        from src.themes.tei_client import TEIClient
 
-        _GLOBAL_MODEL = SentenceTransformer(model_name, local_files_only=True)
+        settings = get_tei_client_settings()
+        _GLOBAL_MODEL = TEIClient(
+            base_url=str(settings.base_url),
+            api_key=settings.api_key.get_secret_value() if settings.api_key else None,
+            client_batch_size=settings.client_batch_size,
+            timeout_seconds=settings.timeout_seconds,
+        )
     return _GLOBAL_MODEL
 
 
 def calculate_sentence_similarity(
     sentences: list, model_name="paraphrase-MiniLM-L6-v2", model=None
 ):
-    """Calculates cosine similarity between sentences using SentenceTransformers."""
-    try:
-        model = model or get_similarity_model(model_name)
-        embeddings = model.encode(sentences, convert_to_tensor=False)
-    except Exception as exc:
-        print(f"Using offline theme similarity fallback: {exc}")
+    """Calculate cosine similarity with explicit TEI failure semantics."""
+    if not sentences:
+        return np.empty((0, 0), dtype=float)
+
+    from src.config.settings import get_similarity_settings
+
+    settings = get_similarity_settings()
+    if model is None and settings.provider == "mock":
         embeddings = _offline_theme_embeddings(sentences)
-    cosine_scores = cosine_similarity(embeddings)
-    return cosine_scores
+    else:
+        try:
+            model = model or get_similarity_model(model_name)
+            embeddings = model.encode(sentences)
+        except Exception as exc:
+            if settings.failure_policy != "mock":
+                raise RuntimeError(
+                    "TEI theme-similarity request failed; set "
+                    "THEME_SIMILARITY_FAILURE_POLICY=mock only for offline tests"
+                ) from exc
+            logger.warning("theme_similarity_mock_fallback error=%s", exc)
+            embeddings = _offline_theme_embeddings(sentences)
+    return cosine_similarity(embeddings)
 
 
 def extract_themes(
     matched_df: pd.DataFrame, paths: list, start_month_theme: str, end_month_theme: str
 ) -> dict:
+    """Extract path themes with O(rows + path nodes) lookups."""
+    start_lookup = {}
+    end_lookup = {}
+    if not matched_df.empty:
+        if {"start_month_community", start_month_theme}.issubset(matched_df.columns):
+            start_lookup = (
+                matched_df[["start_month_community", start_month_theme]]
+                .drop_duplicates("start_month_community", keep="first")
+                .set_index("start_month_community")[start_month_theme]
+                .to_dict()
+            )
+        if {"end_month_community", end_month_theme}.issubset(matched_df.columns):
+            end_lookup = (
+                matched_df[["end_month_community", end_month_theme]]
+                .drop_duplicates("end_month_community", keep="first")
+                .set_index("end_month_community")[end_month_theme]
+                .to_dict()
+            )
+
     all_community_theme = {}
-    count = 1
-
-    for path in paths:
+    for count, path in enumerate(paths, start=1):
         themes = {}
-        for p in path:
-            starts = matched_df[matched_df.start_month_community == p]
-            if not starts.empty and start_month_theme in starts.columns:
-                themes[p] = str(starts[start_month_theme].values[0])
-            else:
-                ends = matched_df[matched_df.end_month_community == p]
-                if not ends.empty and end_month_theme in ends.columns:
-                    themes[p] = str(ends[end_month_theme].values[0])
-                else:
-                    themes[p] = ""
-
+        for community in path:
+            value = start_lookup.get(community, end_lookup.get(community, ""))
+            themes[community] = "" if value is None else str(value)
         all_community_theme[count] = themes
-        count += 1
-
     return all_community_theme
 
 

@@ -34,6 +34,9 @@ def main():
     parser = argparse.ArgumentParser(
         description="Community Analysis Intelligence Platform"
     )
+    from src.logging_config import setup_logging
+
+    setup_logging()
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     # validate-config command
@@ -132,6 +135,7 @@ def main():
         required=False,
         help="Optional dataset ID to execute within the config",
     )
+    parser_social.add_argument("--debug", action="store_true")
 
     # run-topics command
     parser_topics = subparsers.add_parser("run-topics", help="Run topic modeling")
@@ -160,6 +164,28 @@ def main():
         "--dataset-id",
         required=False,
         help="Optional dataset ID to execute within the config",
+    )
+    parser_all.add_argument("--debug", action="store_true")
+    parser_all.add_argument(
+        "--theme-provider",
+        required=False,
+        help="Override theme_provider.primary for this run",
+    )
+
+    parser_evolution = subparsers.add_parser(
+        "run-evolution-pipeline",
+        help="Run the multi-month evolution pipeline",
+    )
+    parser_evolution.add_argument("--config", required=True, help="Path to config file")
+    parser_evolution.add_argument(
+        "--dataset-id",
+        required=False,
+        help="Optional dataset ID to execute within the config",
+    )
+    parser_evolution.add_argument(
+        "--theme-provider",
+        required=False,
+        help="Override theme_provider.primary for this run",
     )
 
     parser_report = subparsers.add_parser(
@@ -221,9 +247,9 @@ def main():
         help="Maximum number of valid examples to include",
     )
     parser_benchmark_dataset.add_argument(
-        "--gpt4o-outputs",
+        "--gpt-5-nano-outputs",
         required=False,
-        help="Optional local JSONL file of prior GPT-4o outputs to copy as reference data",
+        help="Optional local JSONL file of prior GPT-5-nano outputs to copy as reference data",
     )
 
     parser_benchmark_inventory = benchmark_subparsers.add_parser(
@@ -427,44 +453,6 @@ def main():
         "--run-id", required=True, help="Benchmark run identifier"
     )
 
-    parser_benchmark_phase3_review = benchmark_subparsers.add_parser(
-        "prepare-phase3-review",
-        help="Create paired blinded Phase 3 human-review package",
-    )
-    parser_benchmark_phase3_review.add_argument(
-        "--config", required=True, help="Path to config file"
-    )
-    parser_benchmark_phase3_review.add_argument(
-        "--dataset-id",
-        required=False,
-        help="Optional dataset ID to execute within the config",
-    )
-    parser_benchmark_phase3_review.add_argument(
-        "--run-id", required=True, help="Benchmark run identifier"
-    )
-    parser_benchmark_phase3_review.add_argument(
-        "--cohort-id", default="phase3-paired-review-v1"
-    )
-
-    parser_benchmark_phase3_import = benchmark_subparsers.add_parser(
-        "import-phase3-review",
-        help="Validate/import scored Phase 3 review CSV and write summaries",
-    )
-    parser_benchmark_phase3_import.add_argument(
-        "--config", required=True, help="Path to config file"
-    )
-    parser_benchmark_phase3_import.add_argument(
-        "--dataset-id",
-        required=False,
-        help="Optional dataset ID to execute within the config",
-    )
-    parser_benchmark_phase3_import.add_argument(
-        "--run-id", required=True, help="Benchmark run identifier"
-    )
-    parser_benchmark_phase3_import.add_argument(
-        "--scores", required=True, help="Completed review CSV"
-    )
-
     parser_benchmark_deepeval = benchmark_subparsers.add_parser(
         "evaluate-deepeval", help="Evaluate benchmark results using DeepEval LLM judge"
     )
@@ -477,48 +465,7 @@ def main():
         help="Optional dataset ID to execute within the config",
     )
     parser_benchmark_deepeval.add_argument(
-        "--input-csv", required=True, help="Path to the exported blinded review CSV"
-    )
-    parser_benchmark_deepeval.add_argument(
-        "--output-csv", required=True, help="Path to save the judged scores"
-    )
-
-    parser_benchmark_stability = benchmark_subparsers.add_parser(
-        "prepare-stability-subset",
-        help="Create deterministic Phase 3 stability subset",
-    )
-    parser_benchmark_stability.add_argument(
-        "--config", required=True, help="Path to config file"
-    )
-    parser_benchmark_stability.add_argument(
-        "--dataset-id",
-        required=False,
-        help="Optional dataset ID to execute within the config",
-    )
-    parser_benchmark_stability.add_argument(
         "--run-id", required=True, help="Benchmark run identifier"
-    )
-    parser_benchmark_stability.add_argument(
-        "--subset-id", default="phase3-stability-v1"
-    )
-
-    parser_benchmark_stability_report = benchmark_subparsers.add_parser(
-        "summarize-stability",
-        help="Write Phase 3 stability summaries",
-    )
-    parser_benchmark_stability_report.add_argument(
-        "--config", required=True, help="Path to config file"
-    )
-    parser_benchmark_stability_report.add_argument(
-        "--dataset-id",
-        required=False,
-        help="Optional dataset ID to execute within the config",
-    )
-    parser_benchmark_stability_report.add_argument(
-        "--run-id", required=True, help="Benchmark run identifier"
-    )
-    parser_benchmark_stability_report.add_argument(
-        "--subset-id", default="phase3-stability-v1"
     )
 
     # import-csv command
@@ -658,7 +605,18 @@ def main():
 
     elif args.command in ["run-social-network", "run-topics", "run-all"]:
         _run_social_pipeline_command(
-            args.command, args.config, dataset_id=getattr(args, "dataset_id", None)
+            args.command,
+            args.config,
+            dataset_id=getattr(args, "dataset_id", None),
+            debug=getattr(args, "debug", False),
+            theme_provider=getattr(args, "theme_provider", None),
+        )
+
+    elif args.command == "run-evolution-pipeline":
+        _run_evolution_pipeline_command(
+            args.config,
+            dataset_id=getattr(args, "dataset_id", None),
+            theme_provider=args.theme_provider,
         )
 
     elif args.command == "run-theme-analysis":
@@ -712,8 +670,14 @@ def _import_raw_graph(file_paths, platform, config_path):
     print("Raw graph import complete.")
 
 
-def _run_social_pipeline_command(command, config_path, dataset_id=None):
+def _run_social_pipeline_command(
+    command, config_path, dataset_id=None, debug=False, theme_provider=None
+):
     config = validate_config(config_path, dataset_id)
+    if theme_provider:
+        if "theme_provider" not in config:
+            config["theme_provider"] = {}
+        config["theme_provider"]["primary"] = theme_provider
     graph_thresholds = config.get("graph_thresholds", {})
     params = _social_pipeline_params(config, graph_thresholds)
 
@@ -731,6 +695,7 @@ def _run_social_pipeline_command(command, config_path, dataset_id=None):
                 content_type=params["content_type"],
                 month=params["month"],
                 year=params["year"],
+                lda_config=config.get("lda", {}),
             )
         except TopicInputError as exc:
             print(f"Error loading topic inputs: {exc}", file=sys.stderr)
@@ -738,116 +703,186 @@ def _run_social_pipeline_command(command, config_path, dataset_id=None):
         print("Pipeline finished successfully!")
         return
 
-    import pandas as pd
-
     input_path = config.get("input_path", "data/telegram/03_2024.csv")
-    try:
-        df = pd.read_csv(input_path, low_memory=False)
-    except Exception as e:
-        print(f"Error loading sample data from {input_path}: {e}")
+
+    # The canonical dashboard path is orchestrated and reads the dataset inside
+    # the network task.  Do not load the full CSV here as well: that doubled
+    # peak memory and I/O for large Twitter exports.
+    if command == "run-all" and not debug:
+        from src.orchestration.composition_flow import run_monthly_analysis_flow
+
+        ds_id = dataset_id or config.get("id", "default")
+        print(f"Running {command} via Prefect orchestrator...")
+        result = run_monthly_analysis_flow(
+            config=config,
+            dataset_path=input_path,
+            dataset_id=ds_id,
+            run_topics=True,
+            run_themes=True,
+        )
+        run_id = result.context.pipeline_run_id
+        artifact_root = Path(config.get("output_base_path", "results/")).resolve()
+        print("Prefect flow finished successfully!")
+        print(f"Dashboard run ID: {run_id}")
+        print(f"Dashboard artifact root: {artifact_root}")
+        print(
+            "Start the API with "
+            f"COMMUNITY_ANALYSIS_ARTIFACT_ROOT={artifact_root} "
+            "uvicorn src.api.app:app --host 0.0.0.0 --port 8000"
+        )
         return
 
+    import pandas as pd
+
+    try:
+        df = pd.read_csv(input_path, low_memory=False)
+    except Exception as exc:
+        print(f"Error loading sample data from {input_path}: {exc}", file=sys.stderr)
+        sys.exit(1)
+
     if command == "run-social-network":
-        from src.pipelines.social_network_pipeline import run_network_community_pipeline
+        from src.pipelines.social_network_pipeline import (
+            run_network_community_pipeline,
+        )
 
-        print("Running network/community pipeline...")
-        runner = run_network_community_pipeline
-    else:
-        from src.pipelines.social_network_pipeline import run_full_pipeline
+        run_network_community_pipeline(df, **params)
+        print("Social network analysis finished successfully!")
+        print(
+            "Note: this stage command writes legacy analytical outputs. "
+            "Use run-all to publish a run manifest consumed by the dashboard API."
+        )
+        return
 
-        print("Running full network/community/topic pipeline...")
-        runner = run_full_pipeline
+    print(f"Running {command} in local DEBUG mode (no Prefect)...")
+    from src.pipelines.social_network_pipeline import run_full_pipeline
+
+    print("Running full network/community/topic pipeline...")
+    runner = run_full_pipeline
 
     runner(
         df=df,
+        lda_config=config.get("lda", {}),
         **params,
     )
     print("Pipeline finished successfully!")
 
 
 def _run_theme_analysis_command(config_path, dataset_id=None):
-    from src.pipelines.theme_pipeline import (
-        run_theme_pipeline,
-        run_theme_pipeline_from_bundle,
-    )
-    from src.themes.theme_inputs import ThemeInputError, load_theme_inputs
-
     config = validate_config(config_path, dataset_id)
-    theme_config = config.get("theme", {})
-    explicit_input_dir = theme_config.get("input_dir") or config.get("theme_input_dir")
-    year = str(theme_config.get("year") or config.get("year", "2017"))
-    content_type = str(
-        theme_config.get("content_type")
-        if explicit_input_dir and theme_config.get("content_type")
-        else config.get("content_type", "mixed")
-    )
-    output_dir = str(
-        theme_config.get("output_dir")
-        or Path(config.get("output_base_path", "results/"))
-        / config.get("data_type", "twitter")
-        / "theme_analysis"
-        / content_type
-    )
-    render_visuals = bool(theme_config.get("render_visuals", True))
-    similarity_model = theme_config.get("similarity_model", "paraphrase-MiniLM-L6-v2")
+    print("Running run-theme-analysis via Prefect orchestrator...")
+    from prefect import flow
 
-    if explicit_input_dir:
-        print(f"Running full theme analysis on {explicit_input_dir} for year {year}...")
-        if (Path(explicit_input_dir) / "manifest.json").exists():
+    @flow(name="run-theme-analysis")
+    def run_theme_wrapper():
+        from src.pipelines.theme_pipeline import (
+            run_theme_pipeline,
+            run_theme_pipeline_from_bundle,
+        )
+        from src.themes.theme_inputs import ThemeInputError, load_theme_inputs
+
+        theme_config = config.get("theme", {})
+        explicit_input_dir = theme_config.get("input_dir") or config.get(
+            "theme_input_dir"
+        )
+        year = str(theme_config.get("year") or config.get("year", "2017"))
+        content_type = str(
+            theme_config.get("content_type")
+            if explicit_input_dir and theme_config.get("content_type")
+            else config.get("content_type", "mixed")
+        )
+        from pathlib import Path
+
+        output_dir = str(
+            theme_config.get("output_dir")
+            or Path(config.get("output_base_path", "results/"))
+            / config.get("data_type", "twitter")
+            / "theme_analysis"
+            / content_type
+        )
+        render_visuals = bool(theme_config.get("render_visuals", True))
+        similarity_model = theme_config.get(
+            "similarity_model", "paraphrase-MiniLM-L6-v2"
+        )
+        max_theme_workers = max(
+            1,
+            int(
+                theme_config.get(
+                    "max_workers", config.get("orchestration", {}).get("max_workers", 4)
+                )
+            ),
+        )
+
+        if explicit_input_dir:
+            print(
+                f"Running full theme analysis on {explicit_input_dir} for year {year}..."
+            )
+            if (Path(explicit_input_dir) / "manifest.json").exists():
+                import sys
+
+                try:
+                    bundle = load_theme_inputs(
+                        input_dir=explicit_input_dir,
+                        data_type=config.get("data_type", "twitter"),
+                        content_type=content_type,
+                        year=year,
+                        require_manifest=False,
+                    )
+                except ThemeInputError as exc:
+                    print(f"Error loading theme inputs: {exc}", file=sys.stderr)
+                    sys.exit(1)
+                run_theme_pipeline_from_bundle(
+                    bundle,
+                    year=year,
+                    content_type=content_type,
+                    output_dir=output_dir,
+                    config=config,
+                    render_visuals=render_visuals,
+                    similarity_model_name=similarity_model,
+                    max_theme_workers=max_theme_workers,
+                )
+            else:
+                run_theme_pipeline(
+                    input_dir=str(explicit_input_dir),
+                    year=year,
+                    content_type=content_type,
+                    output_dir=output_dir,
+                    config=config,
+                    render_visuals=render_visuals,
+                    similarity_model_name=similarity_model,
+                    max_theme_workers=max_theme_workers,
+                )
+        else:
+            print("Running theme analysis from saved theme inputs...")
+            import sys
+
             try:
                 bundle = load_theme_inputs(
-                    input_dir=explicit_input_dir,
+                    output_base_path=config.get("output_base_path", "results/"),
                     data_type=config.get("data_type", "twitter"),
-                    content_type=content_type,
+                    content_type=config.get("content_type", "mixed"),
                     year=year,
-                    require_manifest=False,
+                    require_manifest=True,
                 )
             except ThemeInputError as exc:
-                print(f"Error loading theme inputs: {exc}", file=sys.stderr)
+                print(
+                    f"Error loading theme inputs: {exc} "
+                    "Run make run-topic-sample first, or use make run-pipeline-sample.",
+                    file=sys.stderr,
+                )
                 sys.exit(1)
             run_theme_pipeline_from_bundle(
                 bundle,
                 year=year,
                 content_type=content_type,
                 output_dir=output_dir,
+                config=config,
                 render_visuals=render_visuals,
                 similarity_model_name=similarity_model,
+                max_theme_workers=max_theme_workers,
             )
-        else:
-            run_theme_pipeline(
-                input_dir=str(explicit_input_dir),
-                year=year,
-                content_type=content_type,
-                output_dir=output_dir,
-                render_visuals=render_visuals,
-                similarity_model_name=similarity_model,
-            )
-    else:
-        print("Running theme analysis from saved theme inputs...")
-        try:
-            bundle = load_theme_inputs(
-                output_base_path=config.get("output_base_path", "results/"),
-                data_type=config.get("data_type", "twitter"),
-                content_type=config.get("content_type", "mixed"),
-                year=year,
-                require_manifest=True,
-            )
-        except ThemeInputError as exc:
-            print(
-                f"Error loading theme inputs: {exc} "
-                "Run make run-topic-sample first, or use make run-pipeline-sample.",
-                file=sys.stderr,
-            )
-            sys.exit(1)
-        run_theme_pipeline_from_bundle(
-            bundle,
-            year=year,
-            content_type=content_type,
-            output_dir=output_dir,
-            render_visuals=render_visuals,
-            similarity_model_name=similarity_model,
-        )
-    print("Theme analysis finished successfully!")
+
+    run_theme_wrapper()
+    print("Prefect flow finished successfully!")
 
 
 def _social_pipeline_params(config, graph_thresholds):
@@ -866,6 +901,11 @@ def _social_pipeline_params(config, graph_thresholds):
         "min_shared_post": graph_thresholds.get("min_shared_post", 5),
         "min_members": graph_thresholds.get("min_members", 3),
         "output_dir": config.get("output_base_path", "results/"),
+        "dashboard_graph_sample_max_edges": max(
+            0, int(config.get("dashboard", {}).get("graph_sample_max_edges", 50_000))
+        ),
+        "louvain_resolution": float(config.get("louvain", {}).get("resolution", 1.0)),
+        "louvain_seed": int(config.get("louvain", {}).get("seed", 123)),
     }
 
 
@@ -900,7 +940,6 @@ def _run_theme_benchmark_command(args):
     from src.themes.benchmark.contracts import ThemeBenchmarkError
     from src.logging_config import setup_logging
 
-    _load_benchmark_dotenv()
     setup_logging()
     config = validate_config(args.config, getattr(args, "dataset_id", None))
     try:
@@ -1093,11 +1132,18 @@ def _run_theme_benchmark_command(args):
             if not judge_provider:
                 raise ValueError("benchmark.evaluator_judge must be configured in yaml")
 
+            tracking_uri = config.get("tracking", {}).get(
+                "backend_store_path", ".mlflow/mlflow.db"
+            )
+            if not tracking_uri.startswith("sqlite:///"):
+                tracking_uri = f"sqlite:///{tracking_uri}"
+
             evaluate_with_deepeval(
                 config=config,
-                input_csv=args.input_csv,
-                output_csv=args.output_csv,
-                judge_provider_id=judge_provider,
+                dataset_id=args.dataset_id,
+                run_id=args.run_id,
+                output_base_path=config.get("output_base_path", "results/"),
+                tracking_uri=tracking_uri,
             )
             return
 
@@ -1121,74 +1167,12 @@ def _run_theme_benchmark_command(args):
             print(f"Completion status: {result['report']['completion_status']}")
             return
 
-        if args.benchmark_command == "prepare-phase3-review":
-            from src.themes.benchmark.phase3 import prepare_phase3_review
-
-            result = prepare_phase3_review(
-                config.get("output_base_path", "results/"),
-                args.run_id,
-                cohort_id=args.cohort_id,
-            )
-            print(
-                f"Phase 3 review cohort examples: {result['cohort']['example_count']}"
-            )
-            print(f"Cohort hash: {result['cohort']['cohort_hash']}")
-            print(f"Review package written to {result['review_dir']}")
-            return
-
-        if args.benchmark_command == "import-phase3-review":
-            from src.themes.benchmark.phase3 import import_phase3_review
-
-            result = import_phase3_review(
-                config.get("output_base_path", "results/"),
-                args.run_id,
-                args.scores,
-            )
-            print(f"Review import summary written to {result['summary_path']}")
-            print(f"Review rows imported: {result['row_count']}")
-            return
-
-        if args.benchmark_command == "prepare-stability-subset":
-            from src.themes.benchmark.phase3 import prepare_stability_subset
-
-            result = prepare_stability_subset(
-                config.get("output_base_path", "results/"),
-                args.run_id,
-                subset_id=args.subset_id,
-            )
-            print(f"Stability subset examples: {result['subset']['example_count']}")
-            print(f"Subset hash: {result['subset']['subset_hash']}")
-            print(f"Subset written to {result['path']}")
-            return
-
-        if args.benchmark_command == "summarize-stability":
-            from src.themes.benchmark.phase3 import summarize_stability
-
-            result = summarize_stability(
-                config.get("output_base_path", "results/"),
-                args.run_id,
-                subset_id=args.subset_id,
-            )
-            print(f"Stability report written to {result['report_path']}")
-            print(f"Completion status: {result['report']['completion_status']}")
-            return
-
         raise ThemeBenchmarkError(
             f"Unknown theme-benchmark command: {args.benchmark_command}"
         )
     except (ThemeBenchmarkError, ValueError) as exc:
         print(f"Theme benchmark failed: {exc}", file=sys.stderr)
         sys.exit(1)
-
-
-def _load_benchmark_dotenv():
-    from dotenv import find_dotenv, load_dotenv
-
-    dotenv_path = find_dotenv(usecwd=True)
-    if dotenv_path:
-        load_dotenv(dotenv_path=dotenv_path, override=False)
-    else:
-        load_dotenv(override=False)
 
 
 def _load_source_configs(source_configs):
@@ -1297,6 +1281,22 @@ def _print_live_benchmark_preflight(
     print(f"Concurrency: {max_concurrency}")
     if "gemini" in provider_prefixes:
         print("Gemini store=False")
+
+
+def _run_evolution_pipeline_command(
+    config_path, dataset_id=None, debug=False, theme_provider=None
+):
+    config = validate_config(config_path, dataset_id)
+    if theme_provider:
+        if "theme_provider" not in config:
+            config["theme_provider"] = {}
+        config["theme_provider"]["primary"] = theme_provider
+
+    from src.orchestration.composition_flow import run_evolution_analysis_flow
+
+    print("Running run-evolution-pipeline via Prefect orchestrator...")
+    run_evolution_analysis_flow(config=config)
+    print("Prefect flow finished successfully!")
 
 
 if __name__ == "__main__":

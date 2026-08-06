@@ -74,6 +74,10 @@ def run_benchmark(
         from src.providers.gemini import GeminiRequestBudget
 
         request_budgets["gemini"] = GeminiRequestBudget(max_outbound_requests)
+    if any(provider_spec.startswith("nvidia:") for provider_spec in provider_ids):
+        from src.providers.nvidia import NvidiaRequestBudget
+
+        request_budgets["nvidia"] = NvidiaRequestBudget(max_outbound_requests)
     if any(provider_spec.startswith("llm7:") for provider_spec in provider_ids):
         from src.providers.llm7 import LLM7RequestBudget
 
@@ -229,9 +233,9 @@ def run_benchmark(
         )
 
     summary_path = (
-        root / "scores" / f"{split}_summary.csv"
+        root / "scores" / f"{split}_summary.parquet"
         if split
-        else root / "scores" / "summary.csv"
+        else root / "scores" / "summary.parquet"
     )
     write_summary(
         summary_path, _collect_generation_results(root, split, results_by_provider)

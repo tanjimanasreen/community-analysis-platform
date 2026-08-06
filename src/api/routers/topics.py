@@ -14,6 +14,7 @@ def get_topics(
     run_id: str,
     type: Literal["matched", "partial"] = "matched",
     community_id: str | None = None,
+    period: str | None = None,
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     service: TopicService = Depends(get_topic_service),
@@ -23,6 +24,7 @@ def get_topics(
             run_id,
             topic_type=type,
             community_id=community_id,
+            period=period,
             limit=limit,
             offset=offset,
         )
@@ -34,6 +36,7 @@ def get_community_topics(
     run_id: str,
     community_id: str,
     type: Literal["matched", "partial"] = "matched",
+    period: str | None = None,
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     service: TopicService = Depends(get_topic_service),
@@ -43,6 +46,7 @@ def get_community_topics(
             run_id,
             topic_type=type,
             community_id=community_id,
+            period=period,
             limit=limit,
             offset=offset,
         )

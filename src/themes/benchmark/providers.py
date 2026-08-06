@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from typing import Any, Mapping, Protocol
 
-from src.themes.benchmark.contracts import ProviderMetadata, ThemeBenchmarkRequest
+from src.themes.benchmark.contracts import (
+    ProviderMetadata,
+    ThemeBenchmarkRequest,
+    ThemeBenchmarkError,
+)
 
 
 class ThemeBenchmarkProvider(Protocol):
@@ -88,6 +92,63 @@ def get_provider(
         if rate_limit_rpm is not None:
             kwargs["rate_limit_rpm"] = rate_limit_rpm
         return NvidiaBenchmarkProvider(**kwargs)
+
+    if provider_id.startswith("mistral:"):
+        from src.providers.mistral import MistralBenchmarkProvider
+
+        model_id = provider_id.split(":", 1)[1].strip()
+        kwargs = {
+            "model_id": model_id,
+            "allow_live": allow_live,
+            "max_retries": max_retries,
+            "timeout": timeout,
+            "max_outbound_requests": max_outbound_requests,
+            "request_budget": request_budget,
+        }
+        if rate_limit_rpm is not None:
+            kwargs["rate_limit_rpm"] = rate_limit_rpm
+        return MistralBenchmarkProvider(**kwargs)
+
+    if provider_id.startswith("openai:"):
+        from src.providers.openai import OpenAIProvider
+
+        if not allow_live:
+            raise ThemeBenchmarkError(
+                "OpenAI benchmark provider requires live-provider access."
+            )
+
+        model_id = provider_id.split(":", 1)[1].strip()
+        if not model_id:
+            raise ThemeBenchmarkError(
+                "OpenAI provider ID must include a model, "
+                "for example openai:gpt-5-nano."
+            )
+
+        provider_registry = config.get("providers", {}) if config else {}
+        openai_config = (
+            provider_registry.get("openai", {})
+            if isinstance(provider_registry, Mapping)
+            else {}
+        )
+
+        return OpenAIProvider(
+            model_id=model_id,
+            rate_limit_rpm=rate_limit_rpm or 60,
+            timeout=timeout if timeout is not None else 60.0,
+            max_retries=max_retries,
+            max_output_tokens=int(openai_config.get("max_output_tokens", 32768)),
+            max_output_tokens_cap=int(
+                openai_config.get("max_output_tokens_cap", 65536)
+            ),
+            reasoning_effort=openai_config.get("reasoning_effort", "low"),
+            content_filter_retries=int(openai_config.get("content_filter_retries", 1)),
+            content_filter_retry_delay_seconds=float(
+                openai_config.get("content_filter_retry_delay_seconds", 8.0)
+            ),
+            log_content_filter_annotations=bool(
+                openai_config.get("log_content_filter_annotations", True)
+            ),
+        )
 
     if provider_id.startswith("routing:"):
         from src.providers.routing import RoutingBenchmarkProvider

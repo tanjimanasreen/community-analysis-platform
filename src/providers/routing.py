@@ -12,6 +12,7 @@ The theme pipeline accesses it via src.providers.factory.build_theme_provider().
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from typing import Any, Sequence
 
@@ -41,6 +42,9 @@ class RoutingBenchmarkProvider:
                 "RoutingBenchmarkProvider requires at least one provider."
             )
         self.providers = list(providers)
+        self._state = threading.local()
+        self._metrics_lock = threading.Lock()
+        self._fallback_attempts = 0
 
         # Metadata inherits from the primary provider
         primary_metadata = self.providers[0].metadata
@@ -48,14 +52,66 @@ class RoutingBenchmarkProvider:
         self.rate_limit_rpm = getattr(self.providers[0], "rate_limit_rpm", 0)
 
         aggregated_parameters = {
-            "primary": primary_metadata.parameters,
-            "fallback_chain": [p.metadata.provider_id for p in self.providers],
+            "route": [
+                {
+                    "provider_id": p.metadata.provider_id,
+                    "model_id": p.metadata.model_id,
+                    "parameters": p.metadata.parameters,
+                }
+                for p in self.providers
+            ],
         }
         self.metadata = ProviderMetadata(
             provider_id=self.provider_id,
             model_id=f"routing__{primary_metadata.model_id}",
             parameters=aggregated_parameters,
         )
+
+    @property
+    def last_generation_metadata(self) -> ProviderMetadata:
+        """Metadata for the provider used by the current worker thread."""
+        return getattr(self._state, "metadata", self.metadata)
+
+    @property
+    def run_metrics(self) -> dict[str, Any]:
+        """Aggregate route metrics without exposing provider secrets."""
+        totals: dict[str, Any] = {
+            "total_prompt_tokens": 0,
+            "total_completion_tokens": 0,
+            "total_cost": 0.0,
+            "latency_ms_list": [],
+            "ttft_ms_list": [],
+            "tpot_ms_list": [],
+            "prompts_and_responses": [],
+            "calls": 0,
+            "logical_theme_requests": 0,
+            "outbound_requests": 0,
+        }
+        for provider in self.providers:
+            metrics = getattr(provider, "run_metrics", {})
+            for key in (
+                "total_prompt_tokens",
+                "total_completion_tokens",
+                "total_cost",
+                "calls",
+                "logical_theme_requests",
+                "outbound_requests",
+            ):
+                totals[key] += metrics.get(key, 0)
+            for key in (
+                "latency_ms_list",
+                "ttft_ms_list",
+                "tpot_ms_list",
+                "prompts_and_responses",
+            ):
+                totals[key].extend(metrics.get(key, []))
+        with self._metrics_lock:
+            totals["fallback_attempts"] = self._fallback_attempts
+        return totals
+
+    def _record_fallback(self) -> None:
+        with self._metrics_lock:
+            self._fallback_attempts += 1
 
     def generate(self, request: ThemeBenchmarkRequest) -> dict[str, Any]:
         """Try each provider in order; fall back on any exception."""
@@ -74,6 +130,7 @@ class RoutingBenchmarkProvider:
                         request.example_id,
                     )
                 result = provider.generate(request)
+                self._state.metadata = provider.metadata
                 if "_benchmark_metadata" in result:
                     result["_benchmark_metadata"][
                         "fallback_attempts"
@@ -81,6 +138,8 @@ class RoutingBenchmarkProvider:
                 return result
 
             except Exception as exc:
+                if i < len(self.providers) - 1:
+                    self._record_fallback()
                 latency = time.time() - start_time
                 error_msg = str(exc)
                 last_error = exc
@@ -108,7 +167,7 @@ class RoutingBenchmarkProvider:
                         f"Routing provider exhausted all fallbacks. Last error: {error_msg}"
                     ) from exc
 
-    def generate_theme(self, text: str) -> dict:
+    def generate_theme(self, keywords: list[str]) -> dict:
         """Fallback-aware theme generation for the theme pipeline."""
         last_error: Exception | None = None
         for i, provider in enumerate(self.providers):
@@ -118,8 +177,12 @@ class RoutingBenchmarkProvider:
                         "Fallback theme generation via %s",
                         provider.metadata.provider_id,
                     )
-                return provider.generate_theme(text)
+                result = provider.generate_theme(keywords)
+                self._state.metadata = provider.metadata
+                return result
             except Exception as exc:
+                if i < len(self.providers) - 1:
+                    self._record_fallback()
                 last_error = exc
                 logger.warning(
                     "Provider %s generate_theme() failed: %s",

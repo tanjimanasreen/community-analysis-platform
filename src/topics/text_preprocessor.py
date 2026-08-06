@@ -1,22 +1,22 @@
+from __future__ import annotations
+
 import os
-from bs4 import BeautifulSoup
-import pandas as pd
 import re
-import demoji
 import unicodedata
-import string
+from collections.abc import Iterable
 
-# Load stop words from the same directory as this script
-current_dir = os.path.dirname(os.path.abspath(__file__))
-stopwords_path = os.path.join(current_dir, "stopwords-list.txt")
+import demoji
+import pandas as pd
+from bs4 import BeautifulSoup
 
-with open(stopwords_path, "r") as f:
-    stop_words = []
-    for l in f.readlines():
-        stop_words.append(l.strip())
+_current_dir = os.path.dirname(os.path.abspath(__file__))
+_stopwords_path = os.path.join(_current_dir, "stopwords-list.txt")
 
-stop_words.extend(
-    [
+with open(_stopwords_path, "r", encoding="utf-8") as stopword_file:
+    _stop_words = {line.strip() for line in stopword_file if line.strip()}
+
+_stop_words.update(
+    {
         "dont",
         "im",
         "um",
@@ -35,61 +35,57 @@ stop_words.extend(
         "do",
         "not",
         "nomnomnomnom",
-    ]
+    }
 )
+
+# Compile once.  The previous implementation rebuilt every expression for every
+# community document, which is expensive for large Twitter runs.
+_REMOVE_USERNAME = re.compile(r"@[^ ]+")
+_REMOVE_URLS = re.compile(r"https?://[A-Za-z0-9./]+")
+_REMOVE_URLS_2 = re.compile(r"https?:[^\s]+")
+_REMOVE_HASHTAG = re.compile(r"\#")
+_REMOVE_WWW = re.compile(r"www\S+")
+_REPLACE_WITH_SPACE = re.compile(r"[/(){}\[\]\|@,;.]")
+_REMOVE_NOT_CHARS = re.compile(r"[^a-z A-Z]")
+_REMOVE_AHAH = re.compile(r"\b(?:ah)+\b")
+_REMOVE_AHA = re.compile(r"\b(?:ah)+a\b")
+_REMOVE_HAHA = re.compile(r"\b(?:ha)+\b")
+_REMOVE_REPETITION = re.compile(r"\b(\w+)( \1\b)+")
+_REMOVE_JAJA = re.compile(r"\b(?:ja)+\b")
+_MULTISPACE = re.compile(r" +")
 
 
 def clean_text(text: str) -> str:
-    """
-    Cleans text by removing URLs, usernames, hashtags, special characters, and repeated sequences.
-    """
-    remove_username = re.compile(r"@[^ ]+")
-    remove_urls = re.compile(r"https?://[A-Za-z0-9./]+")
-    remove_urls_2 = re.compile(r"https?:[^\s]+")
-    remove_hashtag = re.compile(r"\#")
-    remove_www = re.compile(r"www\S+")
-
-    replace_with_space = re.compile(r"[/(){}\[\]\|@,;.]")
-    remove_not_chars = re.compile(r"[^a-z A-Z]")
-
-    remove_ahah = re.compile(r"\b(?:ah)+\b")
-    remove_aha = re.compile(r"\b(?:ah)+a\b")
-    remove_haha = re.compile(r"\b(?:ha)+\b")
-    remove_repetition = re.compile(r"\b(\w+)( \1\b)+")
-    remove_jaja = re.compile(r"\b(?:ja)+\b")
-
+    """Apply the thesis text-cleaning rules to one combined document."""
     text = text.lower()
-
-    text = remove_username.sub(" ", text)
-    text = remove_urls.sub(" ", text)
-    text = remove_urls_2.sub(" ", text)
-    text = remove_hashtag.sub(" ", text)
-    text = remove_www.sub(" ", text)
-    text = replace_with_space.sub(" ", text)
-    text = remove_ahah.sub(" ", text)
-    text = remove_aha.sub(" ", text)
-    text = remove_haha.sub(" ", text)
-    text = remove_jaja.sub(" ", text)
-
-    text = remove_not_chars.sub("", text)
-    text = " ".join([word for word in text.split() if word not in stop_words])
-    text = remove_repetition.sub(r"\1", text)
-
-    return text
+    text = _REMOVE_USERNAME.sub(" ", text)
+    text = _REMOVE_URLS.sub(" ", text)
+    text = _REMOVE_URLS_2.sub(" ", text)
+    text = _REMOVE_HASHTAG.sub(" ", text)
+    text = _REMOVE_WWW.sub(" ", text)
+    text = _REPLACE_WITH_SPACE.sub(" ", text)
+    text = _REMOVE_AHAH.sub(" ", text)
+    text = _REMOVE_AHA.sub(" ", text)
+    text = _REMOVE_HAHA.sub(" ", text)
+    text = _REMOVE_JAJA.sub(" ", text)
+    text = _REMOVE_NOT_CHARS.sub("", text)
+    text = " ".join(word for word in text.split() if word not in _stop_words)
+    return _REMOVE_REPETITION.sub(r"\1", text)
 
 
 def replace_emojis(text: str) -> str:
     for emoji, context in demoji.findall(text).items():
-        text = text.replace(emoji, " " + context + " ")
-        text = re.sub(" +", " ", text)
+        text = text.replace(emoji, f" {context} ")
+        text = _MULTISPACE.sub(" ", text)
     return text
 
 
 def remove_emojis(text: str) -> str:
-    if isinstance(text, str):
-        for emoji, context in demoji.findall(text).items():
-            text = text.replace(emoji, " ")
-            text = re.sub(" +", " ", text)
+    if not isinstance(text, str):
+        return text
+    for emoji in demoji.findall(text):
+        text = text.replace(emoji, " ")
+        text = _MULTISPACE.sub(" ", text)
     return text
 
 
@@ -98,29 +94,27 @@ def normalize_unicode(text: str) -> str:
 
 
 def clean_html(text: str) -> str:
-    return BeautifulSoup(text, "html.parser").get_text(strip=True)
+    # Strip unencodable surrogates that break BeautifulSoup
+    clean_text = text.encode("utf-8", "ignore").decode("utf-8")
+    return BeautifulSoup(clean_text, "html.parser").get_text(strip=True)
 
 
-def message_preprocess(text_df):
-    text_df["messages_processed"] = text_df["messages"].apply(
-        lambda messages: [
-            remove_emojis(message) for message in messages if isinstance(message, str)
-        ]
-    )
-    text_df["messages_processed"] = text_df["messages_processed"].apply(
-        lambda messages: [clean_html(message) for message in messages]
-    )
-    text_df["messages_processed"] = text_df["messages_processed"].apply(
-        lambda messages: [normalize_unicode(message) for message in messages]
-    )
-    text_df["messages_processed"] = text_df["messages_processed"].apply(
-        lambda x: [sentence for sentence in x if sentence.strip()]
-    )
-    text_df["messages_processed"] = text_df["messages_processed"].apply(
-        lambda x: ".".join(x)
-    )
-    text_df["messages_processed"] = text_df["messages_processed"].apply(
-        lambda messages: clean_text(messages)
-    )
+def _preprocess_messages(messages: object) -> str:
+    if not isinstance(messages, Iterable) or isinstance(messages, (str, bytes)):
+        return clean_text("")
 
-    return text_df["messages_processed"]
+    cleaned_messages: list[str] = []
+    for message in messages:
+        if not isinstance(message, str):
+            continue
+        cleaned = normalize_unicode(clean_html(remove_emojis(message)))
+        if cleaned.strip():
+            cleaned_messages.append(cleaned)
+    return clean_text(".".join(cleaned_messages))
+
+
+def message_preprocess(text_df: pd.DataFrame) -> pd.Series:
+    """Preprocess community message lists in a single dataframe pass."""
+    if "messages" not in text_df.columns:
+        raise KeyError("Community messages dataframe is missing column: messages")
+    return text_df["messages"].map(_preprocess_messages)

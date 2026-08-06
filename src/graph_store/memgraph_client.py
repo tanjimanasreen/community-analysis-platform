@@ -1,4 +1,4 @@
-import os
+from src.config.settings import get_database_settings
 from neo4j import GraphDatabase
 
 
@@ -9,10 +9,11 @@ class MemgraphClient:
     """
 
     def __init__(self, uri=None, user=None, password=None, database=None):
-        self.uri = uri or os.environ.get("GRAPH_DB_URI", "bolt://localhost:7687")
-        self.user = user or os.environ.get("GRAPH_DB_USER", "")
-        self.password = password or os.environ.get("GRAPH_DB_PASSWORD", "")
-        self.database = database or os.environ.get("GRAPH_DB_DATABASE", "memgraph")
+        settings = get_database_settings()
+        self.uri = uri or settings.uri
+        self.user = user or settings.user or ""
+        self.password = password or settings.password or ""
+        self.database = database or settings.database
         self.driver = self.get_driver()
 
     def get_driver(self):

@@ -1,36 +1,36 @@
-import os
+from src.config.settings import get_database_settings
 import csv
 
-TELEGRAM_QUERY = """MATCH (source:User)-[r:CREATED]->(target:Message) WHERE datetime({year:$year, month: $month, day:1}) <= target.date < datetime({year:$year_next, month: $month_next, day:1})
+TELEGRAM_QUERY = """MATCH (source:User)-[r:CREATED]->(target:Message) WHERE localdatetime({year:$year, month: $month, day:1}) <= target.date < localdatetime({year:$year_next, month: $month_next, day:1})
     Return source, target, TYPE(r) as relation
     UNION
-    MATCH (source:Message)-[r:SENT_TO]->(target:Channel) WHERE datetime({year:$year, month: $month, day:1}) <= source.date < datetime({year:$year_next, month: $month_next, day:1})
+    MATCH (source:Message)-[r:SENT_TO]->(target:Channel) WHERE localdatetime({year:$year, month: $month, day:1}) <= source.date < localdatetime({year:$year_next, month: $month_next, day:1})
     Return source, target, TYPE(r) as relation
     UNION
-    MATCH (source:User)-[r:PRODUCED]->(target:Forward_Message) WHERE datetime({year:$year, month: $month, day:1}) <= target.forwarded_date < datetime({year:$year_next, month: $month_next, day:1})
+    MATCH (source:User)-[r:PRODUCED]->(target:Forward_Message) WHERE localdatetime({year:$year, month: $month, day:1}) <= target.forwarded_date < localdatetime({year:$year_next, month: $month_next, day:1})
     Return source, target, TYPE(r) as relation
     UNION
-    MATCH (source:Forward_Message)-[r:FORWARDED_BY]->(target:User) WHERE datetime({year:$year, month: $month, day:1}) <= source.forwarded_date < datetime({year:$year_next, month: $month_next, day:1})
+    MATCH (source:Forward_Message)-[r:FORWARDED_BY]->(target:User) WHERE localdatetime({year:$year, month: $month, day:1}) <= source.forwarded_date < localdatetime({year:$year_next, month: $month_next, day:1})
     Return source, target, TYPE(r) as relation
     UNION
-    MATCH (source:Forward_Message)-[r:FORWARDED_TO]->(target:Channel) WHERE datetime({year:$year, month: $month, day:1}) <= source.forwarded_date < datetime({year:$year_next, month: $month_next, day:1})
+    MATCH (source:Forward_Message)-[r:FORWARDED_TO]->(target:Channel) WHERE localdatetime({year:$year, month: $month, day:1}) <= source.forwarded_date < localdatetime({year:$year_next, month: $month_next, day:1})
     Return source, target, TYPE(r) as relation
     UNION
-    MATCH (source:Channel)-[r:ORIGINATED]->(target:Forward_Message) WHERE datetime({year:$year, month: $month, day:1}) <= target.forwarded_date < datetime({year:$year_next, month: $month_next, day:1})
+    MATCH (source:Channel)-[r:ORIGINATED]->(target:Forward_Message) WHERE localdatetime({year:$year, month: $month, day:1}) <= target.forwarded_date < localdatetime({year:$year_next, month: $month_next, day:1})
     Return source, target, TYPE(r) as relation
 """
 
-TWITTER_RETWEET_QUERY = """MATCH (source:Twitter_User)-[r:TWEETED]->(target:Retweet_Quote) WHERE datetime({year:$year, month:$month, day:1}) <= target.created_at < datetime({year:$year_next, month: $month_next, day: 1})
+TWITTER_RETWEET_QUERY = """MATCH (source:Twitter_User)-[r:TWEETED]->(target:Retweet_Quote) WHERE localdatetime({year:$year, month:$month, day:1}) <= target.created_at < localdatetime({year:$year_next, month: $month_next, day: 1})
     Return source, target, TYPE(r) as relation
     UNION
-    MATCH (source:Retweet_Quote)-[r:RETWEETED_BY]->(target:Twitter_User) WHERE datetime({year:$year, month: $month, day: 1}) <= source.created_at < datetime({year:$year_next, month: $month_next, day:1})
+    MATCH (source:Retweet_Quote)-[r:RETWEETED_BY]->(target:Twitter_User) WHERE localdatetime({year:$year, month: $month, day: 1}) <= source.created_at < localdatetime({year:$year_next, month: $month_next, day:1})
     Return source, target, TYPE(r) as relation
 """
 
-TWITTER_REPLY_QUERY = """MATCH (source:Reply)-[r:REPLIED_BY]->(target:Twitter_User) WHERE datetime({year:$year, month:$month, day:1}) <= source.created_at < datetime({year:$year_next, month: $month_next, day: 1})
+TWITTER_REPLY_QUERY = """MATCH (source:Reply)-[r:REPLIED_BY]->(target:Twitter_User) WHERE localdatetime({year:$year, month:$month, day:1}) <= source.created_at < localdatetime({year:$year_next, month: $month_next, day: 1})
     Return source, target, TYPE(r) as relation
     UNION
-    MATCH (source:Reply)-[r:REPLIED_TO]->(target:Twitter_User) WHERE datetime({year:$year, month: $month, day: 1}) <= source.created_at < datetime({year:$year_next, month: $month_next, day:1})
+    MATCH (source:Reply)-[r:REPLIED_TO]->(target:Twitter_User) WHERE localdatetime({year:$year, month: $month, day: 1}) <= source.created_at < localdatetime({year:$year_next, month: $month_next, day:1})
     Return source, target, TYPE(r) as relation
 """
 
@@ -42,11 +42,12 @@ QUERIES = {
 
 
 class Neo4jExporter:
-    def __init__(self, uri=None, user=None, password=None, database="neo4j"):
-        self.uri = uri or os.environ.get("NEO4J_URI")
-        self.user = user or os.environ.get("NEO4J_USER")
-        self.password = password or os.environ.get("NEO4J_PASSWORD")
-        self.database = database or os.environ.get("NEO4J_DATABASE", "neo4j")
+    def __init__(self, uri=None, user=None, password=None, database=None):
+        settings = get_database_settings()
+        self.uri = uri or settings.uri
+        self.user = user or settings.user or ""
+        self.password = password or settings.password or ""
+        self.database = database or settings.database
 
     def get_query(self, query_name):
         if query_name not in QUERIES:

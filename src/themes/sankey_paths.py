@@ -6,19 +6,24 @@ def get_path_info(matched_df: pd.DataFrame):
     if matched_df.empty:
         return [], [], [], []
 
-    all_community = list(matched_df["start_month_community"]) + list(
-        matched_df["end_month_community"]
+    all_community = sorted(
+        set(matched_df["start_month_community"]).union(
+            matched_df["end_month_community"]
+        ),
+        key=str,
     )
-    all_community = list(set(all_community))
+    community_index = {
+        community: index for index, community in enumerate(all_community)
+    }
 
     source_ind = []
     target_ind = []
     score = []
 
-    for _, row in matched_df.iterrows():
-        source_ind.append(all_community.index(row["start_month_community"]))
-        target_ind.append(all_community.index(row["end_month_community"]))
-        score.append(row["jaccard_score"])
+    for row in matched_df.itertuples(index=False):
+        source_ind.append(community_index[row.start_month_community])
+        target_ind.append(community_index[row.end_month_community])
+        score.append(row.jaccard_score)
 
     return source_ind, target_ind, score, all_community
 

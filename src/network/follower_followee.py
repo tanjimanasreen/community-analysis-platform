@@ -3,9 +3,8 @@ import pandas as pd
 
 def extract_network_structure(df_network, followee_id):
     """
-    This function calculates two weight metrics for every follower-followee edges and returns the result row
-    Input: Network dataframe, followee user's id
-    Output: Resulted dataframe for the followee user with the calculated metrics
+    Deprecated: Vectorized logic inside get_follower_followee_network handles this now.
+    Included for backward compatibility if imported elsewhere.
     """
     temp_df = df_network[df_network["from_id"] == followee_id]
     total_post = len(temp_df)
@@ -32,20 +31,40 @@ def get_follower_followee_network(df_network):
     Input: Network dataframe
     Output: Follower-followee dataframe
     """
-
-    followee = list(df_network["from_id"].value_counts().index)
-    results = []
-
-    for followee_id in followee:
-        result = extract_network_structure(df_network, followee_id)
-        if len(result) > 0:
-            results.append(result)
-
-    if results:
-        followee_follower_df = pd.concat(results, ignore_index=True)
-    else:
-        followee_follower_df = pd.DataFrame(
+    if df_network.empty:
+        return pd.DataFrame(
             columns=["target", "shared_post", "source", "total_post", "weighted_post"]
         )
 
-    return followee_follower_df
+    # 1. Total posts per followee
+    total_posts = df_network.groupby("from_id").size().reset_index(name="total_post")
+
+    # 2. Shared posts (source -> target edges)
+    edges = (
+        df_network.groupby(["from_id", "forwarder_id"])
+        .size()
+        .reset_index(name="shared_post")
+    )
+
+    # 3. Rename columns to match expected output
+    edges = edges.rename(columns={"from_id": "source", "forwarder_id": "target"})
+
+    # 4. Filter out self-loops
+    edges = edges[edges["source"] != edges["target"]]
+
+    if edges.empty:
+        return pd.DataFrame(
+            columns=["target", "shared_post", "source", "total_post", "weighted_post"]
+        )
+
+    # 5. Merge total posts to calculate weighted post
+    result = edges.merge(total_posts, left_on="source", right_on="from_id", how="left")
+    result["weighted_post"] = result["shared_post"] / result["total_post"]
+
+    # Drop intermediate merge column and organize columns
+    result = result.drop(columns=["from_id"])
+
+    # Reorder columns to match legacy behavior (not strictly necessary, but safe)
+    result = result[["target", "shared_post", "source", "total_post", "weighted_post"]]
+
+    return result

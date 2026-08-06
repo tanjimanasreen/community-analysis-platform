@@ -74,36 +74,37 @@ def create_user_df(
     creator_node_column: str,
     spreader_node_column: str,
 ) -> pd.DataFrame:
-    """Create a unique user dataframe from creator and spreader node columns."""
-    users: list[dict[str, Any]] = []
+    """Create a unique user dataframe from creator and spreader node columns.
 
-    for _, row in df_creator.iterrows():
-        users.append(normalize_username(parse_node_dict(row[creator_node_column])))
+    Legacy exports repeat the same stringified user node for every message.
+    De-duplicating the raw node representations before ``ast.literal_eval``
+    avoids millions of redundant parses on full Twitter datasets while
+    preserving the first-observed user record.
+    """
+    raw_users = pd.concat(
+        [
+            df_creator[creator_node_column],
+            df_spreader[spreader_node_column],
+        ],
+        ignore_index=True,
+    ).dropna()
+    raw_users = raw_users.drop_duplicates(keep="first")
 
-    for _, row in df_spreader.iterrows():
-        users.append(normalize_username(parse_node_dict(row[spreader_node_column])))
-
+    users = [normalize_username(parse_node_dict(value)) for value in raw_users]
+    users = [user for user in users if user.get("user_id") is not None]
     if not users:
         return pd.DataFrame(columns=["user_id", "username"])
 
-    df_user = pd.DataFrame(users)
-    if "user_id" not in df_user.columns:
-        return pd.DataFrame(columns=["user_id", "username"])
-
-    df_user = df_user.dropna(subset=["user_id"]).drop_duplicates("user_id")
+    df_user = pd.DataFrame(users).drop_duplicates("user_id", keep="first")
     if "username" not in df_user.columns:
-        df_user["username"] = df_user["user_id"].apply(
-            lambda user_id: f"anonymous{user_id}"
-        )
-    else:
-        df_user["username"] = df_user.apply(
-            lambda row: (
-                row["username"]
-                if not pd.isna(row["username"]) and row["username"] not in ("", None)
-                else f"anonymous{row['user_id']}"
-            ),
-            axis=1,
-        )
+        df_user["username"] = pd.NA
+
+    missing_username = df_user["username"].isna() | df_user["username"].astype(
+        str
+    ).str.strip().eq("")
+    df_user.loc[missing_username, "username"] = "anonymous" + df_user.loc[
+        missing_username, "user_id"
+    ].astype(str)
 
     preferred = ["user_id", "username"]
     remaining = [column for column in df_user.columns if column not in preferred]
@@ -114,10 +115,11 @@ def create_network_df(
     df_creator: pd.DataFrame, text_node_column_creator_df: str
 ) -> pd.DataFrame:
     """Create the normalized message/network dataframe used by IF/WIF metrics."""
-    records = [
-        parse_node_dict(row[text_node_column_creator_df])
-        for _, row in df_creator.iterrows()
-    ]
+    if df_creator.empty:
+        return pd.DataFrame()
+
+    records = df_creator[text_node_column_creator_df].map(parse_node_dict).tolist()
+
     if not records:
         return pd.DataFrame()
     return pd.DataFrame(records).reset_index(drop=True)

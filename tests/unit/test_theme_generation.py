@@ -1,41 +1,11 @@
 import pytest
 import pandas as pd
 from unittest.mock import MagicMock
-from src.themes.gpt_themes import (
+from src.themes.theme_generation import (
     call_gpt_theme_api,
-    map_theme,
     extract_unique_keywords,
     generate_gpt_theme,
 )
-
-
-def test_map_theme():
-    reference_df = pd.DataFrame(
-        {
-            "absolute_community": [[0, 1], [2]],
-            "absolute_theme_gpt": ["ThemeA", "ThemeB"],
-            "absolute_theme_names": ["NameA", "NameB"],
-        }
-    )
-
-    result = map_theme(
-        0,
-        reference_df,
-        "absolute_community",
-        "absolute_theme_gpt",
-        "absolute_theme_names",
-    )
-    assert result[0] == "ThemeA"
-    assert result[1] == "NameA"
-
-    result_none = map_theme(
-        5,
-        reference_df,
-        "absolute_community",
-        "absolute_theme_gpt",
-        "absolute_theme_names",
-    )
-    assert result_none[0] is None
 
 
 def test_extract_unique_keywords():
@@ -50,9 +20,19 @@ def test_extract_unique_keywords():
 
     df = extract_unique_keywords(month_df)
 
-    assert "apple,banana,bigapple,orange,bigorange" in df["all_keywords"].iloc[0]
-    assert "apple,banana,bigapple" in df["absolute_keywords"].iloc[0]
-    assert "orange,bigorange" in df["weighted_keywords"].iloc[0]
+    assert df["all_keywords"].iloc[0] == (
+        "apple",
+        "banana",
+        "big apple",
+        "orange",
+        "big orange",
+    )
+    assert df["absolute_keywords"].iloc[0] == (
+        "apple",
+        "banana",
+        "big apple",
+    )
+    assert df["weighted_keywords"].iloc[0] == ("orange", "big orange")
 
 
 def test_generate_gpt_theme():

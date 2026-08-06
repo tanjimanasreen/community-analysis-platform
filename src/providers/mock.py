@@ -8,10 +8,22 @@ Classes:
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from src.providers.base import BaseLLMProvider
 from src.themes.benchmark.contracts import ProviderMetadata, ThemeBenchmarkRequest
+
+
+def _estimate_tokens(text: str) -> int:
+    """Return a deterministic offline token estimate for mock metadata.
+
+    Mock providers must never initialize a tokenizer that may download model
+    assets. Real OpenAI usage is read from the provider response instead.
+    """
+    if not text:
+        return 0
+    return max(1, (len(text) + 3) // 4)
 
 
 class MockProvider(BaseLLMProvider):
@@ -32,6 +44,7 @@ class MockProvider(BaseLLMProvider):
     rate_limit_rpm = 1000
 
     def __init__(self, static_response: dict | None = None) -> None:
+        super().__init__()
         self.static_response = static_response or {
             "Mock Theme": ["mock keyword 1", "mock keyword 2"]
         }
@@ -41,10 +54,24 @@ class MockProvider(BaseLLMProvider):
             {"name": k, "keywords": v if isinstance(v, list) else v.split(", ")}
             for k, v in self.static_response.items()
         ]
-        return {"themes": themes}
 
-    def generate_theme(self, text: str) -> dict:
-        return self.static_response
+        prompt_str = request.system_prompt + "\n" + request.user_prompt
+        completion_str = json.dumps(themes)
+
+        prompt_tokens = _estimate_tokens(prompt_str)
+        completion_tokens = _estimate_tokens(completion_str)
+
+        return {
+            "themes": themes,
+            "_benchmark_metadata": {
+                "usage": {
+                    "prompt_tokens": prompt_tokens,
+                    "completion_tokens": completion_tokens,
+                    "total_tokens": prompt_tokens + completion_tokens,
+                },
+                "estimated_cost": 0.0,
+            },
+        }
 
     def generate_text(self, prompt: str) -> str:
         import json
@@ -92,10 +119,31 @@ class BenchmarkMockProvider(BaseLLMProvider):
     )
     rate_limit_rpm = 1000
 
+    def __init__(self) -> None:
+        super().__init__()
+
     def generate(self, request: ThemeBenchmarkRequest) -> dict[str, Any]:
         keywords = list(dict.fromkeys(request.keywords[:3]))
         name = f"Benchmark {request.keyword_mode.title()} Theme"
-        return {"themes": [{"name": name, "keywords": keywords}] if keywords else []}
+        themes = [{"name": name, "keywords": keywords}] if keywords else []
+
+        prompt_str = request.system_prompt + "\n" + request.user_prompt
+        completion_str = json.dumps(themes)
+
+        prompt_tokens = _estimate_tokens(prompt_str)
+        completion_tokens = _estimate_tokens(completion_str)
+
+        return {
+            "themes": themes,
+            "_benchmark_metadata": {
+                "usage": {
+                    "prompt_tokens": prompt_tokens,
+                    "completion_tokens": completion_tokens,
+                    "total_tokens": prompt_tokens + completion_tokens,
+                },
+                "estimated_cost": 0.0,
+            },
+        }
 
     def generate_text(self, prompt: str) -> str:
         # Provide a generic valid JSON that most DeepEval GEval metrics can parse

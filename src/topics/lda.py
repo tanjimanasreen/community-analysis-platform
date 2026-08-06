@@ -1,8 +1,10 @@
-from gensim.models import CoherenceModel, LdaModel
+from gensim.models import CoherenceModel, LdaMulticore
 from gensim.models import Phrases
+from gensim.models.phrases import Phraser
 import pandas as pd
 import gensim
 import re
+from typing import Any, Mapping
 
 from src.config.defaults import DEFAULT_CONFIG
 
@@ -26,6 +28,7 @@ import logging
 
 _log = logging.getLogger(__name__)
 
+
 def get_nlp():
     """Load the thesis spaCy model lazily, with an offline fallback for tests."""
     global _nlp
@@ -40,7 +43,8 @@ def get_nlp():
                 "Lemmatization will use raw tokens instead of morphological forms, "
                 "which may produce different LDA results from the thesis baseline. "
                 "Install the model with: python -m spacy download %s",
-                SPACY_MODEL, SPACY_MODEL,
+                SPACY_MODEL,
+                SPACY_MODEL,
             )
             _nlp = spacy.blank("en")
         _nlp.max_length = SPACY_MAX_LENGTH
@@ -51,27 +55,70 @@ def lemmatization(texts, allowed_postags=None):
     if allowed_postags is None:
         allowed_postags = ["NOUN", "ADJ", "VERB", "ADV"]
 
-    texts_out = []
+    # ``nlp.pipe`` amortizes spaCy tokenization overhead across community
+    # documents.  Keep one process here to avoid nested multiprocessing with
+    # LdaMulticore and Prefect month workers.  Token order and lemma fallback
+    # are identical to the legacy per-document loop.
     nlp = get_nlp()
-    for sent in texts:
-        doc = nlp(" ".join(sent))
-        texts_out.append([token.lemma_ or token.text for token in doc])
-    return texts_out
+    documents = (" ".join(sent) for sent in texts)
+    return [
+        [token.lemma_ or token.text for token in doc]
+        for doc in nlp.pipe(documents, batch_size=16, n_process=1)
+    ]
 
 
-def get_lda(dictionary, corpus, num_topics=NUM_TOPICS):
-    lda_model = LdaModel(
+def _resolve_lda_settings(
+    lda_config: Mapping[str, Any] | None = None,
+    *,
+    num_topics: int | None = None,
+) -> dict[str, Any]:
+    """Resolve runtime LDA settings while preserving the thesis defaults.
+
+    ``LdaMulticore`` is intentionally retained for performance. Gensim does not
+    support ``alpha="auto"`` or ``eta="auto"`` for this model, so those two
+    documented thesis values continue to use the legacy symmetric fallback.
+    """
+    raw = dict(lda_config or {})
+    resolved: dict[str, Any] = {
+        "num_topics": int(
+            num_topics if num_topics is not None else raw.get("num_topics", NUM_TOPICS)
+        ),
+        "random_state": int(raw.get("random_state", RANDOM_STATE)),
+        "iterations": int(raw.get("iterations", ITERATIONS)),
+        "chunksize": int(raw.get("chunksize", CHUNKSIZE)),
+        "passes": int(raw.get("passes", PASSES)),
+        "alpha": raw.get("alpha", ALPHA),
+        "eta": raw.get("eta", ETA),
+        "top_n_keywords": int(raw.get("top_n_keywords", TOP_N_KEYWORDS)),
+    }
+    if "workers" in raw and raw["workers"] is not None:
+        resolved["workers"] = max(1, int(raw["workers"]))
+
+    # LdaMulticore cannot learn automatic priors. Preserve the project's
+    # established fallback instead of silently dropping the configured values.
+    resolved["alpha"] = (
+        "symmetric" if resolved["alpha"] == "auto" else resolved["alpha"]
+    )
+    resolved["eta"] = "symmetric" if resolved["eta"] == "auto" else resolved["eta"]
+    return resolved
+
+
+def get_lda(
+    dictionary,
+    corpus,
+    num_topics: int | None = None,
+    *,
+    lda_config: Mapping[str, Any] | None = None,
+):
+    settings = _resolve_lda_settings(lda_config, num_topics=num_topics)
+    model_kwargs = {
+        key: value for key, value in settings.items() if key != "top_n_keywords"
+    }
+    return LdaMulticore(
         corpus=corpus,
         id2word=dictionary,
-        num_topics=num_topics,
-        random_state=RANDOM_STATE,
-        iterations=ITERATIONS,
-        chunksize=CHUNKSIZE,
-        passes=PASSES,
-        alpha=ALPHA,
-        eta=ETA,
+        **model_kwargs,
     )
-    return lda_model
 
 
 def get_lda_stat(lda_model, corpus, id2word, lemmatized_tokens):
@@ -126,21 +173,28 @@ def get_unigram_tokens(text_df):
     return data_tokens
 
 
-def get_unigram_lda(text_df):
+def get_unigram_lda(text_df, *, lda_config: Mapping[str, Any] | None = None):
     data_tokens = get_unigram_tokens(text_df)
     lemmatized_tokens = lemmatization(data_tokens)
 
     id2word = gensim.corpora.Dictionary(lemmatized_tokens)
     corpus = [id2word.doc2bow(doc) for doc in lemmatized_tokens]
+    if len(id2word) == 0 or not any(corpus):
+        raise ValueError("Cannot train unigram LDA on an empty token corpus")
 
-    optimal_model = get_lda(id2word, corpus)
+    settings = _resolve_lda_settings(lda_config)
+    optimal_model = get_lda(id2word, corpus, lda_config=lda_config)
     perplexity, coherence = get_lda_stat(
         optimal_model, corpus, id2word, lemmatized_tokens
     )
 
     data = text_df.copy()
     document_topics = assign_dominant_topic(
-        optimal_model, corpus, id2word, data, topn_keywords=TOP_N_KEYWORDS
+        optimal_model,
+        corpus,
+        id2word,
+        data,
+        topn_keywords=settings["top_n_keywords"],
     )
 
     return document_topics, optimal_model, perplexity, coherence
@@ -151,31 +205,41 @@ def get_bigrams_tokens(text_df):
     data_tokens = [TOKEN_RE.findall(text) for text in text_df["messages_processed"]]
     bigrams_tokens = lemmatization(data_tokens)
 
-    bigram = Phrases(bigrams_tokens, min_count=5)
-    trigram = Phrases(bigram[bigrams_tokens])
+    bigram_model = Phrases(bigrams_tokens, min_count=5)
+    bigram = Phraser(bigram_model)
+    trigram = Phraser(Phrases(bigram[bigrams_tokens]))
 
-    for idx in range(len(bigrams_tokens)):
-        for token in bigram[bigrams_tokens[idx]]:
-            if "_" in token:
-                bigrams_tokens[idx].append(token)
-        for token in trigram[bigrams_tokens[idx]]:
-            if "_" in token:
-                bigrams_tokens[idx].append(token)
+    for tokens in bigrams_tokens:
+        # Preserve the legacy token sequence exactly: append detected bigrams
+        # to the original token list first, then evaluate the trigram model on
+        # that augmented list. ``Phraser`` only removes the large training
+        # state; it does not change the trained phrase scores.
+        bigram_tokens = bigram[tokens]
+        tokens.extend(token for token in bigram_tokens if "_" in token)
+        trigram_tokens = trigram[tokens]
+        tokens.extend(token for token in trigram_tokens if "_" in token)
 
     return bigrams_tokens
 
 
-def get_bigram_lda(text_df):
+def get_bigram_lda(text_df, *, lda_config: Mapping[str, Any] | None = None):
     bigrams_tokens = get_bigrams_tokens(text_df)
     id2word = gensim.corpora.Dictionary(bigrams_tokens)
     corpus = [id2word.doc2bow(doc) for doc in bigrams_tokens]
+    if len(id2word) == 0 or not any(corpus):
+        raise ValueError("Cannot train bigram LDA on an empty token corpus")
 
-    optimal_model = get_lda(id2word, corpus)
+    settings = _resolve_lda_settings(lda_config)
+    optimal_model = get_lda(id2word, corpus, lda_config=lda_config)
     perplexity, coherence = get_lda_stat(optimal_model, corpus, id2word, bigrams_tokens)
 
     data = text_df.copy()
     document_topics = assign_dominant_topic(
-        optimal_model, corpus, id2word, data, topn_keywords=TOP_N_KEYWORDS
+        optimal_model,
+        corpus,
+        id2word,
+        data,
+        topn_keywords=settings["top_n_keywords"],
     )
 
     return document_topics, optimal_model, perplexity, coherence

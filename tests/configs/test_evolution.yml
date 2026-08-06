@@ -1,0 +1,44 @@
+data_type: twitter
+content_type: reply
+year: "2017"
+output_base_path: local_output/tests/community-analysis-evolution-test/
+
+creator_relation: REPLIED_TO
+spreader_relation: REPLIED_BY
+creator_node_column: target
+spreader_node_column: target
+text_node_column: source
+date_column: created_at
+
+graph_thresholds:
+  min_total_post: 1
+  min_shared_post: 1
+  min_members: 2
+
+lda:
+  num_topics: 15
+  top_n_keywords: 50
+
+theme:
+  model: "llm7:gpt-oss:20b"
+  sleep_seconds: 2
+  transition_threshold: 0.0
+  year: "2017"
+  render_visuals: false
+  similarity_model: paraphrase-MiniLM-L6-v2
+
+tracking:
+  enabled: true
+  experiment_name: "community-analysis-evolution"
+  backend: "mlflow"
+  backend_store_path: ".mlflow/mlflow.db"
+  artifact_root: ".mlflow/artifacts"
+  nested_stage_runs: true
+  failure_policy: "warn"
+  log_artifact_references: true
+
+longitudinal_datasets:
+  - month: "03"
+    input_path: tests/fixtures/longitudinal/twitter_reply_03_2017.csv
+  - month: "04"
+    input_path: tests/fixtures/longitudinal/twitter_reply_04_2017.csv

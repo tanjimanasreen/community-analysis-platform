@@ -1,6 +1,10 @@
-import plotly.graph_objects as go
 import ast
+import logging
 import os
+
+import plotly.graph_objects as go
+
+logger = logging.getLogger(__name__)
 
 
 def draw_community_transition_diagram(
@@ -12,7 +16,7 @@ def draw_community_transition_diagram(
     matched_df,
 ):
     if not all_community:
-        print("No community transitions to draw.")
+        logger.info("community_transition_visualization_skipped reason=no_transitions")
         return
 
     # Define color palette for nodes
@@ -88,7 +92,7 @@ def draw_community_transition_diagram(
         if isinstance(members_raw, str):
             try:
                 members = ast.literal_eval(members_raw)
-            except:
+            except (SyntaxError, ValueError, TypeError):
                 members = []
         else:
             members = members_raw
@@ -134,11 +138,11 @@ def draw_community_transition_diagram(
     os.makedirs(output_dir, exist_ok=True)
     html_file = os.path.join(output_dir, "community_transition.html")
     fig.write_html(html_file)
-    print(f"Saved Sankey diagram to {html_file}")
+    logger.info("sankey_html_saved path=%s", html_file)
 
     try:
         png_file = os.path.join(output_dir, "community_transition.png")
         fig.write_image(png_file)
-        print(f"Saved Sankey PNG to {png_file}")
-    except Exception as e:
-        print(f"Skipping PNG export (requires kaleido): {e}")
+        logger.info("sankey_png_saved path=%s", png_file)
+    except Exception as exc:
+        logger.warning("sankey_png_skipped error_type=%s", type(exc).__name__)

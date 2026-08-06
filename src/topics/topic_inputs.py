@@ -10,10 +10,10 @@ import pandas as pd
 
 SCHEMA_VERSION = 1
 
-ABSOLUTE_COMMUNITY_MESSAGES_FILE = "absolute_community_messages.csv"
-WEIGHTED_COMMUNITY_MESSAGES_FILE = "weighted_community_messages.csv"
-MATCHED_COMMUNITIES_FILE = "matched_communities.csv"
-PARTIAL_MATCHED_COMMUNITIES_FILE = "partial_matched_communities.csv"
+ABSOLUTE_COMMUNITY_MESSAGES_FILE = "absolute_community_messages.parquet"
+WEIGHTED_COMMUNITY_MESSAGES_FILE = "weighted_community_messages.parquet"
+MATCHED_COMMUNITIES_FILE = "matched_communities.parquet"
+PARTIAL_MATCHED_COMMUNITIES_FILE = "partial_matched_communities.parquet"
 MANIFEST_FILE = "manifest.json"
 
 COMMUNITY_MESSAGE_COLUMNS = [
@@ -253,7 +253,7 @@ def _write_dataframe(df: pd.DataFrame, path: Path, required_columns: list[str]) 
     ]
     for column in LIST_COLUMNS.intersection(frame.columns):
         frame[column] = frame[column].apply(_json_dumps)
-    frame.to_csv(path, index=False)
+    frame.to_parquet(path, index=False)
 
 
 def _read_dataframe(path: Path, required_columns: list[str]) -> pd.DataFrame:
@@ -262,7 +262,7 @@ def _read_dataframe(path: Path, required_columns: list[str]) -> pd.DataFrame:
             f"Required topic input file not found at {path}. "
             "Run run-social-network first to create topic prerequisites."
         )
-    frame = pd.read_csv(path, low_memory=False)
+    frame = pd.read_parquet(path)
     _ensure_columns(frame, required_columns, path.name)
     for column in LIST_COLUMNS.intersection(frame.columns):
         frame[column] = frame[column].apply(_parse_list)

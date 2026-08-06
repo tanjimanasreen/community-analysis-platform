@@ -5,16 +5,17 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable, Mapping
 
+from src.config.settings import get_provider_settings
 from src.config.defaults import DEFAULT_CONFIG
 from src.themes.benchmark.contracts import (
     ProviderMetadata,
     ThemeBenchmarkError,
     ThemeBenchmarkRequest,
+    THEME_OUTPUT_JSON_SCHEMA,
 )
 from src.themes.benchmark.live import LiveRequestBudget
 
 NVIDIA_PROVIDER_PREFIX = "nvidia"
-NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
 RETRYABLE_ERROR_TYPES = {
     "rate_limit",
     "timeout",
@@ -45,7 +46,11 @@ class NvidiaGenerationConfig:
             "timeout": self.timeout,
             "max_outbound_requests": self.max_outbound_requests,
             "api": "chat.completions.create",
-            "base_url": NVIDIA_BASE_URL,
+            "base_url": (
+                str(get_provider_settings().nvidia_base_url)
+                if get_provider_settings().nvidia_base_url
+                else None
+            ),
         }
 
 
@@ -122,9 +127,9 @@ class NvidiaBenchmarkProvider(BaseLLMProvider):
                         {"role": "system", "content": request.system_prompt},
                         {"role": "user", "content": request.user_prompt},
                     ],
-                    "response_format": self.config.response_format,
                     "temperature": self.config.temperature,
                     "stream": self.config.stream,
+                    "response_format": self.config.response_format,
                 }
                 if self.config.timeout is not None:
                     kwargs["timeout"] = self.config.timeout
@@ -187,6 +192,18 @@ class NvidiaBenchmarkProvider(BaseLLMProvider):
 def classify_nvidia_error(exc: Exception) -> str:
     text = _safe_error_message(exc).lower()
     status = getattr(exc, "status_code", None) or getattr(exc, "code", None)
+
+    if any(
+        marker in text
+        for marker in (
+            "not allowed by policy",
+            "blocked by policy",
+            "network egress",
+            "outbound request blocked",
+        )
+    ):
+        return "network_policy"
+
     if "api key" in text or "credential" in text or status == 401:
         return "authentication"
     if "permission" in text or status == 403:
@@ -207,18 +224,26 @@ def classify_nvidia_error(exc: Exception) -> str:
 
 
 def _create_nvidia_client(*, api_key: str | None):
-    api_key = api_key or os.environ.get("NVIDIA_API_KEY")
-    if not api_key:
+    settings = get_provider_settings()
+    resolved_api_key = api_key or (
+        settings.nvidia_api_key.get_secret_value() if settings.nvidia_api_key else None
+    )
+    if not resolved_api_key:
         raise ThemeBenchmarkError(
             "NVIDIA_API_KEY must be set for live NVIDIA benchmark commands."
         )
+    resolved_base_url = (
+        str(settings.nvidia_base_url) if settings.nvidia_base_url else None
+    )
+    if not resolved_base_url:
+        raise ThemeBenchmarkError("NVIDIA_BASE_URL must be set in .env")
     try:
         import openai
     except ModuleNotFoundError as exc:
         raise ThemeBenchmarkError(
             "NVIDIA benchmark support requires the openai dependency."
         ) from exc
-    return openai.OpenAI(base_url=NVIDIA_BASE_URL, api_key=api_key)
+    return openai.OpenAI(base_url=resolved_base_url, api_key=resolved_api_key)
 
 
 def _normalize_completion(
@@ -236,18 +261,22 @@ def _normalize_completion(
     try:
         parsed = json.loads(content)
     except json.JSONDecodeError as exc:
-        raise ThemeBenchmarkError(f"NVIDIA invalid_json: {exc}") from exc
-    normalized = _normalize_theme_payload(parsed, request)
+        raise ThemeBenchmarkError(
+            f"NVIDIA invalid_json: {exc} | Content: {content}"
+        ) from exc
+    normalized = _normalize_theme_payload(parsed, request, content)
     usage = _jsonable(_attr(completion, "usage", None))
-
     metadata_payload = _raw_metadata(completion, choice)
+
+    usage_dict = usage or {}
+
     return {
         "themes": normalized,
         "_benchmark_metadata": {
             "parsed_successfully": True,
             "schema_valid": True,
             "retries": retries,
-            "usage": usage,
+            "usage": usage_dict,
             "estimated_cost": None,  # Not tracked natively here unless cataloged
             "finish_reason": _jsonable(_attr(choice, "finish_reason", None)),
             "safety_metadata": None,
@@ -257,25 +286,26 @@ def _normalize_completion(
 
 
 def _normalize_theme_payload(
-    parsed: Any, request: ThemeBenchmarkRequest
+    parsed: Any, request: ThemeBenchmarkRequest, content: str = ""
 ) -> list[dict[str, Any]]:
     if isinstance(parsed, Mapping) and isinstance(parsed.get("themes"), list):
         source_themes = parsed["themes"]
         allowed = set(request.keywords)
         normalized = []
         for theme in source_themes:
-            if not isinstance(theme, Mapping) or not isinstance(theme.get("name"), str):
+            name_val = theme.get("name") or theme.get("theme_name")
+            if not isinstance(theme, Mapping) or not isinstance(name_val, str):
                 raise ThemeBenchmarkError(
-                    "NVIDIA schema_invalid: response did not match normalized theme schema"
+                    f"NVIDIA schema_invalid: response did not match normalized theme schema. Raw: {content}"
                 )
             keywords = theme.get("keywords")
             if not isinstance(keywords, list):
                 raise ThemeBenchmarkError(
-                    "NVIDIA schema_invalid: response did not match normalized theme schema"
+                    f"NVIDIA schema_invalid: response did not match normalized theme schema. Raw: {content}"
                 )
             normalized.append(
                 {
-                    "name": str(theme["name"]),
+                    "name": str(name_val),
                     "keywords": [
                         str(keyword) for keyword in keywords if str(keyword) in allowed
                     ],
@@ -290,7 +320,7 @@ def _normalize_theme_payload(
         for name, keywords in parsed.items():
             if not isinstance(keywords, list):
                 raise ThemeBenchmarkError(
-                    "NVIDIA schema_invalid: response did not match normalized theme schema"
+                    f"NVIDIA schema_invalid: response did not match normalized theme schema. Raw: {content}"
                 )
             normalized.append(
                 {
@@ -302,7 +332,7 @@ def _normalize_theme_payload(
             )
         return normalized
     raise ThemeBenchmarkError(
-        "NVIDIA schema_invalid: response did not match normalized theme schema"
+        f"NVIDIA schema_invalid: response did not match normalized theme schema. Raw: {content}"
     )
 
 

@@ -49,7 +49,7 @@ class ThemeProviderDefaults(BaseModel):
     primary: str = "mock"
     fallback: bool = True
     fallback_chain: list[str] = Field(
-        default_factory=lambda: ["llm7:fast", "nvidia:meta/llama3-70b-instruct"]
+        default_factory=lambda: ["llm7:fast", "nvidia:meta/llama-3.3-70b-instruct"]
     )
 
 
@@ -60,7 +60,7 @@ class ThemeSimilarityDefaults(BaseModel):
 
 
 class TrackingDefaults(BaseModel):
-    enabled: bool = False
+    enabled: bool = True
     backend: str = "mlflow"
     experiment_name: str = "community-analysis"
     backend_store_path: str = ".mlflow/mlflow.db"

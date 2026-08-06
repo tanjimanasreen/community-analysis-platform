@@ -1,168 +1,178 @@
-import pandas as pd
+from __future__ import annotations
+
 import ast
+from typing import Any
+
+import pandas as pd
+
+from src.config.defaults import DEFAULT_CONFIG
+
+TRANSITION_COLUMNS = [
+    "start_month",
+    "end_month",
+    "start_month_community",
+    "end_month_community",
+    "jaccard_score",
+    "common_members",
+    "uncommon_members",
+    "start_month_members",
+    "total_start_month_members",
+    "end_month_members",
+    "total_end_month_members",
+    "start_month_absolute_theme",
+    "end_month_absolute_theme",
+    "start_month_weighted_theme",
+    "end_month_weighted_theme",
+    "start_month_general_theme",
+    "end_month_general_theme",
+]
+
+
+def _members(value: Any) -> list[Any]:
+    if isinstance(value, list):
+        return value
+    if isinstance(value, tuple):
+        return list(value)
+    if value is None or (not isinstance(value, (list, tuple, str)) and pd.isna(value)):
+        return []
+    if isinstance(value, str):
+        try:
+            parsed = ast.literal_eval(value)
+        except (SyntaxError, ValueError):
+            return []
+        return list(parsed) if isinstance(parsed, (list, tuple, set)) else []
+    if hasattr(value, "tolist"):
+        parsed = value.tolist()
+        return list(parsed) if isinstance(parsed, list) else [parsed]
+    return []
 
 
 def jaccard_similarity(list1, list2):
-    """Define Jaccard Similarity function for two sets"""
     set1 = set(list1)
     set2 = set(list2)
-    if not set1 and not set2:
-        return 0.0
-    intersection = len(set1.intersection(set2))
-    union = len(set1.union(set2))
-    return float(intersection) / union
+    union = set1 | set2
+    return float(len(set1 & set2)) / len(union) if union else 0.0
+
+
+def _theme_value(record: dict[str, Any], column: str) -> str:
+    value = record.get(column, "")
+    return "" if value is None else str(value)
 
 
 def find_matching_communities(
-    df1: pd.DataFrame, df2: pd.DataFrame, month1: str, month2: str, content_type: str
+    df1: pd.DataFrame,
+    df2: pd.DataFrame,
+    month1: str,
+    month2: str,
+    content_type: str,
+    *,
+    threshold: float | None = None,
 ) -> pd.DataFrame:
-    matched = []
+    """Compare consecutive-month communities with pre-parsed member sets."""
+    if df1.empty or df2.empty:
+        return pd.DataFrame(columns=TRANSITION_COLUMNS)
 
-    # Initialize lists to track unmatched communities if needed
-    unmatched_df1 = (
-        df1["absolute_community"].tolist()
-        if "absolute_community" in df1.columns
-        else []
-    )
-    unmatched_df2 = (
-        df2["absolute_community"].tolist()
-        if "absolute_community" in df2.columns
-        else []
-    )
+    if threshold is None:
+        threshold = (
+            DEFAULT_CONFIG.similarity.reply_transition_threshold
+            if content_type == "reply"
+            else DEFAULT_CONFIG.similarity.default_transition_threshold
+        )
+    threshold = float(threshold)
 
-    # Safe access functions since column names might vary or be missing
-    def get_val(row, col, default=""):
-        return str(row[col]) if col in row.index else default
+    left = []
+    for record in df1.to_dict(orient="records"):
+        members = _members(record.get("members", []))
+        left.append((record, members, set(members)))
+    right = []
+    right_by_member: dict[Any, set[int]] = {}
+    for right_index, record in enumerate(df2.to_dict(orient="records")):
+        members = _members(record.get("members", []))
+        member_set = set(members)
+        right.append((record, members, member_set))
+        for member in member_set:
+            right_by_member.setdefault(member, set()).add(right_index)
 
-    for index1, row1 in df1.iterrows():
-        for index2, row2 in df2.iterrows():
-            members1 = row1.get("members", [])
-            members2 = row2.get("members", [])
+    matched: list[dict[str, Any]] = []
+    for row1, members1, set1 in left:
+        # Every accepted Jaccard score is positive, so only communities sharing
+        # at least one member can match. The sorted candidate indexes preserve
+        # the legacy left-then-right output order while avoiding the full
+        # Cartesian product for sparse monthly memberships.
+        candidate_indexes: set[int] = set()
+        for member in set1:
+            candidate_indexes.update(right_by_member.get(member, ()))
+        for right_index in sorted(candidate_indexes):
+            row2, members2, set2 = right[right_index]
+            union = set1 | set2
+            common = set1 & set2
+            score = float(len(common)) / len(union)
+            if not (threshold <= score <= 1.0):
+                continue
 
-            # Ensure members are lists
-            if isinstance(members1, str):
-                try:
-                    members1 = ast.literal_eval(members1)
-                except:
-                    members1 = []
-            if isinstance(members2, str):
-                try:
-                    members2 = ast.literal_eval(members2)
-                except:
-                    members2 = []
+            start_comm = row1.get("absolute_community", "0")
+            end_comm = row2.get("absolute_community", "0")
+            matched.append(
+                {
+                    "start_month": month1,
+                    "end_month": month2,
+                    "start_month_community": f"{month1}_{start_comm}",
+                    "end_month_community": f"{month2}_{end_comm}",
+                    "jaccard_score": score,
+                    "common_members": str(sorted(common, key=str)),
+                    "uncommon_members": str(sorted(set1 ^ set2, key=str)),
+                    "start_month_members": str(members1),
+                    "total_start_month_members": len(members1),
+                    "end_month_members": str(members2),
+                    "total_end_month_members": len(members2),
+                    "start_month_absolute_theme": _theme_value(
+                        row1, "absolute_theme_names"
+                    ),
+                    "end_month_absolute_theme": _theme_value(
+                        row2, "absolute_theme_names"
+                    ),
+                    "start_month_weighted_theme": _theme_value(
+                        row1, "weighted_theme_names"
+                    ),
+                    "end_month_weighted_theme": _theme_value(
+                        row2, "weighted_theme_names"
+                    ),
+                    "start_month_general_theme": _theme_value(
+                        row1, "general_theme_names"
+                    ),
+                    "end_month_general_theme": _theme_value(
+                        row2, "general_theme_names"
+                    ),
+                }
+            )
 
-            jscore = jaccard_similarity(members1, members2)
-
-            # Threshold of 0.0 for reply else 0.5
-            threshold = 0.0 if (content_type == "reply") else 0.5
-            if threshold < jscore <= 1:
-                common_members = list(set(members1) & set(members2))
-                uncommon_members = list(set(members1) ^ set(members2))
-
-                start_comm = row1.get("absolute_community", "0")
-                end_comm = row2.get("absolute_community", "0")
-
-                matched.append(
-                    {
-                        "start_month": month1,
-                        "end_month": month2,
-                        "start_month_community": f"{month1}_{start_comm}",
-                        "end_month_community": f"{month2}_{end_comm}",
-                        "jaccard_score": jscore,
-                        "common_members": str(common_members),
-                        "uncommon_members": str(uncommon_members),
-                        "start_month_members": str(members1),
-                        "total_start_month_members": len(members1),
-                        "end_month_members": str(members2),
-                        "total_end_month_members": len(members2),
-                        "start_month_absolute_theme": get_val(
-                            row1, "absolute_theme_names"
-                        ),
-                        "end_month_absolute_theme": get_val(
-                            row2, "absolute_theme_names"
-                        ),
-                        "start_month_weighted_theme": get_val(
-                            row1, "weighted_theme_names"
-                        ),
-                        "end_month_weighted_theme": get_val(
-                            row2, "weighted_theme_names"
-                        ),
-                        "start_month_general_theme": get_val(
-                            row1, "general_theme_names"
-                        ),
-                        "end_month_general_theme": get_val(row2, "general_theme_names"),
-                    }
-                )
-
-                if start_comm in unmatched_df1:
-                    unmatched_df1.remove(start_comm)
-                if end_comm in unmatched_df2:
-                    unmatched_df2.remove(end_comm)
-
-    columns = [
-        "start_month",
-        "end_month",
-        "start_month_community",
-        "end_month_community",
-        "jaccard_score",
-        "common_members",
-        "uncommon_members",
-        "start_month_members",
-        "total_start_month_members",
-        "end_month_members",
-        "total_end_month_members",
-        "start_month_absolute_theme",
-        "end_month_absolute_theme",
-        "start_month_weighted_theme",
-        "end_month_weighted_theme",
-        "start_month_general_theme",
-        "end_month_general_theme",
-    ]
-
-    matched_df = pd.DataFrame(matched, columns=columns)
-    return matched_df
+    return pd.DataFrame(matched, columns=TRANSITION_COLUMNS)
 
 
-def get_community_transition(theme_dict: dict, content_type: str) -> pd.DataFrame:
-    """
-    Takes a dictionary of {month: df} sorted by month order.
-    Calculates transitions for consecutive months.
-    """
+def get_community_transition(
+    theme_dict: dict[str, pd.DataFrame],
+    content_type: str,
+    *,
+    threshold: float | None = None,
+) -> pd.DataFrame:
+    """Calculate transitions for consecutive months in insertion order."""
     all_matched = []
     month_names = list(theme_dict.keys())
-
-    for i in range(1, len(month_names)):
-        m1 = month_names[i - 1]
-        m2 = month_names[i]
+    for index in range(1, len(month_names)):
+        month1 = month_names[index - 1]
+        month2 = month_names[index]
         result = find_matching_communities(
-            theme_dict[m1], theme_dict[m2], m1, m2, content_type
+            theme_dict[month1],
+            theme_dict[month2],
+            month1,
+            month2,
+            content_type,
+            threshold=threshold,
         )
         if not result.empty:
             all_matched.append(result)
-
-    if all_matched:
-        matched_df = pd.concat(all_matched, ignore_index=True)
-    else:
-        # Return empty dataframe with correct columns
-        columns = [
-            "start_month",
-            "end_month",
-            "start_month_community",
-            "end_month_community",
-            "jaccard_score",
-            "common_members",
-            "uncommon_members",
-            "start_month_members",
-            "total_start_month_members",
-            "end_month_members",
-            "total_end_month_members",
-            "start_month_absolute_theme",
-            "end_month_absolute_theme",
-            "start_month_weighted_theme",
-            "end_month_weighted_theme",
-            "start_month_general_theme",
-            "end_month_general_theme",
-        ]
-        matched_df = pd.DataFrame(columns=columns)
-
-    return matched_df
+    return (
+        pd.concat(all_matched, ignore_index=True)
+        if all_matched
+        else pd.DataFrame(columns=TRANSITION_COLUMNS)
+    )

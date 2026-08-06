@@ -1,34 +1,37 @@
-import pandas as pd
+from __future__ import annotations
+
+from typing import Any
+
 import numpy as np
+import pandas as pd
 
 
-def get_community_members(df):
-    """
-    Extracts all unique members (source and target) for each community_number.
-    """
+def get_community_members(df: pd.DataFrame) -> pd.DataFrame:
+    """Extract unique source/target members for each community."""
+    if df.empty:
+        return pd.DataFrame(columns=["community_number", "members"])
+
     community_data = []
-    grouped = df.groupby("community_number")
-
-    for community_number, group in grouped:
-        members = np.unique(group[["source", "target"]].values.flatten())
+    for community_number, group in df.groupby(
+        "community_number", sort=False, observed=True
+    ):
+        members = np.unique(group[["source", "target"]].to_numpy().ravel())
         community_data.append(
             {"community_number": community_number, "members": list(members)}
         )
-
-    community_df = pd.DataFrame(community_data)
-    return community_df
+    return pd.DataFrame(community_data)
 
 
 def jaccard_similarity(list1, list2):
-    """Define Jaccard Similarity function for two sets"""
     set1 = set(list1)
     set2 = set(list2)
-    intersection = len(set1 & set2)
-    union = len(set1 | set2)
-    return float(intersection) / union if union > 0 else 0.0
+    union = set1 | set2
+    return float(len(set1 & set2)) / len(union) if union else 0.0
 
 
-def find_matching_communities(absolute_community_df, weighted_community_df):
+def find_matching_communities(
+    absolute_community_df: pd.DataFrame, weighted_community_df: pd.DataFrame
+):
     if absolute_community_df.empty or weighted_community_df.empty:
         return (
             pd.DataFrame(
@@ -49,60 +52,66 @@ def find_matching_communities(absolute_community_df, weighted_community_df):
             pd.DataFrame(columns=["per_community"]),
         )
 
-    df1 = get_community_members(absolute_community_df)
-    df2 = get_community_members(weighted_community_df)
+    absolute = get_community_members(absolute_community_df)
+    weighted = get_community_members(weighted_community_df)
 
-    matched = []
-    unmatched_df1 = df1["community_number"].tolist() if not df1.empty else []
-    unmatched_df2 = df2["community_number"].tolist() if not df2.empty else []
-    partial_matched = []
+    absolute_records: list[tuple[Any, list[Any], set[Any]]] = [
+        (row.community_number, list(row.members), set(row.members))
+        for row in absolute.itertuples(index=False)
+    ]
+    weighted_records: list[tuple[Any, list[Any], set[Any]]] = [
+        (row.community_number, list(row.members), set(row.members))
+        for row in weighted.itertuples(index=False)
+    ]
+    weighted_by_member: dict[Any, set[int]] = {}
+    for weighted_index, (_community_id, _members, member_set) in enumerate(
+        weighted_records
+    ):
+        for member in member_set:
+            weighted_by_member.setdefault(member, set()).add(weighted_index)
 
-    # Finding matching communities
-    for index1, row1 in df1.iterrows():
-        for index2, row2 in df2.iterrows():
-            jscore = jaccard_similarity(list(row1["members"]), list(row2["members"]))
-            if jscore == 1:
-                matched.append(
+    matched: list[tuple[Any, Any, float, list[Any]]] = []
+    partial: list[
+        tuple[Any, list[Any], Any, list[Any], float, list[Any], list[Any]]
+    ] = []
+    matched_absolute: set[Any] = set()
+    matched_weighted: set[Any] = set()
+
+    for abs_id, abs_members, abs_set in absolute_records:
+        candidate_indexes: set[int] = set()
+        for member in abs_set:
+            candidate_indexes.update(weighted_by_member.get(member, ()))
+        for weighted_index in sorted(candidate_indexes):
+            weighted_id, weighted_members, weighted_set = weighted_records[
+                weighted_index
+            ]
+            union = abs_set | weighted_set
+            common = abs_set & weighted_set
+            score = float(len(common)) / len(union)
+            if score == 1.0:
+                matched.append((abs_id, weighted_id, score, abs_members))
+                matched_absolute.add(abs_id)
+                matched_weighted.add(weighted_id)
+            elif 0.0 < score < 1.0:
+                partial.append(
                     (
-                        row1["community_number"],
-                        row2["community_number"],
-                        jscore,
-                        list(row1["members"]),
+                        abs_id,
+                        abs_members,
+                        weighted_id,
+                        weighted_members,
+                        score,
+                        list(common),
+                        list(abs_set ^ weighted_set),
                     )
                 )
-                if row1["community_number"] in unmatched_df1:
-                    unmatched_df1.remove(row1["community_number"])
-                if row2["community_number"] in unmatched_df2:
-                    unmatched_df2.remove(row2["community_number"])
-            elif 1 > jscore > 0:
-                common_members = list(
-                    set(list(row1["members"])) & set(list(row2["members"]))
-                )
-                uncommon_members = list(
-                    set(list(row1["members"])) ^ set(list(row2["members"]))
-                )
-                partial_matched.append(
-                    (
-                        row1["community_number"],
-                        row1["members"],
-                        row2["community_number"],
-                        row2["members"],
-                        jscore,
-                        common_members,
-                        uncommon_members,
-                    )
-                )
-                if row1["community_number"] in unmatched_df1:
-                    unmatched_df1.remove(row1["community_number"])
-                if row2["community_number"] in unmatched_df2:
-                    unmatched_df2.remove(row2["community_number"])
+                matched_absolute.add(abs_id)
+                matched_weighted.add(weighted_id)
 
-    # Create dataframes for matched and unmatched communities
     matched_df = pd.DataFrame(
         matched, columns=["abs_community", "per_community", "jaccard_score", "members"]
     )
-    partial_matched_df = pd.DataFrame(
-        partial_matched,
+    partial_df = pd.DataFrame(
+        partial,
         columns=[
             "abs_community",
             "absolute_members",
@@ -113,8 +122,20 @@ def find_matching_communities(absolute_community_df, weighted_community_df):
             "uncommon_members",
         ],
     )
-
-    unmatched_df1_df = pd.DataFrame(unmatched_df1, columns=["abs_community"])
-    unmatched_df2_df = pd.DataFrame(unmatched_df2, columns=["per_community"])
-
-    return matched_df, partial_matched_df, unmatched_df1_df, unmatched_df2_df
+    unmatched_absolute = pd.DataFrame(
+        [
+            community_id
+            for community_id, _, _ in absolute_records
+            if community_id not in matched_absolute
+        ],
+        columns=["abs_community"],
+    )
+    unmatched_weighted = pd.DataFrame(
+        [
+            community_id
+            for community_id, _, _ in weighted_records
+            if community_id not in matched_weighted
+        ],
+        columns=["per_community"],
+    )
+    return matched_df, partial_df, unmatched_absolute, unmatched_weighted

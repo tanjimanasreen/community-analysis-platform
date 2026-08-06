@@ -10,7 +10,7 @@ model is evaluated independently without fallback interference.
 Usage:
     config = load_config("configs/longitudinal/sample_twitter_reply_04.yml")
     provider = build_theme_provider(config)
-    themes = provider.generate_theme("apple, orange, discussion")
+    themes = provider.generate_theme(["apple", "orange", "discussion"])
 """
 
 from __future__ import annotations
@@ -30,8 +30,8 @@ def build_theme_provider(config: dict[str, Any]) -> BaseLLMProvider:
                       in RoutingBenchmarkProvider with the fallback chain
       fallback_chain: ordered list of fallback provider specs (real APIs only)
 
-    All providers are wrapped in CachedProvider so repeated calls with the
-    same text do not make redundant API requests within a single pipeline run.
+    All providers are wrapped in CachedProvider so repeated exact ordered
+    keyword requests can be reused within a run and, for SQLite, across runs.
 
     Raises:
       ValueError: if the primary or any fallback provider spec is unrecognised.
@@ -48,19 +48,25 @@ def build_theme_provider(config: dict[str, Any]) -> BaseLLMProvider:
         """Resolve a provider spec string to a BaseLLMProvider instance."""
         from src.themes.benchmark.providers import get_provider
 
-        # Respect rate_limit_rpm from providers.yml
+        # get_provider reads the provider-specific rate limit from the same
+        # merged config. Timeouts and retries are operational controls and do
+        # not affect analytical cache identity.
         prefix = provider_id.split(":", 1)[0] if ":" in provider_id else provider_id
-        rate_limit_rpm = providers_registry.get(prefix, {}).get("rate_limit_rpm")
-
-        kwargs: dict[str, Any] = {"config": config, "allow_live": False}
-        if rate_limit_rpm is not None:
-            kwargs["rate_limit_rpm"] = rate_limit_rpm  # type: ignore[arg-type]
-
-        try:
-            return get_provider(provider_id, **kwargs)
-        except TypeError:
-            # get_provider may not accept rate_limit_rpm as a kwarg for all providers
-            return get_provider(provider_id, config=config, allow_live=False)
+        provider_cfg = providers_registry.get(prefix, {})
+        is_live = prefix not in {"mock", "keyword_baseline"}
+        max_outbound_requests = int(theme_cfg.get("max_outbound_requests", 10000))
+        max_retries = int(
+            provider_cfg.get("max_retries", theme_cfg.get("max_retries", 2))
+        )
+        timeout = provider_cfg.get("timeout_seconds", theme_cfg.get("timeout_seconds"))
+        return get_provider(
+            provider_id,
+            config=config,
+            allow_live=is_live,
+            max_retries=max_retries,
+            timeout=float(timeout) if timeout is not None else None,
+            max_outbound_requests=max_outbound_requests,
+        )
 
     primary = _get(primary_id)
 
@@ -72,4 +78,29 @@ def build_theme_provider(config: dict[str, Any]) -> BaseLLMProvider:
     else:
         provider = primary
 
-    return CachedProvider(provider)
+    primary_prefix = primary_id.split(":", 1)[0]
+    default_cache_backend = (
+        "memory" if primary_prefix in {"mock", "keyword_baseline"} else "sqlite"
+    )
+    cache_backend = str(theme_cfg.get("cache_backend", default_cache_backend)).lower()
+    cache_path = theme_cfg.get("cache_path", ".cache/theme_cache.sqlite3")
+    failure_policy = str(theme_cfg.get("cache_failure_policy", "bypass")).lower()
+
+    if cache_backend == "sqlite":
+        from src.providers.cache_backends import SQLiteThemeResponseCache
+
+        cache = SQLiteThemeResponseCache(cache_path, failure_policy=failure_policy)
+    elif cache_backend == "memory":
+        from src.providers.cache_backends import InMemoryThemeResponseCache
+
+        cache = InMemoryThemeResponseCache()
+    elif cache_backend in {"none", "disabled"}:
+        from src.providers.cache_backends import NullThemeResponseCache
+
+        cache = NullThemeResponseCache()
+    else:
+        raise ValueError(
+            f"Unknown cache backend: {cache_backend!r}; expected sqlite, memory, or none"
+        )
+
+    return CachedProvider(provider, cache=cache)

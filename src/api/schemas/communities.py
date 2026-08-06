@@ -14,11 +14,15 @@ class CommunitySummary(StrictModel):
     node_count: int
     edge_count: int
     total_weight: float
+    inbound_cross_community_weight: float | None = None
+    outbound_cross_community_weight: float | None = None
+    cross_community_neighbor_count: int | None = None
 
 
 class CommunitiesResponse(StrictModel):
     run_id: str
     metric: MetricName
+    period: str | None = None
     communities: list[CommunitySummary]
     total: int
     limit: int
@@ -28,5 +32,6 @@ class CommunitiesResponse(StrictModel):
 class CommunityDetail(StrictModel):
     run_id: str
     metric: MetricName
+    period: str | None = None
     community: CommunitySummary
     graph: NetworkResponse

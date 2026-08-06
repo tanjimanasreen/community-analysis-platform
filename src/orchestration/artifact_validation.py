@@ -137,7 +137,11 @@ def validate_artifact(
         import pandas as pd
 
         try:
-            header = pd.read_csv(path, nrows=0)
+            if path.endswith(".parquet"):
+                # For Parquet, read the schema directly or read 0 rows
+                header = pd.read_parquet(path)
+            else:
+                header = pd.read_csv(path, nrows=0)
             missing = [c for c in required_csv_columns if c not in header.columns]
             if missing:
                 raise PipelineError(

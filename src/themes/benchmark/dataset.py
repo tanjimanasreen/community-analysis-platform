@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import logging
 import re
+from importlib import resources
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -21,17 +23,80 @@ from src.themes.benchmark.contracts import (
 )
 from src.themes.theme_inputs import ThemeInputError, load_theme_inputs
 
-SYSTEM_PROMPT = (
-    "You are an expert who can find meaningful themes from a list of keywords, "
-    "that may contain specific events, people, locations, or topics."
-)
-USER_PROMPT_TEMPLATE = (
-    "Based on the list of the keywords given below, provide only the exact theme "
-    "and the corresponding keywords in a coherent short sentence in a JSON. The "
-    "keys of the json should be theme names and values should be corresponding "
-    "keywords. There could be one theme or multiple themes for each set of "
-    "keywords. Here is the list of keywords: {keywords}"
-)
+import json
+import jinja2
+
+logger = logging.getLogger(__name__)
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+_PROMPT_PACKAGE = "src.themes.benchmark.prompts"
+
+
+def load_raw_template(name: str) -> str:
+    """Load packaged prompt templates in editable and installed environments."""
+    template_name = f"{name}.jinja2"
+    try:
+        return (
+            resources.files(_PROMPT_PACKAGE)
+            .joinpath(template_name)
+            .read_text(encoding="utf-8")
+        )
+    except (FileNotFoundError, ModuleNotFoundError):
+        # Compatibility for source checkouts created before prompts became
+        # package data. Installed wheels always use the resource path above.
+        path = REPO_ROOT / "configs" / "prompts" / template_name
+        if path.exists():
+            return path.read_text(encoding="utf-8")
+        raise ThemeBenchmarkError(f"Theme prompt template is missing: {template_name}")
+
+
+def get_jinja_env() -> jinja2.Environment:
+    return jinja2.Environment(
+        loader=jinja2.DictLoader(
+            {
+                "system.jinja2": load_raw_template("system"),
+                "user.jinja2": load_raw_template("user"),
+            }
+        ),
+        autoescape=False,
+    )
+
+
+RAW_SYSTEM_TEMPLATE = load_raw_template("system")
+RAW_USER_TEMPLATE = load_raw_template("user")
+
+
+def load_prompt_templates() -> dict[str, str]:
+    return {
+        "system_prompt": RAW_SYSTEM_TEMPLATE,
+        "user_prompt_template": RAW_USER_TEMPLATE,
+    }
+
+
+def register_theme_prompt_to_mlflow(commit_message: str | None = None) -> Any:
+    """Registers the loaded Jinja templates to MLflow Prompt Registry for versioning and tuning."""
+    try:
+        import mlflow
+        from src.themes.benchmark.contracts import THEME_OUTPUT_JSON_SCHEMA
+
+        return mlflow.register_prompt(
+            name="theme_generation_prompt",
+            template=[
+                {"role": "system", "content": RAW_SYSTEM_TEMPLATE},
+                {"role": "user", "content": RAW_USER_TEMPLATE},
+            ],
+            response_format=THEME_OUTPUT_JSON_SCHEMA,
+            commit_message=commit_message
+            or "Automatic registration from theme pipeline",
+        )
+    except Exception as exc:
+        logger.warning(
+            "mlflow_prompt_registration_failed error_type=%s error=%s",
+            type(exc).__name__,
+            exc,
+        )
+        return None
+
 
 RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
@@ -140,10 +205,20 @@ def examples_from_theme_inputs(
 ) -> list[dict[str, Any]]:
     examples: list[dict[str, Any]] = []
     for month in sorted(monthly_data.keys(), key=_month_sort_key):
-        frame = monthly_data[month]
-        for row_index, row in frame.reset_index(drop=True).iterrows():
+        frame = monthly_data[month].reset_index(drop=True)
+        columns = list(frame.columns)
+        positions = {column: index for index, column in enumerate(columns)}
+
+        def value(row: tuple[Any, ...], column: str, default: Any = None) -> Any:
+            position = positions.get(column)
+            return default if position is None else row[position]
+
+        # ``itertuples`` avoids the Series allocation and dtype coercion of
+        # ``iterrows`` when large benchmark inventories are generated.
+        for row_index, row in enumerate(frame.itertuples(index=False, name=None)):
             original = {
-                field: _as_list(row.get(field, [])) for field in ORIGINAL_KEYWORD_FIELDS
+                field: _as_list(value(row, field, []))
+                for field in ORIGINAL_KEYWORD_FIELDS
             }
             keyword_lists = {
                 "absolute": _unique_preserve_order(
@@ -172,9 +247,9 @@ def examples_from_theme_inputs(
                 "year": str(year),
                 "month": str(month),
                 "source_row_index": int(row_index),
-                "absolute_community": _json_safe(row.get("absolute_community")),
-                "weighted_community": _json_safe(row.get("weighted_community")),
-                "members_count": len(_as_list(row.get("members", []))),
+                "absolute_community": _json_safe(value(row, "absolute_community")),
+                "weighted_community": _json_safe(value(row, "weighted_community")),
+                "members_count": len(_as_list(value(row, "members", []))),
                 **original,
                 "absolute_keywords": keyword_lists["absolute"],
                 "weighted_keywords": keyword_lists["weighted"],
@@ -198,21 +273,37 @@ def examples_from_theme_inputs(
 
 def build_requests(examples: list[Mapping[str, Any]]) -> list[ThemeBenchmarkRequest]:
     requests: list[ThemeBenchmarkRequest] = []
+    env = get_jinja_env()
+    sys_tmpl = env.get_template("system.jinja2")
+    user_tmpl = env.get_template("user.jinja2")
+
     for example in examples:
         for keyword_mode in ("general", "absolute", "weighted"):
             keyword_text = str(example[f"{keyword_mode}_keyword_text"])
             keywords = list(example[f"{keyword_mode}_keywords"])
-            user_prompt = USER_PROMPT_TEMPLATE.format(keywords=keyword_text)
+
+            system_prompt = sys_tmpl.render(
+                json_schema=json.dumps(THEME_OUTPUT_JSON_SCHEMA, indent=2)
+            )
+            user_prompt = user_tmpl.render(keywords=keyword_text)
+
             prompt_hash = stable_hash(
                 {
-                    "system": SYSTEM_PROMPT,
-                    "user_template": USER_PROMPT_TEMPLATE,
+                    "system": RAW_SYSTEM_TEMPLATE,
+                    "user_template": RAW_USER_TEMPLATE,
                     "user": user_prompt,
                     "keyword_order": keywords,
                     "output_schema": THEME_OUTPUT_JSON_SCHEMA,
                     "generation_settings": {
                         "temperature": 0.0,
-                        "response_format": {"type": "json_object"},
+                        "response_format": {
+                            "type": "json_schema",
+                            "json_schema": {
+                                "name": "theme_output",
+                                "schema": THEME_OUTPUT_JSON_SCHEMA,
+                                "strict": True,
+                            },
+                        },
                     },
                 }
             )
@@ -222,7 +313,7 @@ def build_requests(examples: list[Mapping[str, Any]]) -> list[ThemeBenchmarkRequ
                     keyword_mode=keyword_mode,
                     keywords=keywords,
                     keyword_text=keyword_text,
-                    system_prompt=SYSTEM_PROMPT,
+                    system_prompt=system_prompt,
                     user_prompt=user_prompt,
                     prompt_hash=prompt_hash,
                     input_hash=str(example["input_hash"]),
@@ -234,25 +325,39 @@ def build_requests(examples: list[Mapping[str, Any]]) -> list[ThemeBenchmarkRequ
 def build_gpt4o_reference_metadata() -> dict[str, Any]:
     template_hash = stable_hash(
         {
-            "system": SYSTEM_PROMPT,
-            "user_template": USER_PROMPT_TEMPLATE,
+            "system": RAW_SYSTEM_TEMPLATE,
+            "user_template": RAW_USER_TEMPLATE,
             "output_schema": THEME_OUTPUT_JSON_SCHEMA,
             "generation_settings": {
                 "temperature": 0.0,
                 "seed": 42,
-                "response_format": {"type": "json_object"},
+                "response_format": {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "theme_output",
+                        "schema": THEME_OUTPUT_JSON_SCHEMA,
+                        "strict": True,
+                    },
+                },
             },
         }
     )
     return {
         "schema_version": 1,
-        "model_id": "gpt-4o",
+        "model_id": "gpt-5-nano",
         "temperature": 0.0,
         "seed": 42,
-        "response_format": {"type": "json_object"},
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "theme_output",
+                "schema": THEME_OUTPUT_JSON_SCHEMA,
+                "strict": True,
+            },
+        },
         "output_schema": THEME_OUTPUT_JSON_SCHEMA,
-        "system_prompt": SYSTEM_PROMPT,
-        "user_prompt_template": USER_PROMPT_TEMPLATE,
+        "system_prompt": RAW_SYSTEM_TEMPLATE,
+        "user_prompt_template": RAW_USER_TEMPLATE,
         "prompt_hash": template_hash,
         "output_schema_version": 1,
         "notes": "Reference metadata only; Plan 016A never calls OpenAI.",

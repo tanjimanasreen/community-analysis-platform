@@ -75,6 +75,33 @@ def topic_metrics(
         metrics["partial_match_count"] = float(
             bundle.partial_matched_communities_topics.row_count or 0
         )
+
+    # LDA score artifacts contain one compact row, so reading them here does
+    # not create a large tracking-side data dependency.  Export the thesis
+    # perplexity/coherence pairs as named MLflow metrics when available.
+    try:
+        import ast
+        import pandas as pd
+
+        score_frame = pd.read_parquet(bundle.lda_scores.path)
+        if not score_frame.empty:
+            score_row = score_frame.iloc[0]
+            for column in (
+                "unigram_absolute",
+                "unigram_weighted",
+                "bigram_absolute",
+                "bigram_weighted",
+            ):
+                value = score_row.get(column)
+                if isinstance(value, str):
+                    value = ast.literal_eval(value)
+                if hasattr(value, "tolist"):
+                    value = value.tolist()
+                if isinstance(value, (list, tuple)) and len(value) >= 2:
+                    metrics[f"lda_{column}_perplexity"] = float(value[0])
+                    metrics[f"lda_{column}_coherence"] = float(value[1])
+    except (OSError, ValueError, SyntaxError, TypeError, ImportError):
+        pass
     return metrics
 
 
@@ -93,7 +120,7 @@ def theme_metrics(
         ref.row_count or 0 for ref in input_bundle.monthly_topic_outputs.values()
     )
     output_rows = sum(ref.row_count or 0 for ref in bundle.themes)
-    return {
+    metrics = {
         **artifact_totals(refs),
         "theme_input_count": float(input_rows),
         "theme_output_count": float(output_rows),
@@ -101,6 +128,43 @@ def theme_metrics(
         "visualization_count": float(len(bundle.visualizations)),
         "stage_duration_seconds": max(0.0, float(duration_seconds)),
     }
+
+    safe_provider = read_safe_provider_summary(bundle.provider_run_summary)
+    if safe_provider and "run_metrics" in safe_provider:
+        rm = safe_provider["run_metrics"]
+        if "total_prompt_tokens" in rm:
+            metrics["llm_prompt_tokens"] = float(rm["total_prompt_tokens"])
+        if "total_completion_tokens" in rm:
+            metrics["llm_completion_tokens"] = float(rm["total_completion_tokens"])
+            if (
+                metrics["llm_completion_tokens"] > 0
+                and metrics["stage_duration_seconds"] > 0
+            ):
+                metrics["llm_tokens_per_second"] = (
+                    metrics["llm_completion_tokens"] / metrics["stage_duration_seconds"]
+                )
+        if "total_cost" in rm:
+            metrics["llm_total_cost"] = float(rm["total_cost"])
+        if "calls" in rm:
+            metrics["llm_calls"] = float(rm["calls"])
+        for source_key, metric_key in (
+            ("logical_theme_requests", "llm_logical_requests"),
+            ("outbound_requests", "llm_outbound_requests"),
+            ("cache_hits", "llm_cache_hits"),
+            ("cache_misses", "llm_cache_misses"),
+            ("cache_writes", "llm_cache_writes"),
+            ("cache_errors", "llm_cache_errors"),
+            ("fallback_attempts", "llm_fallback_attempts"),
+        ):
+            if source_key in rm:
+                metrics[metric_key] = float(rm[source_key])
+        if "latency_ms_list" in rm and rm["latency_ms_list"]:
+            metrics["llm_avg_latency_ms"] = float(
+                sum(rm["latency_ms_list"]) / len(rm["latency_ms_list"])
+            )
+            metrics["llm_max_latency_ms"] = float(max(rm["latency_ms_list"]))
+
+    return metrics
 
 
 def network_metrics(
@@ -239,11 +303,19 @@ def read_safe_provider_summary(
         "prompt_version",
         "generation_settings_digest",
         "semantic_task_version",
+        "run_metrics",
     }
     if not isinstance(payload, Mapping) or set(payload) - allowed:
         return None
+
+    payload_copy = dict(payload)
+    if "run_metrics" in payload_copy and isinstance(payload_copy["run_metrics"], dict):
+        run_metrics_copy = dict(payload_copy["run_metrics"])
+        run_metrics_copy.pop("prompts_and_responses", None)
+        payload_copy["run_metrics"] = run_metrics_copy
+
     try:
-        clean = sanitize_json_payload(payload)
+        clean = sanitize_json_payload(payload_copy)
     except ValueError:
         return None
     return dict(clean)

@@ -145,17 +145,31 @@ def build_interaction_dataframe(
     return df_users, df_network, _with_snapshot_columns(df_interactions, config)
 
 
-def write_interactions_csv(
-    df_interactions: pd.DataFrame, output_path: PathLike
-) -> Path:
-    """Write derived interaction edges using the repository import column order."""
+def write_interactions(df_interactions: pd.DataFrame, output_path: PathLike) -> Path:
+    """Write derived edges in the format declared by the file extension."""
     path = Path(output_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     columns = [
         column for column in INTERACTION_EDGE_COLUMNS if column in df_interactions
     ]
-    df_interactions.to_csv(path, index=False, columns=columns)
+    frame = df_interactions[columns]
+    if path.suffix.lower() == ".parquet":
+        frame.to_parquet(path, index=False)
+    elif path.suffix.lower() == ".csv":
+        frame.to_csv(path, index=False)
+    else:
+        raise ValueError(
+            f"Unsupported interaction output format {path.suffix!r}; "
+            "expected .csv or .parquet"
+        )
     return path
+
+
+def write_interactions_csv(
+    df_interactions: pd.DataFrame, output_path: PathLike
+) -> Path:
+    """Backward-compatible alias for format-aware interaction output."""
+    return write_interactions(df_interactions, output_path)
 
 
 def run_ingestion_pipeline(
@@ -178,7 +192,7 @@ def run_ingestion_pipeline(
 
     written_path: Optional[Path] = None
     if output_path is not None:
-        written_path = write_interactions_csv(df_interactions, output_path)
+        written_path = write_interactions(df_interactions, output_path)
 
     if import_to_repository:
         if repository is None:
@@ -198,11 +212,36 @@ def run_ingestion_pipeline(
 def _relationship_records(
     df: pd.DataFrame, user_column: str, role: str
 ) -> list[dict[str, Any]]:
-    records: list[dict[str, Any]] = []
+    """Parse relationship rows while caching repeated serialized nodes."""
     other_columns = [column for column in ("source", "target") if column != user_column]
-    for _, row in df.iterrows():
-        user = parse_node_dict(row[user_column])
-        message = _message_from_row(row, other_columns)
+    selected_columns = [user_column, *other_columns]
+    missing = [column for column in selected_columns if column not in df.columns]
+    if missing:
+        raise ValueError(
+            "Relationship dataframe is missing required columns: " + ", ".join(missing)
+        )
+
+    parse_cache: dict[str, dict[str, Any]] = {}
+
+    def parse_cached(value: Any) -> dict[str, Any]:
+        if isinstance(value, str):
+            cached = parse_cache.get(value)
+            if cached is None:
+                cached = parse_node_dict(value)
+                parse_cache[value] = cached
+            return cached
+        return parse_node_dict(value)
+
+    records: list[dict[str, Any]] = []
+    for values in df.loc[:, selected_columns].itertuples(index=False, name=None):
+        user = parse_cached(values[0])
+        message: dict[str, Any] = {}
+        for value in values[1:]:
+            candidate = parse_cached(value)
+            if candidate and "user_id" not in candidate:
+                message = candidate
+                break
+
         user_id = user.get("user_id") or user.get("id") or user.get("from_id")
         message_id = (
             message.get("unique_id")
@@ -222,14 +261,6 @@ def _relationship_records(
             }
         )
     return records
-
-
-def _message_from_row(row: pd.Series, candidate_columns: list[str]) -> dict[str, Any]:
-    for column in candidate_columns:
-        message = parse_node_dict(row[column])
-        if message and "user_id" not in message:
-            return message
-    return {}
 
 
 def _with_snapshot_columns(
@@ -254,5 +285,5 @@ def _default_interaction_output_path(config: Mapping[str, Any]) -> Path:
         / "ingestion"
         / snapshot["data_type"]
         / snapshot["content_type"]
-        / f"{snapshot['month']:02d}_{snapshot['year']}_interactions.csv"
+        / f"{snapshot['month']:02d}_{snapshot['year']}_interactions.parquet"
     )

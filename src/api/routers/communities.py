@@ -13,12 +13,15 @@ router = APIRouter(prefix="/runs", tags=["communities"])
 def get_communities(
     run_id: str,
     metric: Literal["if", "wif"] = "if",
+    period: str | None = Query(default=None, pattern=r"^\d{4}-(0[1-9]|1[0-2])$"),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     service: NetworkService = Depends(get_network_service),
 ) -> CommunitiesResponse:
     return CommunitiesResponse(
-        **service.communities(run_id, metric=metric, limit=limit, offset=offset)
+        **service.communities(
+            run_id, metric=metric, limit=limit, offset=offset, period=period
+        )
     )
 
 
@@ -27,6 +30,7 @@ def get_community(
     run_id: str,
     community_id: str,
     metric: Literal["if", "wif"] = "if",
+    period: str | None = Query(default=None, pattern=r"^\d{4}-(0[1-9]|1[0-2])$"),
     max_nodes: int = Query(default=200, ge=2),
     max_edges: int = Query(default=500, ge=1),
     min_weight: float = Query(default=0.0, ge=0.0),
@@ -40,5 +44,6 @@ def get_community(
             max_nodes=max_nodes,
             max_edges=max_edges,
             min_weight=min_weight,
+            period=period,
         )
     )

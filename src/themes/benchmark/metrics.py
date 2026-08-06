@@ -50,7 +50,7 @@ def write_summary(
 ) -> pd.DataFrame:
     summary = compute_summary(results_by_provider)
     path.parent.mkdir(parents=True, exist_ok=True)
-    summary.to_csv(path, index=False)
+    summary.to_parquet(path, index=False)
     return summary
 
 
@@ -121,13 +121,25 @@ def write_phase2_reports(
 
     scores_dir = root / "scores"
     scores_dir.mkdir(parents=True, exist_ok=True)
+    import json
+
+    def _stringify_dicts(row):
+        return {
+            k: (json.dumps(v) if isinstance(v, (dict, list)) else v)
+            for k, v in row.items()
+        }
+
     for split in splits:
-        pd.DataFrame([row for row in rows if row["scope"] == split]).to_csv(
-            scores_dir / f"{split}_summary.csv",
+        pd.DataFrame(
+            [_stringify_dicts(row) for row in rows if row["scope"] == split]
+        ).to_parquet(
+            scores_dir / f"{split}_summary.parquet",
             index=False,
         )
-    scorecard_path = scores_dir / "preliminary_model_scorecard.csv"
-    pd.DataFrame(rows + combined_rows).to_csv(scorecard_path, index=False)
+    scorecard_path = scores_dir / "preliminary_model_scorecard.parquet"
+    pd.DataFrame([_stringify_dicts(row) for row in (rows + combined_rows)]).to_parquet(
+        scorecard_path, index=False
+    )
 
     report = {
         "schema_version": 1,

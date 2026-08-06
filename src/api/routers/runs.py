@@ -73,10 +73,15 @@ def list_artifacts(
 
 @router.get("/{run_id}/verification", response_model=VerificationResponse)
 def verify_run(
-    run_id: str, catalog: RunCatalog = Depends(get_run_catalog)
+    run_id: str,
+    deep: bool = Query(
+        default=False,
+        description="Re-hash and schema-check every artifact instead of using the fast dashboard check.",
+    ),
+    catalog: RunCatalog = Depends(get_run_catalog),
 ) -> VerificationResponse:
     try:
-        manifest = catalog.verify(run_id)
+        manifest = catalog.verify(run_id, deep=deep)
     except InvalidManifestError as exc:
         return VerificationResponse(
             run_id=run_id,
@@ -113,7 +118,7 @@ def _summary(manifest) -> RunSummary:
 
 def _verification_code(message: str) -> str:
     normalized = message.lower()
-    if "checksum mismatch" in normalized:
+    if "checksum mismatch" in normalized or "byte size mismatch" in normalized:
         return "ARTIFACT_CHECKSUM_MISMATCH"
     if "schema" in normalized:
         return "ARTIFACT_SCHEMA_MISMATCH"

@@ -41,21 +41,8 @@ class OllamaProvider(BaseLLMProvider):
         )
 
     def generate(self, request: ThemeBenchmarkRequest) -> dict[str, Any]:
-        """Minimal benchmark interface — delegates to generate_theme()."""
-        themes_dict = self.generate_theme(request.user_prompt)
-        return {"themes": [{"name": k, "keywords": v} for k, v in themes_dict.items()]}
-
-    def generate_theme(self, text: str) -> dict:
-        prompt = (
-            "You are an expert who can find meaningful themes from a list of keywords, "
-            "that may contain specific events, people, locations, or topics.\n\n"
-            "Based on the list of the keywords given below, provide only the exact theme "
-            "and the corresponding keywords in a coherent short sentence in a JSON. "
-            "The keys of the json should be theme names and values should be corresponding "
-            f"keywords. There could be one theme or multiple themes for each set of keywords.\n\n"
-            f"Here is the list of keywords: {text}\n\n"
-            "Output strictly valid JSON and nothing else."
-        )
+        """Minimal benchmark interface."""
+        prompt = f"{request.system_prompt}\n\n{request.user_prompt}"
         response = self._requests.post(
             f"{self.base_url}/api/generate",
             json={
@@ -69,12 +56,24 @@ class OllamaProvider(BaseLLMProvider):
         response.raise_for_status()
         result_text = response.json().get("response", "")
         try:
-            return json.loads(result_text)
+            themes_dict = json.loads(result_text)
         except json.JSONDecodeError:
             if "```json" in result_text:
                 clean = result_text.split("```json")[1].split("```")[0].strip()
                 try:
-                    return json.loads(clean)
+                    themes_dict = json.loads(clean)
                 except json.JSONDecodeError:
-                    pass
-            return {"Error": "Failed to parse JSON", "Raw Output": result_text}
+                    themes_dict = {
+                        "Error": "Failed to parse JSON",
+                        "Raw Output": result_text,
+                    }
+            else:
+                themes_dict = {
+                    "Error": "Failed to parse JSON",
+                    "Raw Output": result_text,
+                }
+
+        if isinstance(themes_dict, dict) and "Error" in themes_dict:
+            return {"themes": [], "error": themes_dict}
+
+        return {"themes": [{"name": k, "keywords": v} for k, v in themes_dict.items()]}

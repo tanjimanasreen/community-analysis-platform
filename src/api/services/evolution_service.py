@@ -14,10 +14,17 @@ class EvolutionService:
 
     def transitions(self, run_id: str, *, limit: int, offset: int) -> dict[str, Any]:
         try:
-            frame = self.reader.read_csv(run_id, "community_transitions")
+            record = self.reader.get_record(run_id, "community_transitions")
         except ArtifactNotFoundError as exc:
             raise ArtifactUnavailableError(run_id, "community_transitions") from exc
-        records, total = self.reader.page(frame, limit=limit, offset=offset)
+        frame = self.reader.read_parquet_record_slice(
+            run_id,
+            record,
+            offset=offset,
+            limit=limit,
+        )
+        records, _ = self.reader.page(frame, limit=limit, offset=0)
+        total = self.reader.parquet_row_count(run_id, record)
         for record in records:
             for field in ("start_month", "end_month"):
                 if record.get(field) is not None:
@@ -30,8 +37,22 @@ class EvolutionService:
             "offset": offset,
         }
 
+    def _all_transitions(self, run_id: str) -> list[dict[str, Any]]:
+        """Load the authoritative transition table without an arbitrary cap."""
+        try:
+            record = self.reader.get_record(run_id, "community_transitions")
+        except ArtifactNotFoundError as exc:
+            raise ArtifactUnavailableError(run_id, "community_transitions") from exc
+        frame = self.reader.read_parquet_record(run_id, record)
+        records, _ = self.reader.page(frame, limit=len(frame), offset=0)
+        for item in records:
+            for field in ("start_month", "end_month"):
+                if item.get(field) is not None:
+                    item[field] = str(item[field]).zfill(2)
+        return records
+
     def persistent_communities(self, run_id: str) -> dict[str, Any]:
-        transitions = self.transitions(run_id, limit=100000, offset=0)["records"]
+        transitions = self._all_transitions(run_id)
         components = _transition_components(transitions)
         result = []
         for index, nodes in enumerate(components, start=1):
@@ -56,7 +77,7 @@ class EvolutionService:
         return {"run_id": run_id, "communities": result, "total": len(result)}
 
     def membership_changes(self, run_id: str) -> dict[str, Any]:
-        transitions = self.transitions(run_id, limit=100000, offset=0)["records"]
+        transitions = self._all_transitions(run_id)
         result = []
         for row in transitions:
             start_members = _as_set(row.get("start_month_members"))
@@ -88,9 +109,7 @@ class EvolutionService:
         matrix = None
         labels: list[str] = []
         for record in data_records:
-            if record.media_type != "text/csv":
-                continue
-            frame = self.reader.read_csv_record(run_id, record)
+            frame = self.reader.read_parquet_record(run_id, record)
             if frame.empty:
                 continue
             labels = [str(column) for column in frame.columns]

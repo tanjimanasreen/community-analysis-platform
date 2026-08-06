@@ -9,6 +9,7 @@ from src.api.errors import (
     ArtifactUnavailableError,
 )
 from src.api.services.artifact_reader import ArtifactReader, filter_by_community
+from src.api.services.periods import default_year, select_period_record
 
 
 class TopicService:
@@ -21,6 +22,7 @@ class TopicService:
         *,
         topic_type: str,
         community_id: str | None,
+        period: str | None = None,
         limit: int,
         offset: int,
     ) -> dict[str, Any]:
@@ -29,16 +31,48 @@ class TopicService:
             if topic_type == "matched"
             else "partial_matched_communities_topics"
         )
-        try:
-            frame = self.reader.read_csv(run_id, key)
-        except ArtifactNotFoundError as exc:
-            raise ArtifactUnavailableError(run_id, key) from exc
-        frame = filter_by_community(frame, community_id)
-        records, total = self.reader.page(frame, limit=limit, offset=offset)
+        artifacts = sorted(
+            self.reader.find_records(run_id, key_prefix=key),
+            key=lambda record: record.key,
+        )
+        if not artifacts:
+            raise ArtifactUnavailableError(run_id, key)
+        if period is not None:
+            manifest = self.reader.catalog.get_manifest(run_id)
+            config = self.reader.read_safe_config(run_id)
+            artifacts = [
+                select_period_record(
+                    artifacts,
+                    period=period,
+                    fallback_year=default_year(config, manifest),
+                    run_id=run_id,
+                    artifact_key=key,
+                )
+            ]
+
+        if community_id is None:
+            frame, total = self.reader.read_parquet_records_page(
+                run_id,
+                artifacts,
+                limit=limit,
+                offset=offset,
+            )
+            page, _ = self.reader.page(frame, limit=limit, offset=0)
+        else:
+            # Community filtering may span both absolute and weighted columns,
+            # so retain the compatibility path for this small targeted query.
+            frames = [
+                self.reader.read_parquet_record(run_id, artifact)
+                for artifact in artifacts
+            ]
+            frame = pd.concat(frames, ignore_index=True)
+            frame = filter_by_community(frame, community_id)
+            page, total = self.reader.page(frame, limit=limit, offset=offset)
+
         return {
             "run_id": run_id,
             "topic_type": topic_type,
-            "records": records,
+            "records": page,
             "total": total,
             "limit": limit,
             "offset": offset,
@@ -50,26 +84,43 @@ class TopicService:
         *,
         month: str | None,
         community_id: str | None,
+        period: str | None = None,
         limit: int,
         offset: int,
     ) -> dict[str, Any]:
-        records = self.reader.find_records(run_id, key_prefix="themes_")
+        artifacts = sorted(
+            self.reader.find_records(run_id, key_prefix="themes_"),
+            key=lambda record: record.key,
+        )
         if month is not None:
-            records = [
-                record for record in records if _theme_month(record.key) == month
+            artifacts = [
+                artifact
+                for artifact in artifacts
+                if _theme_month(artifact.key) == month
             ]
-        if not records:
+        if not artifacts:
             raise ArtifactUnavailableError(run_id, f"themes_{month or '*'}")
 
-        frames = []
-        for record in records:
-            frame = self.reader.read_csv_record(run_id, record).copy()
-            if "month" not in frame.columns:
-                frame.insert(0, "month", _theme_month(record.key))
-            frames.append(frame)
-        combined = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
-        combined = filter_by_community(combined, community_id)
-        page, total = self.reader.page(combined, limit=limit, offset=offset)
+        if community_id is None:
+            frame, total = self._theme_page(
+                run_id,
+                artifacts,
+                limit=limit,
+                offset=offset,
+            )
+            page, _ = self.reader.page(frame, limit=limit, offset=0)
+        else:
+            frames = []
+            for artifact in artifacts:
+                frame = self.reader.read_parquet_record(run_id, artifact).copy()
+                if "month" not in frame.columns:
+                    frame.insert(0, "month", _theme_month(artifact.key))
+                frames.append(frame)
+            combined = (
+                pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+            )
+            combined = filter_by_community(combined, community_id)
+            page, total = self.reader.page(combined, limit=limit, offset=offset)
 
         provider_metadata = None
         try:
@@ -84,6 +135,43 @@ class TopicService:
             "offset": offset,
             "provider_metadata": provider_metadata,
         }
+
+    def _theme_page(
+        self,
+        run_id: str,
+        artifacts,
+        *,
+        limit: int,
+        offset: int,
+    ) -> tuple[pd.DataFrame, int]:
+        total = sum(self.reader.parquet_row_count(run_id, item) for item in artifacts)
+        if offset >= total or limit <= 0:
+            return pd.DataFrame(), total
+
+        remaining_offset = offset
+        remaining_limit = limit
+        frames: list[pd.DataFrame] = []
+        for artifact in artifacts:
+            rows = self.reader.parquet_row_count(run_id, artifact)
+            if remaining_offset >= rows:
+                remaining_offset -= rows
+                continue
+            frame = self.reader.read_parquet_record_slice(
+                run_id,
+                artifact,
+                offset=remaining_offset,
+                limit=remaining_limit,
+            ).copy()
+            if "month" not in frame.columns:
+                frame.insert(0, "month", _theme_month(artifact.key))
+            frames.append(frame)
+            remaining_limit -= len(frame)
+            remaining_offset = 0
+            if remaining_limit <= 0:
+                break
+        if not frames:
+            return pd.DataFrame(), total
+        return pd.concat(frames, ignore_index=True), total
 
 
 def _theme_month(key: str) -> str:

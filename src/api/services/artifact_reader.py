@@ -4,7 +4,7 @@ import ast
 import json
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any, Iterable, Mapping, Sequence
 
 import pandas as pd
 import yaml
@@ -24,8 +24,14 @@ from src.artifacts.run_manifest import validate_artifact_record
 class ArtifactReader:
     """Reads only manifest-listed, checksum-verified run artifacts."""
 
-    def __init__(self, catalog: RunCatalog):
+    def __init__(
+        self,
+        catalog: RunCatalog,
+        *,
+        parquet_cache_max_bytes: int = 16 * 1024 * 1024,
+    ):
         self.catalog = catalog
+        self.parquet_cache_max_bytes = max(0, int(parquet_cache_max_bytes))
 
     def records(self, run_id: str) -> tuple[ArtifactRecord, ...]:
         return self.catalog.get_manifest(run_id).artifacts
@@ -76,8 +82,15 @@ class ArtifactReader:
 
     def verified_path(self, run_id: str, record: ArtifactRecord) -> Path:
         root = self.catalog.get_run_root(run_id)
+        candidate = root / record.path
         try:
-            return validate_artifact_record(root, record)
+            stat = candidate.stat()
+            return _validate_artifact_cached(
+                str(root),
+                record,
+                int(stat.st_size),
+                int(stat.st_mtime_ns),
+            )
         except (OSError, json.JSONDecodeError, ValueError) as exc:
             raise ArtifactValidationError(
                 run_id=run_id,
@@ -85,19 +98,152 @@ class ArtifactReader:
                 validation_message=str(exc),
             ) from exc
 
-    def read_csv(self, run_id: str, artifact_key: str) -> pd.DataFrame:
+    def read_parquet(
+        self,
+        run_id: str,
+        artifact_key: str,
+        *,
+        columns: list[str] | None = None,
+        filters: list[tuple[str, str, Any]] | None = None,
+    ) -> pd.DataFrame:
         record = self.get_record(run_id, artifact_key)
-        return self.read_csv_record(run_id, record)
+        return self.read_parquet_record(
+            run_id, record, columns=columns, filters=filters
+        )
 
-    def read_csv_record(self, run_id: str, record: ArtifactRecord) -> pd.DataFrame:
+    def read_parquet_record(
+        self,
+        run_id: str,
+        record: ArtifactRecord,
+        *,
+        columns: list[str] | None = None,
+        filters: list[tuple[str, str, Any]] | None = None,
+    ) -> pd.DataFrame:
         path = self.verified_path(run_id, record)
-        if path.suffix.lower() != ".csv":
+        if path.suffix.lower() != ".parquet":
             raise ArtifactValidationError(
                 run_id=run_id,
                 artifact_key=record.key,
-                validation_message="artifact schema mismatch: expected CSV",
+                validation_message="artifact schema mismatch: expected Parquet",
             )
-        return _read_csv_cached(str(path), record.sha256).copy(deep=False)
+        if (
+            columns is None
+            and filters is None
+            and record.byte_size is not None
+            and record.byte_size <= self.parquet_cache_max_bytes
+        ):
+            return _read_parquet_cached(str(path), record.sha256).copy(deep=False)
+        if columns is None and filters is None:
+            return pd.read_parquet(path)
+        # Column projection and Parquet predicate pushdown prevent graph API
+        # requests from loading unrelated analytical columns into memory.
+        return pd.read_parquet(path, columns=columns, filters=filters)
+
+    def read_parquet_record_slice(
+        self,
+        run_id: str,
+        record: ArtifactRecord,
+        *,
+        offset: int,
+        limit: int,
+        columns: list[str] | None = None,
+    ) -> pd.DataFrame:
+        """Read only the requested Parquet row range using row-group slicing."""
+        if offset < 0 or limit < 0:
+            raise ValueError("offset and limit must be non-negative")
+        path = self.verified_path(run_id, record)
+        if path.suffix.lower() != ".parquet":
+            raise ArtifactValidationError(
+                run_id=run_id,
+                artifact_key=record.key,
+                validation_message="artifact schema mismatch: expected Parquet",
+            )
+
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+
+        parquet = pq.ParquetFile(path)
+        available_columns = set(parquet.schema_arrow.names)
+        selected_columns = (
+            [column for column in columns if column in available_columns]
+            if columns is not None
+            else None
+        )
+        if limit == 0 or offset >= parquet.metadata.num_rows:
+            names = selected_columns or parquet.schema_arrow.names
+            return pd.DataFrame(columns=names)
+
+        remaining_offset = offset
+        remaining_limit = limit
+        tables = []
+        for row_group in range(parquet.num_row_groups):
+            group_rows = parquet.metadata.row_group(row_group).num_rows
+            if remaining_offset >= group_rows:
+                remaining_offset -= group_rows
+                continue
+            table = parquet.read_row_group(row_group, columns=selected_columns)
+            if remaining_offset:
+                table = table.slice(remaining_offset)
+                remaining_offset = 0
+            if table.num_rows > remaining_limit:
+                table = table.slice(0, remaining_limit)
+            tables.append(table)
+            remaining_limit -= table.num_rows
+            if remaining_limit <= 0:
+                break
+
+        if not tables:
+            names = selected_columns or parquet.schema_arrow.names
+            return pd.DataFrame(columns=names)
+        return pa.concat_tables(tables, promote=True).to_pandas()
+
+    def read_parquet_records_page(
+        self,
+        run_id: str,
+        records: Sequence[ArtifactRecord],
+        *,
+        limit: int,
+        offset: int,
+        columns: list[str] | None = None,
+    ) -> tuple[pd.DataFrame, int]:
+        """Page across ordered immutable Parquet artifacts without full reads."""
+        ordered = list(records)
+        total = sum(self.parquet_row_count(run_id, record) for record in ordered)
+        if limit <= 0 or offset >= total:
+            return pd.DataFrame(columns=columns or []), total
+
+        remaining_offset = offset
+        remaining_limit = limit
+        frames: list[pd.DataFrame] = []
+        for record in ordered:
+            rows = self.parquet_row_count(run_id, record)
+            if remaining_offset >= rows:
+                remaining_offset -= rows
+                continue
+            frame = self.read_parquet_record_slice(
+                run_id,
+                record,
+                offset=remaining_offset,
+                limit=remaining_limit,
+                columns=columns,
+            )
+            frames.append(frame)
+            remaining_limit -= len(frame)
+            remaining_offset = 0
+            if remaining_limit <= 0:
+                break
+        if not frames:
+            return pd.DataFrame(columns=columns or []), total
+        return pd.concat(frames, ignore_index=True), total
+
+    def parquet_row_count(self, run_id: str, record: ArtifactRecord) -> int:
+        if record.rows is not None:
+            self.verified_path(run_id, record)
+            return int(record.rows)
+        path = self.verified_path(run_id, record)
+        import pyarrow.parquet as pq
+
+        return int(pq.ParquetFile(path).metadata.num_rows)
 
     def read_json(self, run_id: str, artifact_key: str) -> dict[str, Any]:
         record = self.get_record(run_id, artifact_key)
@@ -148,14 +294,27 @@ class ArtifactReader:
         return records, total
 
 
+@lru_cache(maxsize=512)
+def _validate_artifact_cached(
+    root: str,
+    record: ArtifactRecord,
+    byte_size: int,
+    modified_ns: int,
+) -> Path:
+    # Size and mtime are part of the key so an altered file is re-validated.
+    del byte_size, modified_ns
+    return validate_artifact_record(root, record)
+
+
 @lru_cache(maxsize=32)
-def _read_csv_cached(path: str, sha256: str) -> pd.DataFrame:
+def _read_parquet_cached(path: str, sha256: str) -> pd.DataFrame:
     del sha256  # Included in the cache key so changed artifacts are never reused.
-    return pd.read_csv(path, low_memory=False)
+    return pd.read_parquet(path)
 
 
 def clear_csv_cache() -> None:
-    _read_csv_cached.cache_clear()
+    _read_parquet_cached.cache_clear()
+    _validate_artifact_cached.cache_clear()
 
 
 def normalize_value(value: Any) -> Any:
@@ -175,6 +334,12 @@ def normalize_value(value: Any) -> Any:
         missing = False
     if isinstance(missing, bool) and missing:
         return None
+
+    if hasattr(value, "tolist") and not isinstance(value, (str, bytes)):
+        try:
+            return [normalize_value(item) for item in value.tolist()]
+        except (TypeError, ValueError, AttributeError):
+            pass
 
     if hasattr(value, "item") and not isinstance(value, (str, bytes)):
         try:

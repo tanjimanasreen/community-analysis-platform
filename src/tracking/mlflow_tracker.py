@@ -173,9 +173,7 @@ class MlflowExperimentTracker:
         def log() -> None:
             safe_filename = Path(filename).name
             if not safe_filename.endswith(".json"):
-                raise ValueError("Tracking summary artifacts must be JSON files")
-            if artifact_path != "summaries":
-                raise ValueError("Only the summaries artifact namespace is supported")
+                raise ValueError("Tracking artifacts must be JSON files")
             encoded = encode_bounded_json(payload)
             with tempfile.TemporaryDirectory(
                 prefix="community-analysis-mlflow-"
@@ -189,6 +187,23 @@ class MlflowExperimentTracker:
                 )
 
         self._safe(f"log_json_artifact:{Path(filename).name}", log, None)
+
+    def log_table(
+        self,
+        run_id: str,
+        *,
+        filename: str,
+        df: Any,
+    ) -> None:
+        def log() -> None:
+            import mlflow
+
+            if self.settings.tracking_uri:
+                mlflow.set_tracking_uri(self.settings.tracking_uri)
+            with mlflow.start_run(run_id=run_id):
+                mlflow.log_table(data=df, artifact_file=filename)
+
+        self._safe(f"log_table:{filename}", log, None)
 
     def finish_run(self, run_id: str, status: str) -> None:
         if status not in {"FINISHED", "FAILED", "KILLED"}:

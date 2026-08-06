@@ -1,3 +1,5 @@
+import logging
+
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import numpy as np
@@ -7,10 +9,12 @@ import os
 
 from src.themes.membership_changes import calculate_membership_changes
 
+logger = logging.getLogger(__name__)
+
 
 def draw_members_transition_diagram(output_dir: str, paths: list, matched_df):
     if not paths:
-        print("No paths to draw membership changes for.")
+        logger.info("membership_visualization_skipped reason=no_paths")
         return
 
     all_comm = {}
@@ -31,7 +35,7 @@ def draw_members_transition_diagram(output_dir: str, paths: list, matched_df):
             if isinstance(members_raw, str):
                 try:
                     members = ast.literal_eval(members_raw)
-                except:
+                except (SyntaxError, ValueError):
                     members = []
             else:
                 members = members_raw
@@ -156,8 +160,8 @@ def draw_members_transition_diagram(output_dir: str, paths: list, matched_df):
         save_file_path = os.path.join(output_dir, filename)
         try:
             plt.savefig(save_file_path, dpi=300, transparent=True, bbox_inches="tight")
-            print(f"Saved {save_file_path}")
-        except Exception as e:
-            print(f"Error saving {filename}: {e}")
+            logger.info("membership_visualization_saved path=%s", save_file_path)
+        except Exception:
+            logger.exception("membership_visualization_failed filename=%s", filename)
         finally:
             plt.close(fig)

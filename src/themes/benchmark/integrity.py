@@ -350,6 +350,10 @@ def _sha256_file(path: Path) -> str:
 
 
 def _csv_data_row_count(path: Path) -> int:
+    if path.suffix == ".parquet":
+        import pandas as pd
+
+        return len(pd.read_parquet(path))
     with path.open("r", encoding="utf-8", newline="") as handle:
         reader = csv.reader(handle)
         try:

@@ -47,5 +47,14 @@ class NoOpExperimentTracker:
     ) -> None:
         return None
 
+    def log_table(
+        self,
+        run_id: str,
+        *,
+        filename: str,
+        df: Any,
+    ) -> None:
+        return None
+
     def finish_run(self, run_id: str, status: str) -> None:
         return None

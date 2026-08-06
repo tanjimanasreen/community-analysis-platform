@@ -15,6 +15,13 @@ class HealthResponse(StrictModel):
     schema_version: str
 
 
+class ReadinessResponse(StrictModel):
+    status: str
+    read_only: bool
+    artifact_root_ready: bool
+    discovered_runs: int
+
+
 class RunSummary(StrictModel):
     run_id: str
     status: str
