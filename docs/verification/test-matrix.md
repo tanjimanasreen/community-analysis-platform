@@ -54,7 +54,7 @@ Unit tests must not:
 - Call Neo4j.
 - Call Memgraph unless marked integration.
 - Call OpenAI.
-- Download SentenceTransformer models unless marked slow/integration.
+- Download TEI models unless marked slow/integration.
 - Depend on external drive paths.
 
 Use mocks or cached fixtures for those cases.
@@ -115,3 +115,36 @@ visualization services.
 Playwright visual baselines are stored beside the visual spec and are updated
 only after review. The functional/axe suite must not depend on snapshot
 availability.
+
+## Performance And Operations Test Matrix
+
+| Feature | Implementation | Required tests |
+|---|---|---|
+| Indexed community messages | `CommunityMessageIndex` | Exact legacy equivalence; message order; duplicates; translated text; anonymous users; empty communities; dates. |
+| Community message benchmark | `scripts/benchmark_community_messages.py` | Fails on output mismatch; reports legacy/indexed duration and scan counts. |
+| Parser reuse | `src/pipelines/ingestion_pipeline.py`, `src/ingestion/network_data_extractor.py` | Repeated serialized nodes are parsed once without changing rows. |
+| Memgraph batching | `MemgraphRepository.import_interactions` | Self-edge exclusion, metric preservation, and configured batch boundaries. |
+| Text preprocessing batching | `message_preprocess` | Output equivalence to the frozen preprocessing sequence. |
+| Topic runtime settings | `src/topics/lda.py` | LdaMulticore retained, configured parameters forwarded, empty corpus rejected. |
+| Prefect semantic keys | `src/orchestration/hashing.py` | Relevant nested theme/network/topic config changes invalidate cache keys. |
+| Theme progress/cache metrics | `src/themes/theme_generation.py` | Completed totals, cache hits/misses, outbound requests, and no external calls in tests. |
+| OpenAI usage and structured output | `src/providers/openai.py` | Mapping/object token usage including reasoning tokens, strict JSON Schema requests, 32K→64K bounded budget escalation, low reasoning effort, one bounded content-filter retry, Azure `model_extra.content_filters` annotation parsing, HTTP 400 prompt-filter handling, safe diagnostic logs, and no live calls. |
+| Offline mock providers | `src/providers/mock.py` | Deterministic theme output and token metadata without tokenizer downloads or any network access. |
+| TEI batching/failure | `src/themes/tei_client.py`, `theme_similarity.py` | Session reuse, batch cardinality, malformed response, fail policy, explicit mock. |
+| Structured logs | `src/logging_config.py` | Text/JSON output and structured fields. |
+| Dashboard read models | network pipeline/API service | Summary/sample/node index generation, exact multi-month node totals, bounded graph reads. |
+| API bounded dataframe cache | `ArtifactReader` | Small Parquet artifacts are cached; large artifacts bypass the dataframe LRU. |
+| Run catalog uniqueness | `RunCatalog` | Duplicate run IDs fail discovery with a diagnostic error. |
+| DeepEval optional adapter | `deepeval_judge.py` | Lazy optional imports, score scaling, schema validation, dataset filtering, and offline helper tests. |
+| spaCy container model | `Dockerfile`, topic smoke | Pinned model wheel imports and loads in the built image. |
+| Artifact month routing | `src/artifacts/run_manifest.py` | Numeric, abbreviated, and full month suffixes map to correct base schema/path. |
+| Container smoke | `Dockerfile` | Frozen install, non-root execution, CLI import/help, writable configured output. |
+
+## Dashboard Production Hardening Matrix
+
+| Feature | Implementation | Required tests |
+|---|---|---|
+| Stable graph canvas | `NetworkGraph.jsx`, `networkModel.ts` | Width-only resize observation, fixed height, deterministic positions, malformed endpoint omission, parallel-edge curvature, metric/remount behavior. |
+| Heterogeneous artifact rendering | `ArtifactValue.tsx`, Data Explorer and metadata panels | JSON arrays/maps, scalars, long text, ordinary text, no evaluation, compact and expanded views. |
+| API operational boundary | `src/api/app.py`, `ApiSettings` | Request ID propagation, security headers, gzip configuration, trusted-host configuration, liveness, readiness success/failure. |
+| AWS container boundary | `Dockerfile.api`, frontend nginx | Non-root API process, environment-based artifact root, health endpoint, same-origin proxy, immutable assets, SPA fallback. |

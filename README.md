@@ -19,24 +19,25 @@ The harness docs have been updated to reflect the actual implemented code featur
 - Month-to-month community transition analysis.
 - Sankey transition diagrams.
 - Membership-change diagrams.
-- SentenceTransformer theme similarity heatmaps.
+- TEIClient theme similarity heatmaps.
 
 ## Harness Start Point
 
-The current repository archive does not contain root `HARNESS.md` or
-`ARCHITECTURE.md`. Start with the available source-of-truth documents:
+Read the repository source-of-truth documents in this order before changing
+pipeline behavior:
 
-1. `AGENTS.md`
-2. `docs/design-docs/current-code-feature-inventory.md`
-3. `docs/product-specs/project-spec.md`
-4. `docs/design-docs/data-contract.md`
-5. `docs/design-docs/database-contract.md`
-6. `docs/design-docs/metric-contract.md`
-7. `docs/design-docs/pipeline-contract.md`
-8. `docs/design-docs/theme-intelligence-contract.md`
-9. `docs/verification/quality-gates.md`
-10. `docs/verification/test-matrix.md`
-11. the relevant active execution plan
+1. `HARNESS.md`
+2. `ARCHITECTURE.md`
+3. `docs/design-docs/current-code-feature-inventory.md`
+4. `docs/product-specs/project-spec.md`
+5. `docs/design-docs/data-contract.md`
+6. `docs/design-docs/database-contract.md`
+7. `docs/design-docs/metric-contract.md`
+8. `docs/design-docs/pipeline-contract.md`
+9. `docs/design-docs/theme-intelligence-contract.md`
+10. `docs/verification/quality-gates.md`
+11. `docs/verification/test-matrix.md`
+12. the relevant active execution plan
 
 Then implement plans in this order:
 
@@ -49,55 +50,54 @@ Then implement plans in this order:
 
 Before refactoring, preserve the current behavior with tests or fixture outputs. Do not change metric definitions, graph thresholds, Louvain defaults, LDA defaults, or GPT theme defaults unless the change is documented as a separate experiment.
 
-## Prefect Orchestration
+## How To Run This Project
 
-Prefect 3 orchestrates the sequential network/community, Topic, and Theme stages through `run_monthly_analysis_flow`. Direct domain execution remains supported, and analytical objects stay inside task boundaries; only typed metadata and artifact references cross Prefect boundaries.
+By default, the CLI commands use **Prefect** as the local orchestrator. MLflow
+tracking is optional and disabled by default in `configs/algorithms.yml`; enable
+it only when the tracking extra is installed. Prefect provides task state and
+retries, while immutable run manifests remain the source of truth for lineage.
 
-Optional local UI command:
+```bash
+# Runs the full pipeline via Prefect
+python -m src.cli run-all --config tests/configs/test_single_month.yml
+```
 
+### 1. Prefect Orchestration (Default)
+Prefect orchestrates the sequential network/community, Topic, and Theme stages through `run_monthly_analysis_flow`.
+**You do NOT need to run a Prefect server.** The flow executes completely ephemerally (like a standard script).
+
+If you *want* to view the Prefect dashboard to see historical runs:
 ```bash
 prefect server start
 ```
+Tests do not require a dedicated server. Local result payloads are isolated from Prefect state under `.prefect_results/`. To clear only the local Prefect result cache, run `rm -rf .prefect_results/`.
 
-Tests do not require a dedicated server. Local result payloads are isolated from Prefect state under:
+### 2. Local MLflow Experiment Tracking
+MLflow tracking is opt-in. Set `tracking.enabled: true` in the selected config
+and install the tracking extra. When tracking is disabled the pipeline does not
+attempt prompt registration or import MLflow. The immutable run bundle remains
+complete without MLflow.
 
-```text
-.prefect_results/
-```
-
-To clear only the local Prefect result cache, run `rm -rf .prefect_results/`.
-
-## Local MLflow Experiment Tracking
-
-MLflow tracking is optional and disabled by default. The pipeline uses the lightweight `mlflow-skinny` client; `make mlflow-ui` launches the full pinned MLflow UI through `uvx`. DVC remains responsible for dataset versioning, Prefect remains responsible for orchestration, and MLflow records only safe experiment metadata, metrics, stage status, lineage summaries, and artifact references. Raw datasets, full analytical CSV outputs, prompts, provider responses, credentials, clients, DataFrames, graphs, and models are not uploaded to MLflow.
-
-Install the tracking extra together with orchestration support:
-
-```bash
-uv sync --frozen --extra orchestration --extra tracking
-```
-
-Enable local tracking in a run configuration:
-
-```yaml
-tracking:
-  enabled: true
-  backend: mlflow
-  experiment_name: community-analysis
-  backend_store_path: .mlflow/mlflow.db
-  artifact_root: .mlflow/artifacts
-  nested_stage_runs: true
-  failure_policy: warn
-  log_artifact_references: true
-```
-
-Start the loopback-only local UI after at least one tracked run:
-
+If you enable tracking and want to inspect metrics, parameters, and dataset hashes:
 ```bash
 make mlflow-ui
 ```
+Then open `http://127.0.0.1:5001`. Tracking failures are warning-only and do not alter analytical success.
+The registered prompt artifact contains the versioned system/user templates and output schema; per-request keyword payloads are intentionally excluded from the safe provider summary to avoid duplicating potentially sensitive content in MLflow. Aggregate request, cache, token, and latency metrics are tracked when available.
 
-Then open `http://127.0.0.1:5000`. Tracking failures are warning-only and do not alter analytical success or retry behavior. Local MLflow state lives under `.mlflow/`; remove that directory only when you intentionally want to delete local experiment history.
+### 3. Local Debugging (`--debug` Flag)
+Use `--debug` only when you intentionally want raw Python execution for local
+step-through debugging. It bypasses Prefect, MLflow, and canonical run-bundle
+finalization:
+
+```bash
+python -m src.cli run-all --config tests/configs/test_single_month.yml --debug
+```
+
+A debug run is not discoverable by the dashboard API. An AWS Step Functions
+implementation may invoke debug-stage containers only if the state machine also
+implements the same manifest lifecycle and canonical publication contract.
+Otherwise, run the normal non-debug `run-all` command in the batch container.
 
 ## Final Handoff Docs
 
@@ -116,11 +116,11 @@ Create and install the local environment:
 make install-dev
 ```
 
-If you already activated another virtual environment, the equivalent install
-command is:
+The project uses a uv dependency group for development tools and optional
+extras for orchestration/tracking. The equivalent explicit setup is:
 
 ```bash
-python -m pip install -e ".[dev]"
+uv sync --frozen --extra orchestration --extra tracking
 ```
 
 Install the read-only dashboard dependencies with:
@@ -129,9 +129,26 @@ Install the read-only dashboard dependencies with:
 make frontend-install
 ```
 
-`pyproject.toml` is the canonical Python dependency declaration. The
-`requirements.txt` file is only a compatibility wrapper for hosts that expect
-one.
+`frontend/package-lock.json` is the canonical frontend dependency lock and must
+remain committed. Production builds use the lock rather than resolving an
+unpinned dependency tree.
+
+`pyproject.toml` and the committed `uv.lock` are the canonical Python dependency
+contract. Production containers install from the frozen lock.
+
+
+The thesis topic pipeline expects the pinned English spaCy model. Install it in
+local development after dependency sync:
+
+```bash
+uv run python -m spacy download en_core_web_sm
+```
+
+The production Dockerfile installs and verifies the pinned `en_core_web_sm`
+model wheel during the image build. If the model is absent locally, the code
+logs a warning and uses a blank English tokenizer for offline tests; that
+fallback can change lemmatization and must not be used for thesis-equivalent
+production runs.
 
 ## Development Quality & CI
 
@@ -154,6 +171,56 @@ make test
 * **Updating hook revisions**: Run `uv run pre-commit autoupdate` or edit `.pre-commit-config.yaml` to pin newer versions.
 * **Reproduce CI locally**: The commands above run exactly what CI runs.
 * **API Credentials**: The full test suite runs entirely offline. Network guards in `tests/conftest.py` block outbound requests. No live API credentials are required to pass tests or CI.
+
+## Canonical Pipeline-to-Dashboard Workflow
+
+The dashboard discovers only immutable run bundles with a completed
+`manifest.json`. Use `run-all` for a real analytical run that must become
+visible through the API and frontend:
+
+```bash
+community-analysis run-all \
+  --config configs/twitter/retweet_quote.yml \
+  --dataset-id january
+```
+
+On success, the CLI prints the generated run ID and artifact root. Start the API
+against the same `output_base_path` configured for the run, then start the
+frontend:
+
+```bash
+export COMMUNITY_ANALYSIS_ARTIFACT_ROOT=/path/to/output_base_path
+uvicorn src.api.app:app --host 0.0.0.0 --port 8000
+
+cd frontend
+npm install
+npm run dev
+```
+
+The Vite development server proxies `/api` to `http://127.0.0.1:8000` by
+default. For separate hosts, set `VITE_API_BASE_URL` before building the
+frontend.
+
+Stage-only commands (`run-social-network`, `run-topics`, and
+`run-theme-analysis`) preserve debugging and thesis-export workflows, but they
+do not publish a complete dashboard run. `run-all --debug` also bypasses the
+canonical Prefect run-bundle lifecycle and is not API-discoverable. Use plain
+`run-all` for dashboard-visible results.
+
+The global network view reads a deterministic, bounded graph sample while
+community detail views retain access to the authoritative full graph. Configure
+`dashboard.graph_sample_max_edges` to balance initial dashboard latency and
+visual density without changing analytical outputs.
+
+For the checked-in sample configuration, the Make targets share the same
+artifact root, so this sequence publishes and serves the exact run just created:
+
+```bash
+make run-dashboard-sample
+make run-api
+# in another terminal
+make run-frontend
+```
 
 ## Dashboard release-quality workflow
 
@@ -194,18 +261,18 @@ Kaleido.
 Sample outputs are written to:
 
 ```text
-/tmp/community-analysis-sample/
-/tmp/community-analysis-theme-sample/
-/tmp/community-analysis-sample-interactions.csv
-/tmp/community-analysis-artifact-index.md
+local_output/tests/community-analysis-sample/
+local_output/tests/community-analysis-theme-sample/
+local_output/tests/community-analysis-sample-interactions.csv
+local_output/tests/community-analysis-artifact-index.md
 ```
 
 The longitudinal two-month sample writes to:
 
 ```text
-/tmp/community-analysis-longitudinal-sample/
-/tmp/community-analysis-longitudinal-theme-sample/
-/tmp/community-analysis-longitudinal-artifact-index.md
+local_output/tests/community-analysis-evolution-test/
+local_output/tests/community-analysis-evolution-test/
+local_output/tests/community-analysis-evolution-artifact-index.md
 ```
 
 ## Offline Sample Commands
@@ -232,6 +299,7 @@ make run-network-sample
 make run-topic-sample
 make run-theme-sample
 make run-pipeline-sample
+make run-dashboard-sample
 make run-longitudinal-sample
 make verify-output-contract
 make verify-longitudinal-output-contract
@@ -256,13 +324,15 @@ make build-report
 What each command does:
 
 - `make test`: runs unit tests.
-- `make validate-config`: validates `configs/sample_twitter_reply.yml`.
+- `make validate-config`: validates `tests/configs/test_single_month.yml`.
 - `make ingest-sample`: converts the legacy `source,target,relation` fixture into derived interaction metrics without importing to a database.
 - `make run-network-sample`: runs network/community sample stages and writes internal topic-input prerequisites.
 - `make run-topic-sample`: runs only topic modeling from saved topic-input prerequisites. Run `make run-network-sample` first, or use `make run-pipeline-sample`.
 - `make run-theme-sample`: runs only theme intelligence from saved theme-input prerequisites. Run `make run-topic-sample` first, or use `make run-pipeline-sample`.
-- `make run-pipeline-sample`: runs the offline sample workflow and writes the artifact index.
+- `make run-pipeline-sample`: runs the legacy stage-by-stage offline sample workflow and writes the artifact index.
+- `make run-dashboard-sample`: runs the canonical Prefect sample and publishes a manifest-backed run for the API/dashboard.
 - `make run-longitudinal-sample`: runs a two-month offline workflow and verifies longitudinal theme transitions.
+- `make run-evolution-pipeline`: runs the multi-month evolution pipeline dynamically using a custom config file (e.g., `make run-evolution-pipeline CONFIG=configs/twitter/reply_evolution.yml`).
 - `make verify-output-contract`: validates generated one-month sample artifact paths and schemas without rerunning the pipeline.
 - `make verify-longitudinal-output-contract`: validates generated two-month longitudinal artifact paths, manifests, hashes, and transitions.
 - `make api-smoke-test`: runs offline tests for the read-only artifact API.
@@ -280,7 +350,8 @@ What each command does:
 - `make frontend-build`: builds the route-split dashboard without requiring the API to be running.
 - `make clean-generated`: removes only known generated demo outputs and the frontend build output.
 - `make clean-cache`: removes Python/test/Vite caches and egg-info without deleting `.venv` or `frontend/node_modules`.
-- `make build-report`: writes `/tmp/community-analysis-artifact-index.md`.
+- `make build-report`: writes `local_output/tests/community-analysis-artifact-index.md`.
+- `make benchmark-performance`: compares the legacy and indexed community-message implementations and verifies exact output equivalence.
 
 ## Direct CLI Usage
 
@@ -288,20 +359,21 @@ The same checks can be run directly through the CLI:
 
 ```bash
 .venv/bin/python -m src.cli validate-config --config configs/sample_telegram.yml
-.venv/bin/python -m src.cli validate-config --config configs/sample_twitter_reply.yml
+.venv/bin/python -m src.cli validate-config --config tests/configs/test_single_month.yml
 .venv/bin/python -m pytest tests/unit
 .venv/bin/python -m src.cli ingest-interactions \
   --file tests/fixtures/sample_relationships.csv \
-  --config configs/sample_twitter_reply.yml \
-  --out /tmp/community-analysis-sample-interactions.csv \
+  --config tests/configs/test_single_month.yml \
+  --out local_output/tests/community-analysis-sample-interactions.csv \
   --no-db
-.venv/bin/python -m src.cli run-social-network --config configs/sample_twitter_reply.yml
-.venv/bin/python -m src.cli run-topics --config configs/sample_twitter_reply.yml
-.venv/bin/python -m src.cli run-theme-analysis --config configs/sample_twitter_reply.yml
-.venv/bin/python -m src.cli verify-output-contract --config configs/sample_twitter_reply.yml
+.venv/bin/python -m src.cli run-social-network --config tests/configs/test_single_month.yml --debug
+.venv/bin/python -m src.cli run-topics --config tests/configs/test_single_month.yml
+.venv/bin/python -m src.cli run-theme-analysis --config tests/configs/test_single_month.yml
+.venv/bin/python -m src.cli run-all --config tests/configs/test_single_month.yml --theme-provider mock
+.venv/bin/python -m src.cli verify-output-contract --config tests/configs/test_single_month.yml
 .venv/bin/python -m src.cli build-report \
-  --config configs/sample_twitter_reply.yml \
-  --out /tmp/community-analysis-artifact-index.md
+  --config tests/configs/test_single_month.yml \
+  --out local_output/tests/community-analysis-artifact-index.md
 ```
 
 `run-topics` reads internal topic-input artifacts from
@@ -321,15 +393,16 @@ compatibility between public matched LDA outputs and copied theme inputs. Use
 
 ## Read-Only Artifact API
 
-The dashboard API reads only canonical run bundles created below
-`<artifact_root>/runs/<run_id>/`. It validates manifest-listed files before
+The dashboard API reads only canonical run bundles created by non-debug
+`run-all` below `<artifact_root>/runs/<run_id>/`. It validates manifest-listed files before
 returning analytical data and never runs ingestion, NetworkX, Louvain, LDA,
 theme providers, TEI, or visualization generation.
 
-Start it with an artifact root that contains the `runs/` directory:
+Start it with an artifact root that contains the `runs/` directory (for example, the `output_base_path` defined in your config):
 
 ```bash
 make run-api API_ARTIFACT_ROOT=/path/to/artifacts
+# Example: make run-api API_ARTIFACT_ROOT=local_output/twitter/reply_evolution
 ```
 
 Useful endpoints:
@@ -358,6 +431,13 @@ The OpenAPI document is available at `/openapi.json`. API errors use a stable
 JSON envelope with `code`, `message`, `run_id`, and `artifact_key` fields where
 applicable.
 
+
+The API caches only small Parquet tables in process memory. Configure the byte
+threshold with `COMMUNITY_ANALYSIS_API_PARQUET_CACHE_MAX_BYTES` (16 MiB by
+default); larger artifacts use projected/predicate-pushed reads and are not
+retained in the dataframe LRU. The run catalog rejects duplicate run IDs across
+discovered roots instead of silently selecting one bundle.
+
 ## Read-Only Dashboard
 
 After generating outputs and starting the API, start the Vite dashboard:
@@ -380,6 +460,42 @@ make frontend-lint
 make frontend-build
 ```
 
+
+## DeepEval Benchmark Evaluation
+
+DeepEval is an optional, separate model-benchmark workflow; it is not invoked by
+normal network, topic, theme, or longitudinal pipeline commands. Install the
+evaluation extra and run the configured benchmark/evaluation target:
+
+```bash
+uv sync --frozen --extra eval
+make evaluate-sample
+```
+
+`benchmark.evaluator_judge: mock` is an offline smoke configuration only. Use a
+reviewed real judge provider for meaningful LLM-as-a-judge scores. Optional
+DeepEval and MLflow modules are imported lazily, and the evaluation adapter
+executes blocking provider calls outside the event loop. Benchmark outputs are
+validated before scoring and written to `deepeval_scores.parquet`.
+
+## AWS Deployment Boundary
+
+The backend image is suitable for separate ECS/Fargate roles:
+
+- a batch/task role runs `community-analysis run-all` and writes immutable run
+  bundles to a mounted artifact filesystem;
+- the API role mounts the same artifact root read-only and serves `/api/v1`;
+- the frontend image serves static assets and proxies `/api` to the API service.
+
+The current API reader is filesystem-based. For the first CDK deployment, use a
+shared EFS artifact root or materialize completed S3 run bundles onto a
+read-only filesystem before serving them. Do not point the API directly at
+arbitrary local paths supplied by the browser. A direct S3 `ArtifactStore`
+adapter is a separate follow-up and is not required for local reproducibility.
+
+Keep provider/database credentials in Secrets Manager or SSM and inject them as
+environment variables; never bake them into either image or a run manifest.
+
 ## Optional Database Commands
 
 Memgraph checks are optional integration checks. Use these only when Docker is
@@ -387,9 +503,80 @@ available and you intentionally want a local graph database:
 
 ```bash
 .venv/bin/python -m src.cli db-up
-.venv/bin/python -m src.cli db-check --config configs/sample_twitter_reply.yml
+.venv/bin/python -m src.cli db-check --config tests/configs/test_single_month.yml
 ```
 
 Neo4j export remains a migration path for existing thesis data. Configure
 Neo4j connection settings before running export commands; the offline sample
 does not need Neo4j.
+
+
+## Full-Data Performance Guidance
+
+The dominant Retweet/Quote bottleneck was community-message extraction. New
+runs build one monthly edge index and reuse it across IF, WIF, and daily message
+statistics instead of scanning the full dataframe for every community edge.
+Verify the regression benchmark with:
+
+```bash
+make benchmark-performance
+```
+
+Longitudinal Twitter configs intentionally use:
+
+```yaml
+orchestration:
+  month_workers: 1
+```
+
+Each month already runs `LdaMulticore`; processing several months concurrently
+can oversubscribe CPU and memory. Theme requests retain bounded thread
+concurrency through `theme.max_workers`.
+
+Long-running stages emit periodic structured logs. Use local text logs by
+default and JSON logs for Docker/ECS/CloudWatch:
+
+```bash
+export LOG_LEVEL=INFO
+export LOG_FORMAT=json
+```
+
+Real theme-similarity outputs require TEI. When `theme.render_visuals=false`, the
+TEI/heatmap stage is skipped completely. When it is enabled, TEI failure stops
+the analytical similarity stage rather than silently substituting mock
+embeddings.
+
+## Full Twitter Runs
+
+Run these sequentially to avoid nested multicore pressure:
+
+```bash
+make run-evolution-pipeline CONFIG=configs/twitter/reply_evolution.yml
+make run-evolution-pipeline CONFIG=configs/twitter/retweet_quote_evolution.yml
+python -m src.cli run-all --config configs/twitter/retweet_quote.yml
+```
+
+The evolution commands each produce one January-April longitudinal run. The
+last command processes every dataset entry in `retweet_quote.yml` and publishes
+four independent monthly runs. The shared SQLite theme cache is cross-run; do
+not delete `.cache/theme_cache.sqlite3` unless a deliberate full provider rerun
+is required.
+
+## Read-only API container
+
+A dedicated `Dockerfile.api` runs only the dashboard API as a non-root user. It
+expects canonical run bundles below `/artifacts` (local bind mount or EFS) and
+uses environment configuration for CORS, trusted hosts, root path, graph caps,
+and docs exposure. It does not execute analytical pipeline stages.
+
+```bash
+docker build -f Dockerfile.api -t community-analysis-api:local .
+docker run --rm -p 8000:8000 \
+  -v "$PWD/local_output/twitter/retweet_quote_evolution:/artifacts:ro" \
+  -e COMMUNITY_ANALYSIS_API_ALLOWED_HOSTS=localhost,127.0.0.1 \
+  community-analysis-api:local
+```
+
+Use `/api/v1/health` for liveness and `/api/v1/ready` for artifact-mount
+readiness. Direct S3 artifact access is not implemented; use EFS for the first
+AWS deployment or add an explicit `ArtifactStore` adapter later.

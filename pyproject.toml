@@ -16,22 +16,29 @@ dependencies = [
     "gensim>=4.0.0",
     "scikit-learn>=1.0.0",
     "spacy>=3.0.0",
+    "tiktoken>=0.7.0",
     "openai>=1.0.0",
     "requests>=2.31.0",
-    "sentence-transformers>=2.2.0",
     "plotly>=5.0.0",
     "matplotlib>=3.4.0",
     "seaborn>=0.11.0",
     "python-dotenv>=1.0.0",
     "kneed>=0.8.0",
     "pyyaml>=6.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
     "demoji>=1.1.0",
     "beautifulsoup4>=4.10.0",
     "langdetect>=1.0.9",
     "deep-translator>=1.8.0",
     "fastapi>=0.110.0",
     "uvicorn>=0.27.0",
+    "pyarrow>=12.0.0",
+    "jinja2>=3.0.0",
 ]
+
+[project.scripts]
+community-analysis = "src.cli:main"
 
 [dependency-groups]
 dev = [
@@ -39,7 +46,7 @@ dev = [
     "pytest-cov>=4.0",
     "black>=22.0",
     "flake8>=6.0",
-    "httpx2>=0.28.0",
+    "httpx>=0.28.0",
     "pre-commit>=4.6.0",
 ]
 
@@ -50,6 +57,22 @@ orchestration = [
 tracking = [
     "mlflow-skinny==3.14.0",
 ]
+benchmark-gemini = [
+    "google-genai>=2.0.0,<3",
+]
+eval = [
+    "deepeval>=1.0.0",
+    "mlflow>=2.11.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+exclude = ["tests*"]
+
+[tool.setuptools.package-data]
+"src.topics" = ["stopwords-list.txt"]
+"src.themes.benchmark.prompts" = ["*.jinja2"]
 
 [tool.pytest.ini_options]
 minversion = "7.0"
@@ -59,4 +82,5 @@ testpaths = [
 ]
 markers = [
     "requires_loopback: test requires the ability to bind a loopback TCP socket (skipped in restricted sandbox environments)",
+    "requires_prefect: test requires the optional Prefect orchestration dependency",
 ]

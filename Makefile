@@ -1,24 +1,34 @@
-.PHONY: help install install-dev test format lint mlflow-ui db-up db-down db-check validate-config ingest-sample run-network-sample run-topic-sample run-theme-sample run-pipeline-sample run-longitudinal-sample verify-output-contract verify-longitudinal-output-contract api-smoke-test run-api demo demo-api demo-frontend frontend-install frontend-build frontend-lint frontend-typecheck frontend-test frontend-coverage frontend-e2e frontend-check dashboard-fixture run-frontend clean-generated clean-cache build-report
+.PHONY: help install install-dev test test-unit test-integration format lint mlflow-ui \
+	db-up db-down db-check tei-up validate-config ingest-sample run-network-sample \
+	run-topic-sample run-theme-sample evaluate-sample run-pipeline-test \
+	run-pipeline-sample run-dashboard-sample run-longitudinal-sample \
+	run-evolution-pipeline-test run-evolution-pipeline verify-output-contract \
+	verify-evolution-output-contract api-smoke-test run-api demo demo-api \
+	demo-frontend frontend-install frontend-build frontend-lint frontend-typecheck \
+	frontend-test frontend-coverage frontend-e2e frontend-check dashboard-fixture \
+	run-frontend clean-generated clean-cache build-report benchmark-performance
 
 PYTHON ?= .venv/bin/python
-PYTHON_BOOTSTRAP ?= python3
-PIP ?= $(PYTHON) -m pip
-SAMPLE_CONFIG ?= configs/sample_twitter_reply.yml
-SAMPLE_OUTPUT ?= /tmp/community-analysis-sample
-SAMPLE_THEME_OUTPUT ?= /tmp/community-analysis-theme-sample
-SAMPLE_INTERACTIONS ?= /tmp/community-analysis-sample-interactions.csv
-SAMPLE_REPORT ?= /tmp/community-analysis-artifact-index.md
-LONGITUDINAL_CONFIG_03 ?= configs/longitudinal/sample_twitter_reply_03.yml
-LONGITUDINAL_CONFIG_04 ?= configs/longitudinal/sample_twitter_reply_04.yml
-LONGITUDINAL_OUTPUT ?= /tmp/community-analysis-longitudinal-sample
-LONGITUDINAL_THEME_OUTPUT ?= /tmp/community-analysis-longitudinal-theme-sample
-LONGITUDINAL_REPORT ?= /tmp/community-analysis-longitudinal-artifact-index.md
-DASHBOARD_FIXTURE_ROOT ?= /tmp/community-dashboard-fixture
-API_ARTIFACT_ROOT ?= $(SAMPLE_OUTPUT)
+UV ?= uv
+SAMPLE_CONFIG ?= tests/configs/test_single_month.yml
+SAMPLE_OUTPUT ?= local_output/tests/community-analysis-sample
+SAMPLE_THEME_OUTPUT ?= local_output/tests/community-analysis-theme-sample
+SAMPLE_INTERACTIONS ?= local_output/tests/community-analysis-sample-interactions.csv
+SAMPLE_REPORT ?= local_output/tests/community-analysis-artifact-index.md
+
+TEST_EVOLUTION_CONFIG ?= tests/configs/test_evolution.yml
+export EVOLUTION_OUTPUT ?= local_output/tests/community-analysis-evolution-test
+export EVOLUTION_REPORT ?= local_output/tests/community-analysis-evolution-artifact-index.md
+# Optional provider override for non-sample longitudinal runs.  It is separate
+# from THEME_PROVIDER, which remains pinned to mock for sample targets.
+EVOLUTION_THEME_PROVIDER ?=
+
+export DASHBOARD_FIXTURE_ROOT ?= local_output/tests/community-dashboard-fixture
+export API_ARTIFACT_ROOT ?= $(SAMPLE_OUTPUT)
 
 # Keep all sample/demo theme generation deterministic and offline.
-# A command-line override remains possible, e.g. `make run-theme-sample OFFLINE_LLM_PROVIDER=mock`.
-OFFLINE_LLM_PROVIDER := mock
+# A command-line override remains possible, e.g. `make run-theme-sample THEME_PROVIDER=mock`.
+THEME_PROVIDER := mock
 
 help:
 	@echo "Available targets:"
@@ -35,13 +45,15 @@ help:
 	@echo "  run-network-sample   - Run network/community sample stages offline"
 	@echo "  run-topic-sample     - Run topic sample stages from saved network outputs"
 	@echo "  run-theme-sample     - Run theme sample from saved topic outputs using the offline mock provider"
-	@echo "  run-pipeline-sample  - Run the offline sample pipeline and artifact index"
-	@echo "  run-longitudinal-sample - Run two-month offline pipeline and transitions"
-	@echo "  verify-output-contract - Validate generated one-month sample artifact schemas"
-	@echo "  verify-longitudinal-output-contract - Validate generated longitudinal artifact schemas"
+	@echo "  evaluate-sample      - Run the offline DeepEval + MLflow benchmark pipeline"
+	@echo "  run-pipeline-test    - Run the legacy stage-by-stage offline test pipeline"
+	@echo "  run-dashboard-sample - Publish a canonical manifest-backed sample run"
+	@echo "  run-evolution-pipeline-test - Run two-month offline evolution pipeline and transitions"
+	@echo "  verify-output-contract - Validate generated one-month test artifact schemas"
+	@echo "  verify-evolution-output-contract - Validate generated evolution artifact schemas"
 	@echo "  api-smoke-test       - Run read-only dashboard API smoke tests"
 	@echo "  run-api              - Start the read-only artifact API"
-	@echo "  demo                 - Run offline sample, verifiers, report, and API smoke tests"
+	@echo "  demo                 - Run offline test, verifiers, report, and API smoke tests"
 	@echo "  demo-api             - Start the read-only artifact API for demo outputs"
 	@echo "  demo-frontend        - Start the read-only dashboard dev server"
 	@echo "  frontend-install     - Install frontend dependencies"
@@ -57,16 +69,13 @@ help:
 	@echo "  clean-generated      - Remove known demo outputs and frontend build output"
 	@echo "  clean-cache          - Remove Python/test/Vite caches and egg-info"
 	@echo "  build-report         - Build a markdown artifact index for sample outputs"
+	@echo "  benchmark-performance - Compare legacy and indexed message aggregation"
 
 install:
-	$(PYTHON_BOOTSTRAP) -m venv .venv
-	$(PIP) install --upgrade pip
-	$(PIP) install -e .
+	$(UV) sync --frozen --no-dev
 
 install-dev:
-	$(PYTHON_BOOTSTRAP) -m venv .venv
-	$(PIP) install --upgrade pip
-	$(PIP) install -e .[dev]
+	$(UV) sync --frozen --extra orchestration --extra tracking
 
 test-unit:
 	uv run --frozen --extra orchestration --extra tracking python -m pytest tests/unit
@@ -91,6 +100,9 @@ db-up:
 db-down:
 	docker compose down
 
+tei-up:
+	bash scripts/start_tei.sh
+
 db-check:
 	$(PYTHON) -m src.cli db-check --config $(SAMPLE_CONFIG)
 
@@ -113,40 +125,62 @@ run-topic-sample:
 	MPLBACKEND=Agg MPLCONFIGDIR=/tmp $(PYTHON) -m src.cli run-topics --config $(SAMPLE_CONFIG)
 
 run-theme-sample:
-	LLM_PROVIDER=$(OFFLINE_LLM_PROVIDER) MPLBACKEND=Agg MPLCONFIGDIR=/tmp $(PYTHON) -m src.cli run-theme-analysis --config $(SAMPLE_CONFIG)
+	MPLBACKEND=Agg MPLCONFIGDIR=/tmp $(PYTHON) -m src.cli run-theme-analysis --config $(SAMPLE_CONFIG) --theme-provider $(THEME_PROVIDER)
 
-run-pipeline-sample: ingest-sample run-network-sample run-topic-sample run-theme-sample build-report
+evaluate-sample:
+	@echo "Running DeepEval sample evaluation..."
+	$(PYTHON) -m src.cli theme-benchmark build-dataset --config $(SAMPLE_CONFIG) --run-id offline-smoke --limit 10
+	$(PYTHON) -m src.cli theme-benchmark run --config $(SAMPLE_CONFIG) --run-id offline-smoke --providers keyword_baseline,mock
+	$(PYTHON) -m src.cli theme-benchmark export-review --config $(SAMPLE_CONFIG) --run-id offline-smoke
+	$(PYTHON) -m src.cli theme-benchmark evaluate-deepeval --config $(SAMPLE_CONFIG) --run-id offline-smoke
+run-pipeline-test: ingest-sample run-network-sample run-topic-sample run-theme-sample build-report
 
-run-longitudinal-sample:
-	$(PYTHON) -m src.cli ingest-interactions --file tests/fixtures/longitudinal/twitter_reply_03_2017.csv --config $(LONGITUDINAL_CONFIG_03) --out $(LONGITUDINAL_OUTPUT)/interactions_03.csv --no-db
-	MPLBACKEND=Agg MPLCONFIGDIR=/tmp $(PYTHON) -m src.cli run-social-network --config $(LONGITUDINAL_CONFIG_03)
-	MPLBACKEND=Agg MPLCONFIGDIR=/tmp $(PYTHON) -m src.cli run-topics --config $(LONGITUDINAL_CONFIG_03)
-	$(PYTHON) -m src.cli ingest-interactions --file tests/fixtures/longitudinal/twitter_reply_04_2017.csv --config $(LONGITUDINAL_CONFIG_04) --out $(LONGITUDINAL_OUTPUT)/interactions_04.csv --no-db
-	MPLBACKEND=Agg MPLCONFIGDIR=/tmp $(PYTHON) -m src.cli run-social-network --config $(LONGITUDINAL_CONFIG_04)
-	MPLBACKEND=Agg MPLCONFIGDIR=/tmp $(PYTHON) -m src.cli run-topics --config $(LONGITUDINAL_CONFIG_04)
-	LLM_PROVIDER=$(OFFLINE_LLM_PROVIDER) MPLBACKEND=Agg MPLCONFIGDIR=/tmp $(PYTHON) -m src.cli run-theme-analysis --config $(LONGITUDINAL_CONFIG_04)
-	$(PYTHON) -m src.cli build-report --config $(LONGITUDINAL_CONFIG_04) --out $(LONGITUDINAL_REPORT)
+# Backward-compatible names documented in HARNESS.md and AGENTS.md.
+run-pipeline-sample: run-pipeline-test
+
+run-dashboard-sample:
+	MPLBACKEND=Agg MPLCONFIGDIR=/tmp $(PYTHON) -m src.cli run-all --config $(SAMPLE_CONFIG) --theme-provider $(THEME_PROVIDER)
+
+run-longitudinal-sample: run-evolution-pipeline-test
+
+run-evolution-pipeline-test:
+	@mkdir -p $(EVOLUTION_OUTPUT)
+	@mkdir -p /tmp/prefect
+	$(PYTHON) -m src.cli ingest-interactions --file tests/fixtures/longitudinal/twitter_reply_03_2017.csv --config $(TEST_EVOLUTION_CONFIG) --month 03 --out $(EVOLUTION_OUTPUT)/interactions_03.csv --no-db
+	$(PYTHON) -m src.cli ingest-interactions --file tests/fixtures/longitudinal/twitter_reply_04_2017.csv --config $(TEST_EVOLUTION_CONFIG) --month 04 --out $(EVOLUTION_OUTPUT)/interactions_04.csv --no-db
+	PREFECT_HOME=/tmp/prefect PREFECT_API_DATABASE_CONNECTION_URL="sqlite+aiosqlite:////tmp/prefect/prefect.db" MPLBACKEND=Agg MPLCONFIGDIR=/tmp $(PYTHON) -m src.cli run-evolution-pipeline --config $(TEST_EVOLUTION_CONFIG) --theme-provider $(THEME_PROVIDER)
+	$(PYTHON) -m src.cli build-report --config $(TEST_EVOLUTION_CONFIG) --out $(EVOLUTION_REPORT)
 
 verify-output-contract:
 	$(PYTHON) -m src.cli verify-output-contract --config $(SAMPLE_CONFIG)
 
-verify-longitudinal-output-contract:
-	$(PYTHON) -m src.cli verify-output-contract --config $(LONGITUDINAL_CONFIG_04) --longitudinal
+verify-evolution-output-contract:
+	$(PYTHON) -m src.cli verify-output-contract --config $(TEST_EVOLUTION_CONFIG) --longitudinal
+
+run-evolution-pipeline:
+	@if [ -z "$(CONFIG)" ]; then \
+		echo "Error: CONFIG is not set. Usage: make run-evolution-pipeline CONFIG=configs/twitter/reply_evolution.yml"; \
+		exit 1; \
+	fi
+	PREFECT_HOME=/tmp/prefect PREFECT_API_DATABASE_CONNECTION_URL="sqlite+aiosqlite:////tmp/prefect/prefect.db" MPLBACKEND=Agg MPLCONFIGDIR=/tmp $(PYTHON) -m src.cli run-evolution-pipeline --config $(CONFIG) $(if $(EVOLUTION_THEME_PROVIDER),--theme-provider $(EVOLUTION_THEME_PROVIDER))
 
 api-smoke-test:
-	$(PYTHON) -m pytest tests/unit/test_backend_api.py
+	uv run --frozen --extra orchestration --extra tracking python -m pytest tests/unit/test_backend_api.py
+
+API_HOST ?= 127.0.0.1
+API_PORT ?= 8000
 
 run-api:
-	COMMUNITY_ANALYSIS_ARTIFACT_ROOT=$(API_ARTIFACT_ROOT) $(PYTHON) -m uvicorn src.api.app:app --reload
+	COMMUNITY_ANALYSIS_ARTIFACT_ROOT=$(API_ARTIFACT_ROOT) uv run --frozen --extra orchestration --extra tracking python -m uvicorn src.api.app:app --host $(API_HOST) --port $(API_PORT)
 
-demo: run-pipeline-sample verify-output-contract run-longitudinal-sample verify-longitudinal-output-contract build-report api-smoke-test
+demo: run-pipeline-test verify-output-contract run-evolution-pipeline-test verify-evolution-output-contract build-report api-smoke-test
 
 demo-api: run-api
 
 demo-frontend: run-frontend
 
 frontend-install:
-	cd frontend && npm ci
+	cd frontend && if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
 frontend-build:
 	cd frontend && npm run build
@@ -176,7 +210,7 @@ run-frontend:
 	cd frontend && npm run dev
 
 clean-generated:
-	rm -rf "$(SAMPLE_OUTPUT)" "$(SAMPLE_THEME_OUTPUT)" "$(SAMPLE_INTERACTIONS)" "$(SAMPLE_REPORT)" "$(LONGITUDINAL_OUTPUT)" "$(LONGITUDINAL_THEME_OUTPUT)" "$(LONGITUDINAL_REPORT)" "$(DASHBOARD_FIXTURE_ROOT)" frontend/dist frontend/playwright-report frontend/test-results frontend/coverage
+	rm -rf "$(SAMPLE_OUTPUT)" "$(SAMPLE_THEME_OUTPUT)" "$(SAMPLE_INTERACTIONS)" "$(SAMPLE_REPORT)" "$(EVOLUTION_OUTPUT)" "$(EVOLUTION_REPORT)" "$(DASHBOARD_FIXTURE_ROOT)" frontend/dist frontend/playwright-report frontend/test-results frontend/coverage
 
 clean-cache:
 	find . -path ./.venv -prune -o -path ./frontend/node_modules -prune -o -type d -name "__pycache__" -prune -exec rm -rf {} +
@@ -185,3 +219,6 @@ clean-cache:
 
 build-report:
 	$(PYTHON) -m src.cli build-report --config $(SAMPLE_CONFIG) --out $(SAMPLE_REPORT)
+
+benchmark-performance:
+	$(PYTHON) -m scripts.benchmark_community_messages
