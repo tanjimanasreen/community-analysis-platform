@@ -7,6 +7,7 @@ export const API_ROUTES = {
   overview: '/runs/{run_id}/overview',
   network: '/runs/{run_id}/network',
   centrality: '/runs/{run_id}/centrality',
+  centralityLeaders: '/runs/{run_id}/centrality-leaders',
   communities: '/runs/{run_id}/communities',
   communityDetail: '/runs/{run_id}/communities/{community_id}',
   topics: '/runs/{run_id}/topics',
@@ -23,10 +24,12 @@ export const API_ROUTES = {
 
 export const API_QUERY_KEYS = {
   runs: ['platform', 'content_type', 'year', 'month', 'status'],
-  network: ['metric', 'community_id', 'max_nodes', 'max_edges', 'min_weight'],
+  verification: ['deep'],
+  network: ['metric', 'period', 'view', 'sampling', 'community_id', 'max_nodes', 'max_edges', 'min_weight'],
   centrality: ['limit', 'offset'],
-  communities: ['metric', 'limit', 'offset'],
-  communityDetail: ['metric', 'max_nodes', 'max_edges', 'min_weight'],
+  centralityLeaders: ['metric', 'period'],
+  communities: ['metric', 'period', 'limit', 'offset'],
+  communityDetail: ['metric', 'period', 'max_nodes', 'max_edges', 'min_weight'],
   topics: ['type', 'community_id', 'limit', 'offset'],
   communityTopics: ['type', 'limit', 'offset'],
   themes: ['month', 'community_id', 'limit', 'offset'],

@@ -1,5 +1,6 @@
 import React from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import ArtifactValue from '../ArtifactValue';
 import { metricCommunityCount, runDate } from '../../features/overview/overviewUtils';
 
 export default function EvolutionChart({
@@ -28,7 +29,7 @@ export default function EvolutionChart({
   }
 
   return (
-    <section className="bg-panel border border-border rounded-xl p-5 flex flex-col h-full">
+    <section className="panel p-5 flex flex-col h-full">
       <div className="mb-6">
         <h3 className="text-sm font-bold text-text-heading">{title || 'Compatible Run History'}</h3>
         <p className="text-xs text-muted mt-1">
@@ -76,7 +77,7 @@ function HistoryTooltip({ active, payload, label, unit }) {
       ? `${Number(raw).toLocaleString(undefined, { maximumFractionDigits: 2 })}%`
       : Number(raw).toLocaleString(undefined, { maximumFractionDigits: 2 });
   return (
-    <div className="bg-panel border border-border p-3 rounded-lg shadow-xl text-xs">
+    <div className="panel p-3 rounded-lg shadow-xl text-xs border border-border">
       <p className="font-bold text-text-heading">{label}</p>
       <p className="mt-2 text-muted">Value: <span className="text-text-heading">{value}</span></p>
       {point.runId && <p className="mt-1 font-mono text-[10px] text-muted">{point.runId}</p>}
@@ -97,14 +98,14 @@ function RunConfigurationPanel({ selectedRunDetail, title }) {
   ].filter(([, value]) => value !== null && value !== undefined);
 
   return (
-    <section className="bg-panel border border-border rounded-xl p-5 flex flex-col h-full min-h-[300px]">
+    <section className="panel p-5 flex flex-col h-full min-h-[300px]">
       <h3 className="text-sm font-bold text-text-heading">{title || 'Run Configuration'}</h3>
       <p className="mt-1 text-xs text-muted">At least two compatible completed runs with available values are required for a run-history chart.</p>
       <dl className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
         {entries.map(([label, value]) => (
-          <div key={label} className="rounded-lg border border-border bg-panel-soft/50 p-3">
+           <div key={label} className="rounded-lg border border-border bg-surface-soft/50 p-3">
             <dt className="text-xs text-muted">{label}</dt>
-            <dd className="mt-1 text-sm font-semibold text-text-heading break-words">{String(value)}</dd>
+            <dd className="mt-1 text-sm font-semibold text-text-heading break-words"><ArtifactValue value={value} /></dd>
           </div>
         ))}
         {entries.length === 0 && <p className="text-sm text-muted">Configuration metadata is unavailable for this run.</p>}

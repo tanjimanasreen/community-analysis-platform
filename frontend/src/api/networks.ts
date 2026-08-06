@@ -1,8 +1,11 @@
 import type {
+  CentralityLeadersResponse,
   CommunitiesResponse,
   CommunityDetail,
   MetricName,
   NetworkResponse,
+  NetworkView,
+  SamplingStrategy,
   TablePage,
 } from '../types/api';
 import { getJson } from './client';
@@ -10,6 +13,9 @@ import { API_ROUTES, fillRoute } from './routes';
 
 export interface NetworkParams {
   metric?: MetricName;
+  period?: string;
+  view?: NetworkView;
+  sampling?: SamplingStrategy;
   community_id?: string;
   max_nodes?: number;
   max_edges?: number;
@@ -41,9 +47,19 @@ export const getCentrality = (
     signal,
   });
 
+export const getCentralityLeaders = (
+  runId: string,
+  params: { metric?: MetricName; period?: string } = {},
+  signal?: AbortSignal,
+) =>
+  getJson<CentralityLeadersResponse>(
+    fillRoute(API_ROUTES.centralityLeaders, { run_id: runId }),
+    { params, signal },
+  );
+
 export const getCommunities = (
   runId: string,
-  params: PageParams & { metric?: MetricName } = {},
+  params: PageParams & { metric?: MetricName; period?: string } = {},
   signal?: AbortSignal,
 ) =>
   getJson<CommunitiesResponse>(

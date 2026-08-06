@@ -11,7 +11,7 @@ export default function EmptyState({
 }: EmptyStateProps) {
   return (
     <section
-      className="min-h-56 rounded-2xl border border-border bg-panel/80 p-8 flex items-center justify-center"
+      className="min-h-56 rounded-2xl border border-border bg-surface/80 p-8 flex items-center justify-center"
       aria-live="polite"
     >
       <div className="max-w-md text-center">

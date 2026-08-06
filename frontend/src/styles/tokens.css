@@ -1,0 +1,153 @@
+:root {
+  /* ─────────────────────────────────────────────────────────────
+     Spacing scale
+     ───────────────────────────────────────────────────────────── */
+  --space-xxs: 4px;
+  --space-xs: 8px;
+  --space-sm: 12px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 40px;
+  --space-3xl: 48px;
+
+  /* ─────────────────────────────────────────────────────────────
+     Border radius
+     ───────────────────────────────────────────────────────────── */
+  --radius-none: 0;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+
+  /* ─────────────────────────────────────────────────────────────
+     Typography
+     ───────────────────────────────────────────────────────────── */
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'Fira Code', 'Courier New', monospace;
+  --font-size-xs: 12px;
+  --font-size-sm: 13px;
+  --font-size-md: 15px;
+  --font-size-lg: 18px;
+  --font-size-xl: 20px;
+  --font-size-2xl: 24px;
+  --font-size-3xl: 28px;
+  --font-size-4xl: 32px;
+
+  --font-weight-light: 300;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  --line-height-tight: 1.2;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.75;
+  --line-height-loose: 2;
+
+  /* ─────────────────────────────────────────────────────────────
+     Color Palette - Base
+     ───────────────────────────────────────────────────────────── */
+  --color-bg: #0b1121;
+  --color-surface: #161f33;
+  --color-surface-soft: #1e293b;
+  --color-surface-hover: #1f2d42;
+  --color-border: #2a354b;
+  --color-border-light: #3a4a5f;
+
+  /* ─────────────────────────────────────────────────────────────
+     Color Palette - Text
+     ───────────────────────────────────────────────────────────── */
+  --color-text: #f8fafc;
+  --color-text-heading: #ffffff;
+  --color-text-muted: #94a3b8;
+  --color-text-soft: #cbd5e1;
+  --color-muted: #94a3b8; /* Alias for backward compatibility */
+
+  /* ─────────────────────────────────────────────────────────────
+     Color Palette - Semantic
+     ───────────────────────────────────────────────────────────── */
+  --color-primary: #3b82f6;
+  --color-primary-hover: #2563eb;
+  --color-primary-active: #1d4ed8;
+
+  --color-secondary: #8b5cf6;
+  --color-secondary-hover: #7c3aed;
+  --color-secondary-active: #6d28d9;
+
+  --color-success: #10b981;
+  --color-success-hover: #059669;
+  --color-success-active: #047857;
+
+  --color-warning: #f59e0b;
+  --color-warning-hover: #d97706;
+  --color-warning-active: #b45309;
+
+  --color-danger: #ef4444;
+  --color-danger-hover: #dc2626;
+  --color-danger-active: #b91c1c;
+
+  --color-info: #0ea5e9;
+  --color-info-hover: #0284c7;
+  --color-info-active: #0369a1;
+
+  /* ─────────────────────────────────────────────────────────────
+     Component Background Colors
+     ───────────────────────────────────────────────────────────── */
+  --color-panel: var(--color-surface);
+  --color-panel-soft: var(--color-surface-soft);
+
+  /* ─────────────────────────────────────────────────────────────
+     Shadows
+     ───────────────────────────────────────────────────────────── */
+  --shadow-none: none;
+  --shadow-sm: 0 1px 2px rgba(2, 6, 23, 0.6);
+  --shadow-md: 0 4px 6px rgba(2, 6, 23, 0.7);
+  --shadow-lg: 0 10px 15px rgba(2, 6, 23, 0.8);
+  --shadow-xl: 0 20px 25px rgba(2, 6, 23, 0.9);
+  --shadow-glow: 0 0 20px 4px rgba(59, 130, 246, 0.28);
+
+  /* ─────────────────────────────────────────────────────────────
+     Layout tokens
+     ───────────────────────────────────────────────────────────── */
+  --max-content-width: 1200px;
+  --sidebar-width: 260px;
+  --rightbar-width: 340px;
+  --header-height: 60px;
+  --footer-height: 40px;
+
+  /* ─────────────────────────────────────────────────────────────
+     Motion / Animations
+     ───────────────────────────────────────────────────────────── */
+  --motion-fast: 150ms;
+  --motion-medium: 260ms;
+  --motion-slow: 420ms;
+  --motion-slower: 600ms;
+
+  --easing-ease-in-out-quad: cubic-bezier(0.45, 0.05, 0.55, 0.95);
+  --easing-ease-out-cubic: cubic-bezier(0.16, 1, 0.3, 1);
+  --easing-ease-in-out-cubic: cubic-bezier(0.645, 0.045, 0.355, 1);
+
+  /* ─────────────────────────────────────────────────────────────
+     Z-Index Scale
+     ───────────────────────────────────────────────────────────── */
+  --z-hide: -1;
+  --z-auto: auto;
+  --z-base: 0;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-fixed: 300;
+  --z-header: 400;
+  --z-overlay: 500;
+  --z-modal: 600;
+  --z-popover: 700;
+  --z-tooltip: 800;
+}
+
+/* Helpful aliases for dark/light adjustments if needed in future */
+[data-theme='light'] {
+  /* light theme overrides can be added here */
+}
+
+

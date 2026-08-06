@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Download, ExternalLink } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Download, ExternalLink, Info } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   communitiesCsv,
@@ -59,17 +59,17 @@ export default function DataTable({
   };
 
   return (
-    <section className="bg-panel border border-border rounded-xl flex flex-col overflow-hidden">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-5 border-b border-border">
+    <section className="panel flex flex-col overflow-hidden">
+      <div className="control-panel" style={{ alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <h2 className="text-lg font-bold text-text-heading">Top Communities · {metric.toUpperCase()}</h2>
-          <p className="text-xs text-muted mt-1">Canonical structural fields from the selected community partition.</p>
+          <h2 className="panel-title">Top Communities · {metric.toUpperCase()}</h2>
+          <p className="panel-subtitle">Canonical structural fields from the selected community partition.</p>
         </div>
         <button
           type="button"
           onClick={exportVisible}
           disabled={rows.length === 0}
-          className="inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-panel-soft px-3 py-2 text-sm font-medium text-text-heading hover:bg-border/50 disabled:cursor-not-allowed disabled:opacity-50"
+           className="inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-surface-soft px-3 py-2 text-sm font-medium text-text-heading hover:bg-border/50 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Download size={16} />
           Export visible communities
@@ -81,13 +81,13 @@ export default function DataTable({
           <p className="font-semibold text-text-heading">No communities available</p>
           <p className="mt-2 text-sm text-muted">The selected metric returned no community records for this page.</p>
         </div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+        ) : (
+        <div className="overflow-x-auto chart-container">
+          <table className="table">
             <thead>
-              <tr className="border-b border-border bg-panel-soft/50 text-xs text-muted uppercase tracking-wider font-semibold">
+              <tr className="table-head">
                 {columns.map(([key, label]) => (
-                  <th key={key} className="px-5 py-3 font-medium">
+                  <th key={key} className="table-cell">
                     <button
                       type="button"
                       onClick={() => onSort(key)}
@@ -98,19 +98,28 @@ export default function DataTable({
                     </button>
                   </th>
                 ))}
-                <th className="px-5 py-3 font-medium">Theme</th>
-                <th className="px-5 py-3 font-medium"><span className="sr-only">Actions</span></th>
+                <th className="table-cell">Theme</th>
+                <th className="table-cell"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody className="text-sm">
               {rows.map((row) => (
-                <tr key={row.community_id} className="border-b border-border/50 hover:bg-panel-soft/30 transition-colors">
-                  <td className="px-5 py-3 font-semibold text-text-heading">{row.community_id}</td>
-                  <td className="px-5 py-3">{formatCount(row.node_count)}</td>
-                  <td className="px-5 py-3">{formatCount(row.edge_count)}</td>
-                  <td className="px-5 py-3">{formatCount(row.total_weight)}</td>
-                  <td className="px-5 py-3 text-muted">{row.theme || 'Not unambiguously matched'}</td>
-                  <td className="px-5 py-3 text-right">
+                <tr key={row.community_id} className="table-row hover:bg-surface-soft/30 transition-colors">
+                  <td className="table-cell font-semibold text-text-heading">{row.community_id}</td>
+                  <td className="table-cell">{formatCount(row.node_count)}</td>
+                  <td className="table-cell">{formatCount(row.edge_count)}</td>
+                  <td className="table-cell">{formatCount(row.total_weight)}</td>
+                  <td className="table-cell text-muted">
+                    {row.theme ? (
+                      row.theme
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 cursor-help" title="Themes are only generated for communities that appear consistently across both the IF and WIF network graphs.">
+                        Unmatched Community
+                        <Info size={14} className="opacity-70" />
+                      </span>
+                    )}
+                  </td>
+                  <td className="table-cell table-actions">
                     <button
                       type="button"
                       onClick={() => viewCommunity(row.community_id)}
@@ -135,18 +144,18 @@ export default function DataTable({
           <button
             type="button"
             aria-label="Previous community page"
-            onClick={onPrevious}
-            disabled={!hasPrevious}
-            className="p-1.5 rounded-md border border-border hover:bg-panel-soft disabled:opacity-40 disabled:cursor-not-allowed"
+             onClick={onPrevious}
+             disabled={!hasPrevious}
+             className="p-1.5 rounded-md border border-border hover:bg-surface-soft disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <ChevronLeft size={15} />
           </button>
           <button
             type="button"
             aria-label="Next community page"
-            onClick={onNext}
-            disabled={!hasNext}
-            className="p-1.5 rounded-md border border-border hover:bg-panel-soft disabled:opacity-40 disabled:cursor-not-allowed"
+             onClick={onNext}
+             disabled={!hasNext}
+             className="p-1.5 rounded-md border border-border hover:bg-surface-soft disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <ChevronRight size={15} />
           </button>

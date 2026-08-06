@@ -1,8 +1,13 @@
 import React from 'react';
 import { CalendarRange, Database, GitCommit, Layers3 } from 'lucide-react';
 import { conciseRunId, metadataValue } from '../../features/overview/overviewUtils';
+import SkeletonCard from '../SkeletonCard';
 
-export default function PlatformComparison({ selectedRun, selectedRunDetail, overview }) {
+export default function PlatformComparison({ selectedRun, selectedRunDetail, overview, isLoading = false }) {
+  if (isLoading || !overview) {
+    return <SkeletonCard className="h-full min-h-64" />;
+  }
+
   const commit = metadataValue(selectedRunDetail?.code, ['git_commit', 'commit']);
   const configDigest = metadataValue(selectedRunDetail?.code, ['config_digest']);
   const items = [
@@ -13,12 +18,12 @@ export default function PlatformComparison({ selectedRun, selectedRunDetail, ove
   ];
 
   return (
-    <section className="bg-panel border border-border rounded-xl p-5 flex flex-col h-full">
+    <section className="panel p-5 flex flex-col h-full">
       <h3 className="text-sm font-bold text-text-heading">Run Provenance</h3>
       <p className="mt-1 text-xs text-muted">A platform comparison requires explicit compatible run selection and is available on the Comparative route.</p>
       <div className="mt-5 grid grid-cols-1 gap-3">
         {items.map(({ label, value, icon: Icon }) => (
-          <div key={label} className="flex items-start gap-3 rounded-lg border border-border bg-panel-soft/40 p-3">
+           <div key={label} className="flex items-start gap-3 rounded-lg border border-border bg-surface-soft/40 p-3">
             <Icon size={17} className="text-primary mt-0.5 shrink-0" />
             <div>
               <p className="text-xs text-muted">{label}</p>

@@ -16,6 +16,17 @@ export interface NetworkGraphNode {
   totalDegree: number;
   color: string;
   val: number;
+  nodeType?: 'user' | 'community';
+  memberCount?: number | null;
+  internalEdgeCount?: number | null;
+  internalWeight?: number | null;
+  inboundCrossCommunityWeight?: number | null;
+  outboundCrossCommunityWeight?: number | null;
+  crossCommunityNeighborCount?: number | null;
+  x?: number | null;
+  y?: number | null;
+  fx?: number | null;
+  fy?: number | null;
 }
 
 export interface NetworkGraphLink {
@@ -27,6 +38,15 @@ export interface NetworkGraphLink {
   weight: number;
   width: number;
   opacity: number;
+  edgeCount?: number | null;
+  userPairCount?: number | null;
+  interactionCount?: number | null;
+  sourceUserCount?: number | null;
+  targetUserCount?: number | null;
+  forwardWeight?: number;
+  reverseWeight?: number;
+  forwardUserPairCount?: number;
+  reverseUserPairCount?: number;
 }
 
 export interface NetworkGraphData {
@@ -102,11 +122,27 @@ export function transformNetworkResponse(
         totalDegree,
         color: communityColor(primaryCommunityId),
         val: 2.5 + Math.sqrt(totalDegree),
+        nodeType: node.node_type,
+        memberCount: node.member_count,
+        internalEdgeCount: node.internal_edge_count,
+        internalWeight: node.internal_weight,
+        inboundCrossCommunityWeight: node.inbound_cross_community_weight,
+        outboundCrossCommunityWeight: node.outbound_cross_community_weight,
+        crossCommunityNeighborCount: node.cross_community_neighbor_count,
+        x: node.x,
+        y: node.y,
+        fx: node.x,
+        fy: node.y,
       };
     }),
     links: network.edges.map((edge, index) => {
       const weight = Math.max(0, Number(edge.weight) || 0);
       const normalizedWeight = weight / maxWeight;
+      
+      // Note: Backend might not return forwardWeight / reverseWeight directly in NetworkEdge,
+      // but if the UI is expecting it (NetworkGraph.jsx), we should map it if available.
+      // The API doesn't seem to return forwardWeight/reverseWeight on edge in the NetworkEdge type, 
+      // but we map the properties anyway to be safe, or default them.
       return {
         id: `${String(edge.source)}-${String(edge.target)}-${index}`,
         source: String(edge.source),
@@ -116,6 +152,15 @@ export function transformNetworkResponse(
         weight,
         width: 0.5 + normalizedWeight * 3,
         opacity: 0.2 + normalizedWeight * 0.65,
+        edgeCount: edge.edge_count,
+        userPairCount: edge.user_pair_count,
+        interactionCount: edge.interaction_count,
+        sourceUserCount: edge.source_user_count,
+        targetUserCount: edge.target_user_count,
+        forwardWeight: (edge as any).forward_weight ?? (edge.direction === 'forward' ? weight : 0),
+        reverseWeight: (edge as any).reverse_weight ?? (edge.direction === 'reverse' ? weight : 0),
+        forwardUserPairCount: (edge as any).forward_user_pair_count ?? 0,
+        reverseUserPairCount: (edge as any).reverse_user_pair_count ?? 0,
       };
     }),
   };

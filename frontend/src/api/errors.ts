@@ -7,6 +7,7 @@ export class DashboardApiError extends Error {
   readonly runId: string | null;
   readonly artifactKey: string | null;
   readonly details: Record<string, unknown> | null;
+  readonly requestId: string | null;
 
   constructor({
     code,
@@ -15,6 +16,7 @@ export class DashboardApiError extends Error {
     runId = null,
     artifactKey = null,
     details = null,
+    requestId = null,
   }: {
     code: string;
     message: string;
@@ -22,6 +24,7 @@ export class DashboardApiError extends Error {
     runId?: string | null;
     artifactKey?: string | null;
     details?: Record<string, unknown> | null;
+    requestId?: string | null;
   }) {
     super(message);
     this.name = 'DashboardApiError';
@@ -30,6 +33,7 @@ export class DashboardApiError extends Error {
     this.runId = runId;
     this.artifactKey = artifactKey;
     this.details = details;
+    this.requestId = requestId;
   }
 }
 
@@ -52,6 +56,7 @@ export function normalizeApiError(error: unknown): DashboardApiError {
         runId: payload.run_id ?? null,
         artifactKey: payload.artifact_key ?? null,
         details: payload.details ?? null,
+        requestId: error.response?.headers?.['x-request-id'] ?? null,
       });
     }
 
@@ -66,6 +71,7 @@ export function normalizeApiError(error: unknown): DashboardApiError {
       code: error.code || 'API_UNAVAILABLE',
       message: error.message || 'The dashboard API could not be reached.',
       status: error.response?.status ?? null,
+      requestId: error.response?.headers?.['x-request-id'] ?? null,
     });
   }
 

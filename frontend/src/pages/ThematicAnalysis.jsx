@@ -9,6 +9,7 @@ import {
   Tags,
 } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
+import ArtifactValue from '../components/ArtifactValue';
 import MetricCard from '../components/MetricCard';
 import KeywordList from '../components/KeywordList';
 import ProviderMetadata from '../components/ProviderMetadata';
@@ -37,7 +38,6 @@ import {
   availableThemeMonths,
   themeFrequencies,
 } from '../features/themes/themeModel';
-import { displayArtifactValue } from '../utils/artifactValues';
 import { clampPageOffset, nextPageOffset, pageRange, previousPageOffset } from '../utils/pagination';
 
 const TOPIC_LIMIT = 10;
@@ -152,7 +152,7 @@ export default function ThematicAnalysisPage() {
         </p>
       </header>
 
-      <section className="rounded-xl border border-border bg-panel p-5">
+      <section className="panel p-5">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
           <Control label="Topic records">
             <select
@@ -250,7 +250,7 @@ export default function ThematicAnalysisPage() {
         />
       </div>
 
-      <section className="rounded-xl border border-border bg-panel overflow-hidden">
+      <section className="panel overflow-hidden">
         <div className="border-b border-border p-5">
           <h2 className="text-lg font-bold text-text-heading">LDA topic records</h2>
           <p className="mt-1 text-xs text-muted">Community IDs, selected topic representation, keyword evidence, and membership overlap from canonical topic artifacts.</p>
@@ -271,7 +271,7 @@ export default function ThematicAnalysisPage() {
                   type="button"
                   key={topicRecordKey(topic, index)}
                   onClick={() => setSelectedTopicIndex(index)}
-                  className={`block w-full p-5 text-left hover:bg-panel-soft/40 ${selectedTopic === topic ? 'bg-primary/5' : ''}`}
+                  className={`block w-full p-5 text-left hover:bg-surface-soft/40 ${selectedTopic === topic ? 'bg-primary/5' : ''}`}
                 >
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="flex flex-wrap items-center gap-3 text-xs">
@@ -300,7 +300,7 @@ export default function ThematicAnalysisPage() {
         />
       </section>
 
-      <section className="rounded-xl border border-border bg-panel overflow-hidden">
+      <section className="panel overflow-hidden">
         <div className="border-b border-border p-5">
           <h2 className="text-lg font-bold text-text-heading">Downstream theme labels</h2>
           <p className="mt-1 text-xs text-muted">Provider-generated labels are displayed with the LDA keywords that supplied their evidence.</p>
@@ -347,7 +347,7 @@ export default function ThematicAnalysisPage() {
         />
       </section>
 
-      <section className="rounded-xl border border-border bg-panel p-5">
+      <section className="panel p-5">
         <h2 className="text-lg font-bold text-text-heading">Theme similarity</h2>
         <p className="mt-1 text-xs text-muted">Only saved similarity matrices or manifest-listed visualization artifacts are shown. No embeddings are computed in the browser.</p>
         <div className="mt-5">
@@ -393,16 +393,16 @@ function Control({ label, children }) {
 }
 
 function ThemeFrequencyPanel({ query, frequencies }) {
-  return (
-    <section className="rounded-xl border border-border bg-panel p-5">
+    return (
+     <section className="panel p-5">
       <h2 className="text-sm font-bold text-text-heading">Theme-frequency summary</h2>
       <p className="mt-1 text-xs text-muted">Counts general provider labels, falling back to metric-specific labels when needed. The denominator is the number of labels across the complete filtered result.</p>
       {query.isPending ? (
-        <div className="mt-5 h-40 animate-pulse rounded-lg bg-panel-soft" aria-live="polite" />
+        <div className="mt-5 h-40 animate-pulse rounded-lg bg-surface-soft" aria-live="polite" />
       ) : query.error ? (
         <p className="mt-4 text-xs text-muted">Theme summary unavailable because the theme artifact could not be loaded.</p>
       ) : frequencies === null ? (
-        <p className="mt-4 rounded-lg border border-border bg-panel-soft/40 p-3 text-xs text-muted">The filtered result exceeds the 500-record safe cap, so no partial frequency chart is shown. Use the paginated theme browser below.</p>
+         <p className="mt-4 rounded-lg border border-border bg-surface-soft/40 p-3 text-xs text-muted">The filtered result exceeds the 500-record safe cap, so no partial frequency chart is shown. Use the paginated theme browser below.</p>
       ) : frequencies.length === 0 ? (
         <p className="mt-4 text-xs text-muted">No theme labels are available for the current filter.</p>
       ) : (
@@ -413,7 +413,7 @@ function ThemeFrequencyPanel({ query, frequencies }) {
                 <span className="truncate font-medium text-text-heading" title={frequency.name}>{frequency.name}</span>
                 <span className="text-muted">{frequency.count} / {frequency.percentage.toFixed(1)}%</span>
               </div>
-              <div className="h-2.5 rounded-full bg-panel-soft">
+               <div className="h-2.5 rounded-full bg-surface-soft">
                 <div className="h-2.5 rounded-full" style={{ width: `${frequency.percentage}%`, backgroundColor: frequency.color }} />
               </div>
             </div>
@@ -482,7 +482,7 @@ function CommunityLink({ label, href }) {
 }
 
 function Detail({ label, value }) {
-  return <div className="rounded-lg border border-border/70 bg-panel-soft/30 p-3"><dt className="text-muted">{label}</dt><dd className="mt-1 break-words font-semibold text-text-heading">{displayArtifactValue(value)}</dd></div>;
+  return <div className="rounded-lg border border-border/70 bg-surface-soft/30 p-3"><dt className="text-muted">{label}</dt><dd className="mt-1 break-words font-semibold text-text-heading"><ArtifactValue value={value} /></dd></div>;
 }
 
 function PaginationBar({ label, offset, limit, total, onPrevious, onNext }) {

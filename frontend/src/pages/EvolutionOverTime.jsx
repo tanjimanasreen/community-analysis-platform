@@ -44,7 +44,7 @@ export default function EvolutionOverTimePage() {
 
   return (
     <div className="flex flex-col gap-6 max-w-[1600px] mx-auto w-full">
-      <header className="flex flex-col gap-4 rounded-xl border border-border bg-panel p-5 lg:flex-row lg:items-end lg:justify-between">
+      <header className="panel p-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h1 className="text-xl font-bold text-text-heading">Evolution over completed runs</h1>
           <p className="mt-1 max-w-3xl text-sm text-muted">
@@ -133,7 +133,7 @@ export default function EvolutionOverTimePage() {
               selectedRunDetail={data.selectedRunDetail}
             />
           </div>
-          <section className="rounded-xl border border-border bg-panel p-5">
+          <section className="panel p-5">
             <h2 className="text-sm font-bold text-text-heading">Deterministic endpoint comparison</h2>
             <p className="mt-2 text-sm leading-relaxed text-muted">
               {note ?? 'Fewer than two runs contain a value for the selected field, so no endpoint change is calculated.'}
@@ -143,7 +143,7 @@ export default function EvolutionOverTimePage() {
         </div>
       )}
 
-      <section className="rounded-xl border border-border bg-panel p-5">
+      <section className="panel p-5">
         <h2 className="text-sm font-bold text-text-heading">Accessible run-history table</h2>
         <div className="mt-4 overflow-x-auto">
           <table className="min-w-full text-left text-sm">

@@ -16,7 +16,7 @@ export default function ErrorState({
 
   return (
     <section
-      className="min-h-56 rounded-2xl border border-danger/30 bg-panel/80 p-8 flex items-center justify-center"
+      className="min-h-56 rounded-2xl border border-danger/30 bg-surface/80 p-8 flex items-center justify-center"
       role="alert"
       aria-live="assertive"
     >
@@ -34,6 +34,7 @@ export default function ErrorState({
                 run_id: normalized.runId,
                 artifact_key: normalized.artifactKey,
                 details: normalized.details,
+                request_id: normalized.requestId,
               },
               null,
               2,

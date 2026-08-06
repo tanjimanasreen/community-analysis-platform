@@ -1,13 +1,14 @@
 import React from 'react';
 import { AlertCircle, CheckCircle2, Database, Info, Lightbulb, PieChart } from 'lucide-react';
 import { formatCount, metadataValue } from '../features/overview/overviewUtils';
+import SkeletonCard from './SkeletonCard';
 
 function InsightItem({ title, description, icon: Icon, tone = 'primary' }) {
   const toneClass = {
     primary: 'text-primary bg-primary/10',
     success: 'text-success bg-success/10',
     warning: 'text-warning bg-warning/10',
-    neutral: 'text-muted bg-panel-soft',
+    neutral: 'text-muted bg-surface-soft',
   }[tone];
   return (
     <div className="flex gap-3">
@@ -29,7 +30,17 @@ export default function RightSidebar({
   selectedRun,
   selectedRunDetail,
   hasTransitions,
+  isLoading = false,
 }) {
+  if (isLoading || !overview) {
+    return (
+      <aside className="w-full h-full flex flex-col gap-6">
+        <SkeletonCard className="h-64" />
+        <SkeletonCard className="h-64 flex-1" />
+      </aside>
+    );
+  }
+
   const insights = [];
   if (overview.matched_percentage !== null) {
     if (overview.matched_percentage >= 80) {
@@ -93,7 +104,7 @@ export default function RightSidebar({
 
   return (
     <aside className="flex flex-col gap-6 h-full">
-      <section className="bg-panel border border-border rounded-xl p-5">
+      <section className="panel">
         <h3 className="text-sm font-bold text-text-heading flex items-center gap-2 mb-6 uppercase tracking-wider">
           <Lightbulb size={16} className="text-warning" />
           Traceable Insights
@@ -113,7 +124,7 @@ export default function RightSidebar({
         </div>
       </section>
 
-      <section className="bg-panel border border-border rounded-xl p-5 flex-grow">
+      <section className="panel flex-grow">
         <h3 className="text-sm font-bold text-text-heading mb-4 uppercase tracking-wider">Run Summary</h3>
         <dl className="flex flex-col gap-3 text-sm">
           <SummaryRow label="Time Range" value={formatRange(overview.date_start, overview.date_end)} />

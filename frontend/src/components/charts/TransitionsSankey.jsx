@@ -32,7 +32,7 @@ export default function TransitionsSankey({
   const transitionRecords = records ?? transitions?.records ?? [];
   if (transitionRecords.length === 0) {
     return (
-      <section className="bg-panel border border-border rounded-xl p-8 text-center min-h-[220px] flex items-center justify-center">
+      <section className="panel p-8 text-center min-h-[220px] flex items-center justify-center">
         <div>
           <p className="font-semibold text-text-heading">No transition records available</p>
           <p className="mt-2 text-sm text-muted">The artifact exists but contains no transitions for this run.</p>
@@ -45,13 +45,13 @@ export default function TransitionsSankey({
   const average = transitionRecords.reduce((sum, row) => sum + row.jaccard_score, 0) / transitionRecords.length;
 
   return (
-    <section className="bg-panel border border-border rounded-xl p-5 flex flex-col h-full">
+    <section className="panel p-5 flex flex-col h-full">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h3 className="text-sm font-bold text-text-heading">Community Transitions</h3>
           <p className="mt-1 text-xs text-muted">Links are encoded by Jaccard membership similarity. Nodes are month/community pairs.</p>
         </div>
-        <div className="rounded-lg border border-border bg-panel-soft px-3 py-2 text-right">
+         <div className="rounded-lg border border-border bg-surface-soft px-3 py-2 text-right">
           <p className="text-[10px] uppercase tracking-wider text-muted">Average Jaccard</p>
           <p className="text-lg font-bold text-text-heading">{average.toFixed(2)}</p>
         </div>
@@ -83,7 +83,7 @@ function SankeyTooltip({ active, payload }) {
   const item = payload[0]?.payload;
   if (!item) return null;
   return (
-    <div className="rounded-lg border border-border bg-panel p-3 text-xs shadow-xl">
+    <div className="rounded-lg border border-border panel p-3 text-xs shadow-xl">
       {item.startLabel && <p className="font-semibold text-text-heading">{item.startLabel} → {item.endLabel}</p>}
       {typeof item.jaccard === 'number' && <p className="mt-1 text-muted">Jaccard: {item.jaccard.toFixed(3)}</p>}
       {item.name && <p className="font-semibold text-text-heading">{item.name}</p>}

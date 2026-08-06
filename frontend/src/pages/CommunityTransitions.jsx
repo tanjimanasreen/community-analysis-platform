@@ -58,7 +58,7 @@ export default function CommunityTransitionsPage() {
 
   return (
     <div className="flex flex-col gap-6 max-w-[1600px] mx-auto w-full">
-      <header className="rounded-xl border border-border bg-panel p-5">
+      <header className="panel p-5">
         <h1 className="text-xl font-bold text-text-heading">Community transitions and member mobility</h1>
         <p className="mt-1 max-w-4xl text-sm text-muted">
           Every panel reads a separate optional longitudinal artifact. A missing transition, membership, persistence, or similarity artifact does not prevent the other panels from rendering.
@@ -116,7 +116,7 @@ export default function CommunityTransitionsPage() {
         <TransitionsSankey records={transitions} maxLinks={60} />
       </OptionalQueryPanel>
 
-      <section className="rounded-xl border border-border bg-panel p-5">
+      <section className="panel p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-sm font-bold text-text-heading">Transition records</h2>
@@ -125,9 +125,9 @@ export default function CommunityTransitionsPage() {
           {transitions.length > 0 && (
             <button
               type="button"
-              onClick={() => downloadCsv(transitionsCsv(transitions), `${data.selectedRunId}-transitions-${responseOffset + 1}-${responseOffset + transitions.length}.csv`)}
-              className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-semibold text-text-heading hover:bg-panel-soft"
-            >
+               onClick={() => downloadCsv(transitionsCsv(transitions), `${data.selectedRunId}-transitions-${responseOffset + 1}-${responseOffset + transitions.length}.csv`)}
+               className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-semibold text-text-heading hover:bg-surface-soft"
+             >
               <Download size={14} /> Export loaded transitions
             </button>
           )}
@@ -196,7 +196,7 @@ export default function CommunityTransitionsPage() {
       </section>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <section className="rounded-xl border border-border bg-panel p-5">
+        <section className="panel p-5">
           <h2 className="text-sm font-bold text-text-heading">Persistent community sets</h2>
           <p className="mt-1 text-xs text-muted">Duration is represented by the number of distinct months in each transition component.</p>
           <OptionalQueryPanel query={data.persistentQuery} artifactName="Persistent communities" loadingTitle="Loading persistent communities" plain>
@@ -222,7 +222,7 @@ export default function CommunityTransitionsPage() {
           </OptionalQueryPanel>
         </section>
 
-        <section className="rounded-xl border border-border bg-panel p-5">
+        <section className="panel p-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-sm font-bold text-text-heading">Membership changes</h2>
@@ -231,9 +231,9 @@ export default function CommunityTransitionsPage() {
             {membership.length > 0 && (
               <button
                 type="button"
-                onClick={() => downloadCsv(membershipChangesCsv(membership), `${data.selectedRunId}-membership-changes.csv`)}
-                className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-semibold text-text-heading hover:bg-panel-soft"
-              >
+                 onClick={() => downloadCsv(membershipChangesCsv(membership), `${data.selectedRunId}-membership-changes.csv`)}
+                 className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-semibold text-text-heading hover:bg-surface-soft"
+               >
                 <Download size={14} /> Export membership changes
               </button>
             )}
@@ -262,7 +262,7 @@ export default function CommunityTransitionsPage() {
         </section>
       </div>
 
-      <section className="rounded-xl border border-border bg-panel p-5">
+      <section className="panel p-5">
         <h2 className="text-sm font-bold text-text-heading">Theme similarity</h2>
         <p className="mt-1 text-xs text-muted">Cosine-similarity values and visualization artifacts are read from the selected run; no embeddings are computed in the browser.</p>
         <OptionalQueryPanel query={data.similarityQuery} artifactName="Theme similarity" loadingTitle="Loading theme similarity" plain>
@@ -275,7 +275,7 @@ export default function CommunityTransitionsPage() {
                   <a
                     key={artifact.artifact_key}
                     href={getArtifactDownloadUrl(data.selectedRunId, artifact.artifact_key)}
-                    className="rounded-lg border border-border px-3 py-2 text-sm font-medium text-primary hover:bg-panel-soft"
+                    className="rounded-lg border border-border px-3 py-2 text-sm font-medium text-primary hover:bg-surface-soft"
                   >
                     Open {artifact.path}
                   </a>

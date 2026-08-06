@@ -24,6 +24,8 @@ export interface DashboardContextValue {
   runDetailError: unknown;
   verificationError: unknown;
   setSelectedRunId: (runId: string) => void;
+  selectedPlatform: string;
+  setSelectedPlatform: (platform: string) => void;
   setMetric: (metric: MetricName) => void;
   retryInitial: () => void;
   retryRunMetadata: () => void;

@@ -5,6 +5,7 @@ import { API_ROUTES, fillRoute } from './routes';
 export interface TopicParams {
   type?: TopicType;
   community_id?: string;
+  period?: string;
   limit?: number;
   offset?: number;
 }

@@ -88,7 +88,7 @@ export default function CommunityNetworkPage() {
 
   return (
     <div data-run-id={selectedRunId || undefined} className="flex flex-col gap-6 max-w-[1600px] mx-auto w-full">
-      <div className="flex flex-col gap-4 rounded-xl border border-border bg-panel p-4 lg:flex-row lg:items-end lg:justify-between">
+      <div className="panel p-4 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h1 className="text-xl font-bold text-text-heading">Community Network</h1>
           <p className="mt-1 text-sm text-muted">Bounded, run-scoped interaction graph using the selected {metric.toUpperCase()} metric.</p>
@@ -209,7 +209,7 @@ export default function CommunityNetworkPage() {
 
 function MetricSummary({ icon: Icon, label, value, help }) {
   return (
-    <section className="bg-panel border border-border rounded-xl p-4">
+    <section className="panel p-4">
       <div className="flex items-center gap-3">
         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary"><Icon size={20} /></div>
         <div>
@@ -224,19 +224,19 @@ function MetricSummary({ icon: Icon, label, value, help }) {
 
 function NodeDetail({ node, onClose }) {
   return (
-    <aside className="h-full rounded-xl border border-border bg-panel p-6">
+    <aside className="panel p-6 h-full">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-muted">Selected node</p>
           <h2 className="mt-2 break-all text-xl font-bold text-text-heading">{node.id}</h2>
         </div>
-        <button type="button" onClick={onClose} className="rounded border border-border px-2 py-1 text-xs text-muted hover:bg-panel-soft">Clear</button>
-      </div>
-      <dl className="mt-6 grid grid-cols-2 gap-4 text-sm">
-        <div><dt className="text-xs text-muted">In-degree within returned graph</dt><dd className="mt-1 font-semibold text-text-heading">{node.inDegree}</dd></div>
-        <div><dt className="text-xs text-muted">Out-degree within returned graph</dt><dd className="mt-1 font-semibold text-text-heading">{node.outDegree}</dd></div>
-      </dl>
-      <p className="mt-6 rounded-lg border border-border bg-panel-soft/40 p-3 text-sm text-muted">This node has no community ID in the returned bounded graph, so no community was inferred.</p>
+         <button type="button" onClick={onClose} className="rounded border border-border px-2 py-1 text-xs text-muted hover:bg-surface-soft">Clear</button>
+       </div>
+       <dl className="mt-6 grid grid-cols-2 gap-4 text-sm">
+         <div><dt className="text-xs text-muted">In-degree within returned graph</dt><dd className="mt-1 font-semibold text-text-heading">{node.inDegree}</dd></div>
+         <div><dt className="text-xs text-muted">Out-degree within returned graph</dt><dd className="mt-1 font-semibold text-text-heading">{node.outDegree}</dd></div>
+       </dl>
+       <p className="mt-6 rounded-lg border border-border bg-surface-soft/40 p-3 text-sm text-muted">This node has no community ID in the returned bounded graph, so no community was inferred.</p>
     </aside>
   );
 }

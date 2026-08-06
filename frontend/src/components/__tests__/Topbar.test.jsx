@@ -57,7 +57,7 @@ describe('Topbar', () => {
     expect(screen.getByRole('option', { name: /twitter · reply · 2017-03-01 → 2017-03-31/ })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Interaction Frequency (IF)' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Weighted Interaction Frequency (WIF)' })).toBeInTheDocument();
-    expect(screen.getByText('API ok')).toBeInTheDocument();
+    expect(screen.getByLabelText('API ok')).toBeInTheDocument();
     expect(screen.getByText('Run verified')).toBeInTheDocument();
   });
 

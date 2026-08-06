@@ -2,10 +2,14 @@ import axios, { type AxiosRequestConfig } from 'axios';
 import { normalizeApiError } from './errors';
 
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+const configuredTimeout = Number(import.meta.env.VITE_API_TIMEOUT_MS || 30_000);
+export const API_TIMEOUT_MS = Number.isFinite(configuredTimeout) && configuredTimeout > 0
+  ? configuredTimeout
+  : 30_000;
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15_000,
+  timeout: API_TIMEOUT_MS,
   headers: {
     Accept: 'application/json',
   },

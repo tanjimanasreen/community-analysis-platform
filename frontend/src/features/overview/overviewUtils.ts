@@ -134,3 +134,63 @@ function firstString(value: unknown): string | null {
   }
   return null;
 }
+
+export function formatPeriod(period: string | null | undefined): string {
+  if (!period) return '';
+  const parts = period.split('-');
+  if (parts.length === 2) {
+    const date = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, 1);
+    return date.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+  }
+  return period;
+}
+
+export function periodMetricValue(
+  period: import('../../types/api').OverviewPeriod,
+  metric: MetricName,
+  type: 'users' | 'messages' | 'communities'
+): number | null {
+  if (type === 'users') {
+    return metric === 'if' ? period.if_users : period.wif_users;
+  }
+  if (type === 'messages') {
+    return metric === 'if' ? period.if_messages : period.wif_messages;
+  }
+  if (type === 'communities') {
+    return metric === 'if' ? period.if_community_count : period.wif_community_count;
+  }
+  return null;
+}
+
+export function percentageChange(value: number | null | undefined, previous: number | null | undefined): number | null {
+  if (value == null || previous == null || previous === 0) return null;
+  return ((value - previous) / Math.abs(previous)) * 100;
+}
+
+export function selectedOverviewPeriod(
+  overview: OverviewResponse | null | undefined,
+  period: string | null | undefined
+): import('../../types/api').OverviewPeriod | null {
+  if (!overview || !overview.periods || !period) return null;
+  return overview.periods.find((p) => p.period === period) || null;
+}
+
+export function previousPeriod(
+  periods: import('../../types/api').OverviewPeriod[],
+  current: string | null | undefined
+): import('../../types/api').OverviewPeriod | null {
+  if (!periods || periods.length === 0 || !current) return null;
+  const sorted = [...periods].sort((a, b) => a.period.localeCompare(b.period));
+  const currentIndex = sorted.findIndex((p) => p.period === current);
+  if (currentIndex <= 0) return null;
+  return sorted[currentIndex - 1];
+}
+
+export function formatBytes(bytes: number | null | undefined): string {
+  if (bytes == null || bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+

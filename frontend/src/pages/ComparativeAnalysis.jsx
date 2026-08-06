@@ -1,6 +1,7 @@
 import React from 'react';
 import { AlertTriangle, Database, Lightbulb, Scale, Send } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
+import ArtifactValue from '../components/ArtifactValue';
 import ErrorState from '../components/states/ErrorState';
 import LoadingState from '../components/states/LoadingState';
 import EmptyState from '../components/states/EmptyState';
@@ -13,7 +14,6 @@ import {
 } from '../features/comparison/comparisonModel';
 import { useComparisonData } from '../features/comparison/useComparisonData';
 import { comparisonWarnings } from '../features/evolution/runCompatibility';
-import { displayArtifactValue } from '../utils/artifactValues';
 
 const TWITTER_RUN_PARAM = 'twitterRun';
 const TELEGRAM_RUN_PARAM = 'telegramRun';
@@ -77,7 +77,7 @@ export default function ComparativeAnalysisPage() {
 
   return (
     <div className="flex flex-col gap-6 max-w-[1600px] mx-auto w-full">
-      <header className="rounded-xl border border-border bg-panel p-5">
+      <header className="panel p-5">
         <h1 className="text-xl font-bold text-text-heading">Cross-platform comparison</h1>
         <p className="mt-1 max-w-4xl text-sm text-muted">
           Select one completed Twitter/X run and one completed Telegram run. No arbitrary catalog entries are compared automatically.
@@ -129,7 +129,7 @@ export default function ComparativeAnalysisPage() {
             </section>
           )}
 
-          <section className="rounded-xl border border-border bg-panel p-5">
+          <section className="panel p-5">
             <h2 className="text-sm font-bold text-text-heading">Supported overview fields</h2>
             <p className="mt-1 text-xs text-muted">Only fields exposed by both selected run overviews are compared. Missing values remain unavailable.</p>
             <div className="mt-4 overflow-x-auto">
@@ -156,7 +156,7 @@ export default function ComparativeAnalysisPage() {
             <ThemeComparison title="Telegram top theme labels" themes={themes.right} />
           </div>
 
-          <section className="rounded-xl border border-border bg-panel p-5">
+          <section className="panel p-5">
             <h2 className="text-sm font-bold text-text-heading">Exact normalized theme-label overlap</h2>
             <p className="mt-1 text-xs text-muted">This is exact label overlap after case and surrounding-whitespace normalization. It is not message-volume overlap or semantic similarity.</p>
             <div className="mt-4 flex flex-wrap gap-2">
@@ -181,7 +181,7 @@ export default function ComparativeAnalysisPage() {
             />
           </div>
 
-          <section className="rounded-xl border border-border bg-panel p-5">
+          <section className="panel p-5">
             <div className="flex items-center gap-2">
               <Lightbulb size={18} className="text-primary" />
               <h2 className="text-sm font-bold text-text-heading">Deterministic findings</h2>
@@ -208,7 +208,7 @@ function RunSelector({ label, icon: Icon, value, options, onChange }) {
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="mt-2 w-full rounded-lg border border-border bg-panel px-3 py-2 text-sm text-text-heading"
+         className="mt-2 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-heading"
       >
         <option value="">Select a completed run</option>
         {options.map((run) => (
@@ -224,8 +224,8 @@ function RunSelector({ label, icon: Icon, value, options, onChange }) {
 
 function RunSummaryCard({ title, run, overview, metric, accent }) {
   const communityCount = metric === 'if' ? overview.if_community_count : overview.wif_community_count;
-  return (
-    <section className="rounded-xl border border-border bg-panel p-5">
+    return (
+      <section className="panel p-5">
       <div className="flex items-center justify-between gap-3">
         <h2 className={`text-lg font-bold ${accent}`}>{title}</h2>
         <span className="rounded-full border border-border px-2 py-1 text-[11px] text-muted">{run.status}</span>
@@ -242,7 +242,7 @@ function RunSummaryCard({ title, run, overview, metric, accent }) {
 
 function SummaryItem({ label, value, mono = false }) {
   return (
-    <div className="rounded-lg border border-border bg-panel-soft/40 p-3">
+     <div className="rounded-lg border border-border bg-surface-soft/40 p-3">
       <dt className="text-xs text-muted">{label}</dt>
       <dd className={`mt-1 break-words font-semibold text-text-heading ${mono ? 'font-mono text-xs' : ''}`}>{value ?? 'Unavailable'}</dd>
     </div>
@@ -250,12 +250,12 @@ function SummaryItem({ label, value, mono = false }) {
 }
 
 function ThemeComparison({ title, themes }) {
-  return (
-    <section className="rounded-xl border border-border bg-panel p-5">
+    return (
+      <section className="panel p-5">
       <h2 className="text-sm font-bold text-text-heading">{title}</h2>
       <div className="mt-4 space-y-3">
         {themes.map((theme) => (
-          <div key={theme.name} className="flex items-center justify-between gap-4 rounded-lg border border-border bg-panel-soft/40 px-3 py-2 text-sm">
+           <div key={theme.name} className="flex items-center justify-between gap-4 rounded-lg border border-border bg-surface-soft/40 px-3 py-2 text-sm">
             <span className="text-text-heading">{theme.name}</span>
             <span className="font-semibold text-muted">{theme.count}</span>
           </div>
@@ -274,16 +274,16 @@ function ConfigurationPanel({ title, overview, detail, artifactCount }) {
     ['pipeline.prefect_flow_run_id', detail?.pipeline?.prefect_flow_run_id],
     ['artifact_count', artifactCount],
   ].filter(([, value]) => value !== null && value !== undefined && value !== '');
-  return (
-    <section className="rounded-xl border border-border bg-panel p-5">
+    return (
+      <section className="panel p-5">
       <div className="flex items-center gap-2"><Database size={17} className="text-primary" /><h2 className="text-sm font-bold text-text-heading">{title}</h2></div>
       {entries.length > 0 ? (
         <dl className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
           {entries.map(([key, value]) => (
-            <div key={key} className="rounded-lg border border-border bg-panel-soft/40 p-3">
-              <dt className="break-all text-[11px] text-muted">{key}</dt>
-              <dd className="mt-1 break-words text-sm font-semibold text-text-heading">{displayArtifactValue(value)}</dd>
-            </div>
+             <div key={key} className="rounded-lg border border-border bg-surface-soft/40 p-3">
+               <dt className="break-all text-[11px] text-muted">{key}</dt>
+               <dd className="mt-1 break-words text-sm font-semibold text-text-heading"><ArtifactValue value={value} /></dd>
+             </div>
           ))}
         </dl>
       ) : <p className="mt-4 text-sm text-muted">Configuration and model metadata are unavailable.</p>}

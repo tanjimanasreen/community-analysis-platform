@@ -27,6 +27,10 @@ export default function Topbar({
   health,
   verification,
   toggleSidebar,
+  isSidebarCollapsed,
+  selectedPlatform,
+  onPlatformChange,
+  facets,
 }) {
   const location = useLocation();
   const [title, subtitle] = routeCopy[location.pathname] || routeCopy['/'];
@@ -34,30 +38,42 @@ export default function Topbar({
   const helpTarget = `/methodology${location.search}`;
 
   return (
-    <header className="flex flex-col gap-4 py-4 px-4 lg:px-8 border-b border-border bg-bg/80 backdrop-blur-md sticky top-0 z-10">
+    <header className="page-header sticky top-0 z-30 shrink-0 border-b border-border/80 bg-bg/95 backdrop-blur-md p-4 sm:p-5 mb-5 shadow-sm">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={toggleSidebar}
-            aria-label="Open navigation"
-            className="lg:hidden p-2 text-muted hover:text-text-heading bg-panel border border-border rounded-lg"
+            aria-label={isSidebarCollapsed ? 'Open navigation' : 'Close navigation'}
+            aria-expanded={!isSidebarCollapsed}
+            className="lg:hidden p-2 text-muted hover:text-text-heading bg-surface-soft border border-border rounded-xl transition-colors"
           >
             <Menu size={20} />
           </button>
           <div>
-            <h1 className="text-xl md:text-2xl font-bold text-text-heading">{title}</h1>
-            <p className="text-xs md:text-sm text-muted mt-1 hidden sm:block">{subtitle}</p>
+            <h1 className="text-xl sm:text-2xl font-bold text-text-heading tracking-tight">{title}</h1>
+            <p className="text-xs sm:text-sm text-muted/90 mt-0.5 hidden sm:block">{subtitle}</p>
           </div>
         </div>
 
-        <div className="flex items-center flex-wrap gap-2 self-end sm:self-auto">
+        <div className="flex items-center flex-wrap gap-2.5 self-end sm:self-auto">
           {health && (
-            <ArtifactStatusBadge
-              label={`API ${health.status}`}
-              status={health.status === 'ok' || health.status === 'healthy' ? 'healthy' : 'neutral'}
-              title={`Read-only API schema ${health.schema_version}`}
-            />
+            <span
+              className="flex items-center gap-1.5 text-xs text-muted/90 bg-surface-soft/80 px-2.5 py-1 rounded-full border border-border/60"
+              title={`API ${health.status} · schema ${health.schema_version}`}
+            >
+              <span
+                className={`w-2 h-2 rounded-full shrink-0 ${
+                  health.status === 'ok' || health.status === 'healthy'
+                    ? 'bg-success animate-pulse-glow'
+                    : 'bg-warning'
+                }`}
+                aria-label={`API ${health.status}`}
+              />
+              <span className="hidden sm:inline font-medium">
+                API {health.status === 'ok' || health.status === 'healthy' ? 'live' : health.status}
+              </span>
+            </span>
           )}
           {verification && (
             <ArtifactStatusBadge
@@ -71,28 +87,46 @@ export default function Topbar({
           <Link
             to={helpTarget}
             aria-label="Open methodology help"
-            className="p-2 text-muted hover:text-text-heading hover:bg-panel-soft rounded-lg transition-colors"
+            className="p-2 text-muted hover:text-text-heading hover:bg-surface-soft rounded-xl border border-border/60 transition-colors"
           >
             <HelpCircle size={20} />
           </Link>
         </div>
       </div>
 
-      <div className="flex flex-col md:flex-row md:flex-wrap items-start md:items-center gap-2 pb-2 md:pb-0">
-        <div className="flex flex-wrap bg-panel border border-border rounded-lg p-1 shadow-sm w-full md:w-auto">
-          <label className={`flex items-center px-3 py-1.5 gap-2 ${showMetric ? 'border-r border-border' : ''}`}>
-            <Calendar size={16} className="text-muted" aria-hidden="true" />
+      <div className="flex flex-col md:flex-row md:flex-wrap items-start md:items-center justify-between gap-3 pt-3 border-t border-border/40 mt-3 w-full">
+        <div className="control-panel w-full md:w-auto bg-surface-soft/90 border border-border/80 rounded-xl p-1 flex-col sm:flex-row flex-wrap overflow-hidden">
+          {facets?.platforms?.length > 0 && (
+            <label className="flex items-center px-2.5 py-1.5 gap-2 w-full sm:w-auto min-w-0 overflow-hidden border-b sm:border-b-0 sm:border-r border-border/60 pb-2 sm:pb-1.5">
+              <span className="sr-only">Platform</span>
+              <select
+                aria-label="Platform"
+                className="bg-transparent border-none text-xs sm:text-sm text-text-heading font-semibold focus:outline-none cursor-pointer pr-2 w-full min-w-0 truncate capitalize"
+                value={selectedPlatform || ''}
+                onChange={(event) => onPlatformChange(event.target.value)}
+              >
+                {facets.platforms.map((platform) => (
+                  <option key={platform} value={platform} className="bg-surface text-text-heading capitalize">
+                    {platform}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+
+          <label className={`flex items-center px-2.5 py-1.5 gap-2 w-full sm:w-auto min-w-0 overflow-hidden ${showMetric ? 'border-b sm:border-b-0 sm:border-r border-border/60 pb-2 sm:pb-1.5' : ''}`}>
+            <Calendar size={16} className="text-primary shrink-0" aria-hidden="true" />
             <span className="sr-only">Analysis run</span>
             <select
               aria-label="Analysis run"
-              className="bg-transparent border-none text-sm text-text-heading font-medium focus:outline-none cursor-pointer pr-4 max-w-[22rem]"
+              className="bg-transparent border-none text-xs sm:text-sm text-text-heading font-semibold focus:outline-none cursor-pointer pr-2 w-full min-w-0 truncate"
               value={selectedRunId}
               onChange={(event) => onRunChange(event.target.value)}
               disabled={runs.length === 0}
             >
               {runs.length === 0 && <option value="">No completed runs available</option>}
               {runs.map((run) => (
-                <option key={run.run_id} value={run.run_id}>
+                <option key={run.run_id} value={run.run_id} className="bg-surface text-text-heading">
                   {formatRunLabel(run)}
                 </option>
               ))}
@@ -100,23 +134,23 @@ export default function Topbar({
           </label>
 
           {showMetric && (
-            <label className="flex items-center px-3 py-1.5 gap-2">
-              <Activity size={16} className="text-secondary" aria-hidden="true" />
+            <label className="flex items-center px-2.5 py-1.5 gap-2 w-full sm:w-auto min-w-0 shrink-0">
+              <Activity size={16} className="text-secondary shrink-0" aria-hidden="true" />
               <span className="sr-only">Affinity metric</span>
               <select
                 aria-label="Affinity metric"
-                className="bg-transparent border-none text-sm text-text-heading font-medium focus:outline-none cursor-pointer pr-4"
+                className="bg-transparent border-none text-xs sm:text-sm text-text-heading font-semibold focus:outline-none cursor-pointer pr-2 w-full sm:w-auto min-w-0"
                 value={metric}
                 onChange={(event) => onMetricChange(event.target.value)}
               >
-                <option value="if">Interaction Frequency (IF)</option>
-                <option value="wif">Weighted Interaction Frequency (WIF)</option>
+                <option value="if" className="bg-surface text-text-heading">Interaction Frequency (IF)</option>
+                <option value="wif" className="bg-surface text-text-heading">Weighted Interaction Frequency (WIF)</option>
               </select>
             </label>
           )}
         </div>
         {selectedRun && (
-          <span className="text-xs text-muted" title={selectedRun.run_id} aria-live="polite">
+          <span className="text-[11px] font-mono text-muted/80 truncate max-w-full block" title={selectedRun.run_id} aria-live="polite">
             Selected run: {conciseRunId(selectedRun.run_id)}
           </span>
         )}

@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, Database, Download, ExternalLink, Search, X 
 import { useLocation, useNavigate } from 'react-router-dom';
 import { normalizeApiError } from '../api/errors';
 import { getArtifactDownloadUrl } from '../api/reports';
+import ArtifactValue from '../components/ArtifactValue';
 import ArtifactUnavailableState from '../components/states/ArtifactUnavailableState';
 import ErrorState from '../components/states/ErrorState';
 import LoadingState from '../components/states/LoadingState';
@@ -14,7 +15,6 @@ import {
   modeSupportsExactCommunitySearch,
   navigationCommunityId,
   recordKey,
-  safeDisplayValue,
 } from '../features/explorer/explorerModel';
 import { useExplorerData } from '../features/explorer/useExplorerData';
 import { updateNetworkSearchParams } from '../features/networks/networkModel';
@@ -71,7 +71,7 @@ export default function DataExplorerPage() {
 
   return (
     <div data-run-id={selectedRunId || undefined} className="grid grid-cols-1 gap-4 max-w-[1800px] mx-auto w-full xl:grid-cols-[230px_minmax(0,1fr)_320px] items-start">
-      <aside className="rounded-xl border border-border bg-panel p-4 xl:sticky xl:top-24">
+      <aside className="panel p-4 xl:sticky xl:top-24">
         <div className="flex items-center gap-2">
           <Database size={17} className="text-primary" />
           <h1 className="text-sm font-bold text-text-heading">Artifact Explorer</h1>
@@ -84,7 +84,7 @@ export default function DataExplorerPage() {
               type="button"
               key={item.id}
               onClick={() => changeMode(item.id)}
-              className={`rounded-lg px-3 py-2 text-left text-xs font-semibold transition-colors ${mode === item.id ? 'bg-primary/10 text-primary' : 'text-muted hover:bg-panel-soft hover:text-text-heading'}`}
+              className={`rounded-lg px-3 py-2 text-left text-xs font-semibold transition-colors ${mode === item.id ? 'bg-primary/10 text-primary' : 'text-muted hover:bg-surface-soft hover:text-text-heading'}`}
             >
               {item.label}
             </button>
@@ -107,7 +107,7 @@ export default function DataExplorerPage() {
           </div>
           <div className="mt-2 grid grid-cols-2 gap-2">
             <button type="submit" className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white hover:bg-primary/90">Apply</button>
-            <button type="button" onClick={clearSearch} className="rounded-lg border border-border px-3 py-2 text-xs font-semibold text-muted hover:bg-panel-soft">Clear</button>
+            <button type="button" onClick={clearSearch} className="rounded-lg border border-border px-3 py-2 text-xs font-semibold text-muted hover:bg-surface-soft">Clear</button>
           </div>
           <p className="mt-2 text-[11px] text-muted">
             {modeSupportsExactCommunitySearch(mode)
@@ -117,7 +117,7 @@ export default function DataExplorerPage() {
         </form>
       </aside>
 
-      <main className="min-w-0 rounded-xl border border-border bg-panel overflow-hidden">
+      <main className="panel overflow-hidden min-w-0">
         <div className="flex flex-col gap-2 border-b border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="font-bold text-text-heading">{EXPLORER_MODES.find((item) => item.id === mode)?.label}</h2>
@@ -141,7 +141,7 @@ export default function DataExplorerPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead>
-                <tr className="border-b border-border bg-panel-soft/40 text-muted">
+                <tr className="border-b border-border bg-surface-soft/40 text-muted">
                   {columns.map((column) => <th key={column.key} className="px-4 py-3 font-semibold">{column.label}</th>)}
                 </tr>
               </thead>
@@ -152,11 +152,11 @@ export default function DataExplorerPage() {
                     <tr
                       key={key}
                       onClick={() => setSelectedRecord(record)}
-                      className={`cursor-pointer border-b border-border/40 align-top hover:bg-panel-soft/40 ${selectedRecord === record ? 'bg-primary/10' : ''}`}
+                      className={`cursor-pointer border-b border-border/40 align-top hover:bg-surface-soft/40 ${selectedRecord === record ? 'bg-primary/10' : ''}`}
                     >
                       {columns.map((column) => (
                         <td key={column.key} className="max-w-xs px-4 py-3 text-muted">
-                          <span className="line-clamp-3 whitespace-pre-wrap break-words">{safeDisplayValue(record[column.key])}</span>
+                          <ArtifactValue value={record[column.key]} compact />
                         </td>
                       ))}
                     </tr>
@@ -173,7 +173,7 @@ export default function DataExplorerPage() {
             aria-label="Previous explorer page"
             disabled={(page?.offset ?? offset) <= 0}
             onClick={() => setOffset(previousPageOffset(page?.offset ?? offset, limit))}
-            className="rounded-md border border-border p-1.5 text-muted hover:bg-panel-soft disabled:opacity-40"
+            className="rounded-md border border-border p-1.5 text-muted hover:bg-surface-soft disabled:opacity-40"
           >
             <ChevronLeft size={15} />
           </button>
@@ -181,8 +181,8 @@ export default function DataExplorerPage() {
             type="button"
             aria-label="Next explorer page"
             disabled={(page?.offset ?? offset) + (page?.limit ?? limit) >= (page?.total ?? 0)}
-            onClick={() => setOffset(nextPageOffset(page?.offset ?? offset, page?.total ?? 0, limit))}
-            className="rounded-md border border-border p-1.5 text-muted hover:bg-panel-soft disabled:opacity-40"
+             onClick={() => setOffset(nextPageOffset(page?.offset ?? offset, page?.total ?? 0, limit))}
+            className="rounded-md border border-border p-1.5 text-muted hover:bg-surface-soft disabled:opacity-40"
           >
             <ChevronRight size={15} />
           </button>
@@ -209,7 +209,7 @@ export default function DataExplorerPage() {
 function RecordDetails({ record, mode, metric, runId, onClose, onViewNetwork }) {
   if (!record) {
     return (
-      <aside className="rounded-xl border border-border bg-panel p-6 xl:sticky xl:top-24">
+      <aside className="panel p-6 xl:sticky xl:top-24">
         <h2 className="font-semibold text-text-heading">Record details</h2>
         <p className="mt-2 text-sm text-muted">Select a row to inspect its normalized values and related actions.</p>
       </aside>
@@ -222,21 +222,21 @@ function RecordDetails({ record, mode, metric, runId, onClose, onViewNetwork }) 
     ? getArtifactDownloadUrl(runId, record.key)
     : null;
 
-  return (
-    <aside className="rounded-xl border border-border bg-panel p-5 xl:sticky xl:top-24 xl:max-h-[calc(100vh-120px)] xl:overflow-y-auto">
+    return (
+      <aside className="panel p-5 xl:sticky xl:top-24 xl:max-h-[calc(100vh-120px)] xl:overflow-y-auto">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="font-semibold text-text-heading">Normalized record</h2>
           <p className="mt-1 text-xs text-muted">Values are rendered safely without evaluating artifact text.</p>
         </div>
-        <button type="button" aria-label="Close record details" onClick={onClose} className="rounded p-1 text-muted hover:bg-panel-soft"><X size={15} /></button>
+        <button type="button" aria-label="Close record details" onClick={onClose} className="rounded p-1 text-muted hover:bg-surface-soft"><X size={15} /></button>
       </div>
 
       <dl className="mt-5 space-y-3">
         {Object.entries(record).map(([key, value]) => (
           <div key={key} className="rounded-lg border border-border/70 bg-bg/30 p-3">
             <dt className="text-[11px] font-semibold text-muted">{key}</dt>
-            <dd className="mt-1 whitespace-pre-wrap break-words text-xs text-text-heading">{safeDisplayValue(value)}</dd>
+            <dd className="mt-1 text-xs text-text-heading"><ArtifactValue value={value} /></dd>
           </div>
         ))}
       </dl>
@@ -255,12 +255,12 @@ function RecordDetails({ record, mode, metric, runId, onClose, onViewNetwork }) 
         downloadUrl ? (
           <a
             href={downloadUrl}
-            className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-semibold text-text-heading hover:bg-panel-soft"
+             className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-semibold text-text-heading hover:bg-surface-soft"
           >
             <Download size={13} /> Download verified artifact
           </a>
         ) : (
-          <p className="mt-3 rounded-lg border border-border bg-panel-soft/40 p-3 text-xs text-muted">Intermediate artifacts are not downloadable through the read-only API.</p>
+           <p className="mt-3 rounded-lg border border-border bg-surface-soft/40 p-3 text-xs text-muted">Intermediate artifacts are not downloadable through the read-only API.</p>
         )
       )}
     </aside>

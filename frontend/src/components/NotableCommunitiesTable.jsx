@@ -39,7 +39,7 @@ export default function NotableCommunitiesTable({
   };
 
   return (
-    <section className="bg-panel border border-border rounded-xl overflow-hidden">
+    <section className="panel overflow-hidden">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-5 py-4 border-b border-border">
         <div>
           <h2 className="text-sm font-bold text-text-heading">Communities · {metric.toUpperCase()}</h2>
@@ -56,7 +56,7 @@ export default function NotableCommunitiesTable({
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b border-border bg-panel-soft/40 text-muted">
+              <tr className="border-b border-border bg-surface-soft/40 text-muted">
                 {columns.map(([key, label]) => (
                   <th key={key} className="px-5 py-3 font-semibold">
                     <button
@@ -76,7 +76,7 @@ export default function NotableCommunitiesTable({
                 <tr
                   key={row.community_id}
                   onClick={() => onSelectCommunity(row.community_id)}
-                  className={`cursor-pointer border-b border-border/40 transition-colors hover:bg-panel-soft/40 ${selectedCommunityId === row.community_id ? 'bg-primary/10' : ''}`}
+                  className={`cursor-pointer border-b border-border/40 transition-colors hover:bg-surface-soft/40 ${selectedCommunityId === row.community_id ? 'bg-primary/10' : ''}`}
                 >
                   <td className="px-5 py-3 font-semibold text-text-heading">{row.community_id}</td>
                   <td className="px-5 py-3 text-muted">{formatCount(row.node_count)}</td>
@@ -93,8 +93,8 @@ export default function NotableCommunitiesTable({
           type="button"
           aria-label="Previous community page"
           disabled={offset <= 0}
-          onClick={onPrevious}
-          className="rounded-md border border-border p-1.5 text-muted hover:bg-panel-soft disabled:cursor-not-allowed disabled:opacity-40"
+           onClick={onPrevious}
+           className="rounded-md border border-border p-1.5 text-muted hover:bg-surface-soft disabled:cursor-not-allowed disabled:opacity-40"
         >
           <ChevronLeft size={15} />
         </button>
@@ -102,8 +102,8 @@ export default function NotableCommunitiesTable({
           type="button"
           aria-label="Next community page"
           disabled={offset + limit >= total}
-          onClick={onNext}
-          className="rounded-md border border-border p-1.5 text-muted hover:bg-panel-soft disabled:cursor-not-allowed disabled:opacity-40"
+           onClick={onNext}
+           className="rounded-md border border-border p-1.5 text-muted hover:bg-surface-soft disabled:cursor-not-allowed disabled:opacity-40"
         >
           <ChevronRight size={15} />
         </button>

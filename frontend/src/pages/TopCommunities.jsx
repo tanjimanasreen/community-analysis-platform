@@ -94,7 +94,7 @@ export default function TopCommunitiesPage() {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
-        <section className="xl:col-span-3 bg-panel border border-border rounded-xl overflow-hidden shadow-sm">
+         <section className="xl:col-span-3 bg-surface border border-border rounded-xl overflow-hidden shadow-sm">
           {rows.length === 0 ? (
             <div className="p-10 text-center" aria-live="polite">
               <h2 className="font-semibold text-text-heading">No communities available</h2>
@@ -104,7 +104,7 @@ export default function TopCommunitiesPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs whitespace-nowrap">
                 <thead>
-                  <tr className="border-b border-border bg-panel-soft/30 text-muted">
+                   <tr className="border-b border-border bg-surface-soft/30 text-muted">
                     <th className="px-4 py-4 font-semibold">Page rank</th>
                     {columns.map(([key, label]) => (
                       <th key={key} className="px-4 py-4 font-semibold">
@@ -122,7 +122,7 @@ export default function TopCommunitiesPage() {
                     <tr
                       key={community.community_id}
                       onClick={() => selectCommunity(community.community_id)}
-                      className={`cursor-pointer border-b border-border/40 hover:bg-panel-soft/40 ${selectedCommunityId === community.community_id ? 'bg-primary/10' : ''}`}
+                       className={`cursor-pointer border-b border-border/40 hover:bg-surface-soft/40 ${selectedCommunityId === community.community_id ? 'bg-primary/10' : ''}`}
                     >
                       <td className="px-4 py-3 text-muted">{offset + index + 1}</td>
                       <td className="px-4 py-3 font-semibold text-text-heading">{community.community_id}</td>
@@ -196,7 +196,7 @@ export default function TopCommunitiesPage() {
 
 function SummaryCard({ icon: Icon, label, value, helper }) {
   return (
-    <section className="rounded-xl border border-border bg-panel p-4 shadow-sm">
+     <section className="rounded-xl border border-border bg-surface p-4 shadow-sm">
       <div className="flex items-center gap-3">
         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary"><Icon size={20} /></div>
         <div><p className="text-sm text-muted">{label}</p><p className="text-2xl font-bold text-text-heading">{value}</p></div>

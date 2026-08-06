@@ -108,6 +108,9 @@ function DashboardLayout() {
     verification,
     setSelectedRunId,
     setMetric,
+    selectedPlatform,
+    setSelectedPlatform,
+    facets,
   } = useDashboardContext();
 
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
@@ -131,10 +134,10 @@ function DashboardLayout() {
   }, []);
 
   return (
-    <div className="flex h-screen w-full bg-bg overflow-hidden text-text font-sans">
+    <div className="h-screen max-h-screen w-full bg-bg text-text font-sans flex overflow-hidden relative selection:bg-primary/30 selection:text-white">
       <a
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[70] focus:rounded-lg focus:bg-primary focus:px-4 focus:py-2 focus:text-white"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[110] focus:rounded-lg focus:bg-primary focus:px-4 focus:py-2 focus:text-white"
       >
         Skip to main content
       </a>
@@ -143,40 +146,46 @@ function DashboardLayout() {
         <button
           type="button"
           aria-label="Close navigation"
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[90] lg:hidden transition-all duration-300 animate-fade-in-up"
           onClick={() => setIsSidebarCollapsed(true)}
         />
       )}
 
-      <Sidebar
-        isCollapsed={isSidebarCollapsed}
-        toggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-        onNavigate={() => {
-          if (typeof window !== 'undefined' && window.innerWidth < 1024) {
-            setIsSidebarCollapsed(true);
-          }
-        }}
-      />
-
-      <div className="flex-1 flex flex-col transition-all duration-300 overflow-hidden relative w-full">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/20 rounded-full blur-[120px] pointer-events-none" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[30%] h-[30%] bg-secondary/20 rounded-full blur-[100px] pointer-events-none" />
-
-        <Topbar
-          selectedRunId={selectedRunId}
-          runs={runs}
-          onRunChange={setSelectedRunId}
-          metric={metric}
-          onMetricChange={setMetric}
-          health={health}
-          selectedRun={selectedRun}
-          verification={verification}
+      <div className="flex-1 flex w-full max-w-[1720px] mx-auto h-screen overflow-hidden">
+        <Sidebar
+          isCollapsed={isSidebarCollapsed}
           toggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+          onNavigate={() => {
+            if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+              setIsSidebarCollapsed(true);
+            }
+          }}
         />
 
-        <main id="main-content" tabIndex={-1} className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 z-10 w-full overflow-x-hidden">
-          <Suspense fallback={<LoadingState title="Loading dashboard route" />}><DashboardContent /></Suspense>
-        </main>
+        <div className="main-content flex-1 flex flex-col min-w-0 h-screen overflow-hidden relative w-full">
+          <div className="absolute top-[-5%] left-[-5%] w-[45%] h-[45%] bg-primary/10 rounded-full blur-[140px] pointer-events-none" />
+          <div className="absolute bottom-[-5%] right-[-5%] w-[35%] h-[35%] bg-secondary/10 rounded-full blur-[120px] pointer-events-none" />
+
+          <Topbar
+            selectedRunId={selectedRunId}
+            runs={runs}
+            onRunChange={setSelectedRunId}
+            metric={metric}
+            onMetricChange={setMetric}
+            health={health}
+            selectedRun={selectedRun}
+            verification={verification}
+            toggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+            isSidebarCollapsed={isSidebarCollapsed}
+            selectedPlatform={selectedPlatform}
+            onPlatformChange={setSelectedPlatform}
+            facets={facets}
+          />
+
+          <main id="main-content" tabIndex={-1} className="flex-1 overflow-y-auto p-3 sm:p-5 lg:p-6 z-10 w-full animate-fade-in-up">
+            <Suspense fallback={<LoadingState title="Loading dashboard route" />}><DashboardContent /></Suspense>
+          </main>
+        </div>
       </div>
     </div>
   );

@@ -13,6 +13,7 @@ import {
   Network,
   TrendingUp,
   Users,
+  X,
 } from 'lucide-react';
 
 const navItems = [
@@ -34,22 +35,36 @@ export default function Sidebar({ isCollapsed, toggleSidebar, onNavigate }) {
   return (
     <aside
       aria-label="Primary navigation"
-      className={`bg-panel border-r border-border h-screen flex flex-col fixed top-0 lg:static z-50 lg:shrink-0 transition-all duration-300 ${isCollapsed ? '-left-80 w-64 lg:left-0 lg:w-20' : 'left-0 w-64'}`}
+      className={`bg-surface border-r border-border/80 flex flex-col transition-all duration-300 shrink-0 h-screen sticky top-0 ${
+        isCollapsed
+          ? 'hidden lg:flex lg:w-20'
+          : 'fixed inset-y-0 left-0 z-[100] w-[85vw] max-w-xs sm:w-72 lg:w-64 lg:static lg:z-auto shadow-2xl lg:shadow-none bg-surface/95 backdrop-blur-xl'
+      }`}
     >
-      <div className={`p-6 flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'}`}>
-        <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-primary to-secondary flex items-center justify-center shadow-[0_0_15px_rgba(122,162,247,0.5)] shrink-0">
-          <Network size={20} className="text-white" aria-hidden="true" />
-        </div>
-        {!isCollapsed && (
-          <div className="whitespace-nowrap overflow-hidden">
-            <h1 className="text-text-heading font-bold text-lg leading-tight">Digital Community</h1>
-            <h2 className="text-primary font-semibold text-sm">Dynamics</h2>
+      <div className={`p-5 flex items-center justify-between border-b border-border/40 ${isCollapsed ? 'lg:justify-center' : ''}`}>
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-primary to-secondary flex items-center justify-center shadow-[0_0_15px_rgba(122,162,247,0.4)] shrink-0">
+            <Network size={20} className="text-white" aria-hidden="true" />
           </div>
-        )}
+          {!isCollapsed && (
+            <div className="whitespace-nowrap overflow-hidden">
+              <h1 className="text-text-heading font-bold text-base leading-tight">Digital Community</h1>
+              <h2 className="text-primary font-semibold text-xs">Dynamics</h2>
+            </div>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={toggleSidebar}
+          aria-label="Close navigation"
+          className="lg:hidden p-1.5 text-muted hover:text-text-heading rounded-lg hover:bg-surface-soft transition-colors"
+        >
+          <X size={20} />
+        </button>
       </div>
 
-      <div className="px-4 pb-4 mt-2 flex-1 overflow-y-auto">
-        {!isCollapsed && <p className="text-xs text-muted mb-4 px-2 uppercase tracking-wider font-semibold">Dashboards</p>}
+      <div className="px-3 pb-4 mt-3 flex-1 overflow-y-auto">
+        {!isCollapsed && <p className="text-[11px] text-muted/80 mb-3 px-3 uppercase tracking-wider font-bold">Dashboards</p>}
         <nav className="flex flex-col gap-1">
           {navItems.map((item) => {
             const Icon = item.icon;
@@ -61,15 +76,15 @@ export default function Sidebar({ isCollapsed, toggleSidebar, onNavigate }) {
                 onClick={onNavigate}
                 aria-label={isCollapsed ? item.name : undefined}
                 title={isCollapsed ? item.name : undefined}
-                className={({ isActive }) => `flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'} px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+                className={({ isActive }) => `flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'} px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
                   isActive
-                    ? 'bg-primary/10 text-primary shadow-[inset_2px_0_0_var(--color-primary)]'
-                    : 'text-text hover:bg-panel-soft hover:text-text-heading'
+                    ? 'bg-primary/15 text-primary shadow-[inset_3px_0_0_var(--color-primary)]'
+                    : 'text-text/90 hover:bg-surface-soft hover:text-text-heading'
                 }`}
               >
                 {({ isActive }) => (
                   <>
-                    <Icon size={20} className={isActive ? 'text-primary' : 'text-muted'} aria-hidden="true" />
+                    <Icon size={18} className={isActive ? 'text-primary' : 'text-muted/80'} aria-hidden="true" />
                     {!isCollapsed && <span className="whitespace-nowrap overflow-hidden">{item.name}</span>}
                   </>
                 )}
@@ -80,7 +95,7 @@ export default function Sidebar({ isCollapsed, toggleSidebar, onNavigate }) {
       </div>
 
       <div className="mt-auto p-4 border-t border-border/50">
-        <div className={`rounded-xl border border-border/50 bg-panel-soft p-3 ${isCollapsed ? 'text-center' : ''}`}>
+        <div className={`rounded-xl border border-border/60 bg-surface-soft/80 p-3 ${isCollapsed ? 'text-center' : ''}`}>
           <Database size={18} className="text-primary mx-auto" aria-hidden="true" />
           {!isCollapsed && (
             <div className="mt-2 text-center">
@@ -95,7 +110,7 @@ export default function Sidebar({ isCollapsed, toggleSidebar, onNavigate }) {
         type="button"
         onClick={toggleSidebar}
         aria-label={isCollapsed ? 'Expand navigation' : 'Collapse navigation'}
-        className="absolute -right-3 top-8 bg-panel border border-border rounded-full p-1 text-muted hover:text-text-heading hover:bg-panel-soft transition-colors shadow-md z-50"
+        className="hidden lg:flex absolute -right-3 top-7 bg-surface border border-border rounded-full p-1 text-muted hover:text-text-heading hover:bg-surface-soft transition-colors shadow-md z-50"
       >
         {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
       </button>

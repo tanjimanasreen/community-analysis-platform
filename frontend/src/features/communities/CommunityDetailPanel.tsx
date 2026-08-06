@@ -35,7 +35,7 @@ export default function CommunityDetailPanel({
   const location = useLocation();
   if (!communityId) {
     return (
-      <aside className="bg-panel border border-border rounded-xl p-6 h-full flex items-center justify-center text-center">
+      <aside className="panel p-6 h-full flex items-center justify-center text-center">
         <div>
           <Network className="mx-auto text-muted" size={28} />
           <h2 className="mt-3 font-semibold text-text-heading">No community selected</h2>
@@ -47,10 +47,10 @@ export default function CommunityDetailPanel({
 
   if (detailPending) {
     return (
-      <aside className="bg-panel border border-border rounded-xl p-6 h-full" aria-live="polite">
-        <div className="h-7 w-40 animate-pulse rounded bg-panel-soft" />
-        <div className="mt-6 space-y-3">
-          {[1, 2, 3, 4].map((item) => <div key={item} className="h-12 animate-pulse rounded bg-panel-soft" />)}
+      <aside className="panel p-6 h-full" aria-live="polite">
+         <div className="h-7 w-40 animate-pulse rounded bg-surface-soft" />
+         <div className="mt-6 space-y-3">
+           {[1, 2, 3, 4].map((item) => <div key={item} className="h-12 animate-pulse rounded bg-surface-soft" />)}
         </div>
       </aside>
     );
@@ -59,7 +59,7 @@ export default function CommunityDetailPanel({
   if (detailError || !detail) {
     const error = normalizeApiError(detailError);
     return (
-      <aside className="bg-panel border border-danger/30 rounded-xl p-6 h-full" role="alert">
+      <aside className="panel p-6 h-full border border-danger/30" role="alert">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="font-semibold text-text-heading">Community unavailable</h2>
@@ -77,7 +77,7 @@ export default function CommunityDetailPanel({
   const graph = detail.graph;
 
   return (
-    <aside className="bg-panel border border-border rounded-xl p-6 h-full overflow-y-auto">
+    <aside className="panel p-6 h-full overflow-y-auto">
       <div className="flex items-start justify-between gap-4 border-b border-border pb-5">
         <div>
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted">
@@ -120,7 +120,7 @@ export default function CommunityDetailPanel({
         ) : keywords.length > 0 ? (
           <div className="mt-3 flex flex-wrap gap-2">
             {keywords.slice(0, 20).map((keyword) => (
-              <span key={keyword} className="rounded border border-border bg-panel-soft px-2 py-1 text-xs text-muted">{keyword}</span>
+               <span key={keyword} className="rounded border border-border bg-surface-soft px-2 py-1 text-xs text-muted">{keyword}</span>
             ))}
           </div>
         ) : (
@@ -130,7 +130,7 @@ export default function CommunityDetailPanel({
 
       <Link
         to={thematicHref(location.search, metric, communityId)}
-        className="mt-6 flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-panel-soft/40 px-4 py-2.5 text-sm font-semibold text-primary hover:bg-panel-soft"
+         className="mt-6 flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-surface-soft/40 px-4 py-2.5 text-sm font-semibold text-primary hover:bg-surface-soft"
       >
         <BookOpen size={15} /> Open thematic analysis
       </Link>
@@ -158,7 +158,7 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 function OptionalUnavailable({ label }: { label: string }) {
-  return <p className="mt-3 rounded-lg border border-border bg-panel-soft/40 p-3 text-xs text-muted">{label}</p>;
+   return <p className="mt-3 rounded-lg border border-border bg-surface-soft/40 p-3 text-xs text-muted">{label}</p>;
 }
 
 function CloseButton({ onClick }: { onClick: () => void }) {
@@ -167,7 +167,7 @@ function CloseButton({ onClick }: { onClick: () => void }) {
       type="button"
       aria-label="Clear selected community"
       onClick={onClick}
-      className="rounded-lg p-1.5 text-muted hover:bg-panel-soft hover:text-text-heading"
+       className="rounded-lg p-1.5 text-muted hover:bg-surface-soft hover:text-text-heading"
     >
       <X size={16} />
     </button>

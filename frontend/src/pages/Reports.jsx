@@ -14,7 +14,7 @@ import {
   isDownloadableArtifact,
 } from '../features/reports/artifactLibrary';
 import { useArtifactLibrary } from '../features/reports/useArtifactLibrary';
-import { formatCount } from '../features/overview/overviewUtils';
+import { formatBytes, formatCount } from '../features/overview/overviewUtils';
 
 export default function ReportsPage() {
   const data = useArtifactLibrary();
@@ -37,7 +37,7 @@ export default function ReportsPage() {
 
   return (
     <div className="flex flex-col gap-6 max-w-[1600px] mx-auto w-full">
-      <header className="rounded-xl border border-border bg-panel p-5">
+      <header className="panel p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h1 className="text-xl font-bold text-text-heading">Read-only artifact library</h1>
@@ -71,7 +71,7 @@ export default function ReportsPage() {
         <SummaryCard label="Intermediate artifacts" value={counts.intermediate ?? 0} icon={ShieldCheck} detail="Listed but not downloadable" />
       </div>
 
-      <section className="rounded-xl border border-border bg-panel">
+      <section className="panel">
         <div className="border-b border-border p-5">
           <h2 className="text-lg font-bold text-text-heading">Artifacts for {data.selectedRunId}</h2>
           <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -101,7 +101,7 @@ export default function ReportsPage() {
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
-              <thead className="border-b border-border bg-panel-soft/40 text-xs text-muted">
+               <thead className="border-b border-border bg-surface-soft/40 text-xs text-muted">
                 <tr>
                   <th className="px-5 py-4">Artifact</th>
                   <th className="px-4 py-4">Category</th>
@@ -115,7 +115,7 @@ export default function ReportsPage() {
               </thead>
               <tbody>
                 {filtered.map((artifact) => (
-                  <tr key={artifact.key} className="border-b border-border/40 align-top hover:bg-panel-soft/30">
+                   <tr key={artifact.key} className="border-b border-border/40 align-top hover:bg-surface-soft/30">
                     <td className="px-5 py-4">
                       <p className="font-semibold text-text-heading">{artifact.key}</p>
                       <p className="mt-1 max-w-md break-all font-mono text-[11px] text-muted">{artifact.path}</p>
@@ -125,12 +125,12 @@ export default function ReportsPage() {
                     <td className="px-4 py-4 text-muted">{artifact.schema_version}</td>
                     <td className="px-4 py-4 text-muted">{artifact.stage ?? 'Unavailable'}</td>
                     <td className="px-4 py-4 text-text-heading">{artifact.rows === null ? 'Unavailable' : formatCount(artifact.rows)}</td>
-                    <td className="px-4 py-4 text-text-heading">{artifact.byte_size === null ? 'Unavailable' : formatCount(artifact.byte_size)}</td>
+                    <td className="px-4 py-4 text-text-heading">{formatBytes(artifact.byte_size)}</td>
                     <td className="px-5 py-4 text-right">
                       {isDownloadableArtifact(artifact) ? (
                         <a
                           href={getArtifactDownloadUrl(data.selectedRunId, artifact.key)}
-                          className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-semibold text-primary hover:bg-panel-soft"
+                           className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-semibold text-primary hover:bg-surface-soft"
                         >
                           <Download size={14} /> Download
                         </a>
@@ -146,7 +146,7 @@ export default function ReportsPage() {
         )}
       </section>
 
-      <section className="rounded-xl border border-border bg-panel p-5">
+      <section className="panel p-5">
         <h2 className="text-sm font-bold text-text-heading">Verification and download behavior</h2>
         <p className="mt-2 text-sm text-muted">
           The application-level verification gate prevents analytical routes from opening when a manifest or artifact fails validation. File links use the backend's native inline-report and manifest-key download endpoints so media type and content disposition remain server-controlled.
@@ -158,7 +158,7 @@ export default function ReportsPage() {
 
 function SummaryCard({ label, value, icon: Icon, detail }) {
   return (
-    <article className="rounded-xl border border-border bg-panel p-5">
+    <article className="panel p-5">
       <div className="flex items-center gap-3">
         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary"><Icon size={20} /></div>
         <div>
