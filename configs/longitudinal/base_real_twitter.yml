@@ -30,7 +30,6 @@ lda:
   passes: 80
 
 theme:
-  enable_gpt: false
   fallback: true
   fallback_chain:
     - "llm7:fast"
@@ -39,3 +38,7 @@ theme:
   output_dir: ${LONGITUDINAL_THEME_OUTPUT}
   render_visuals: false
   similarity_model: paraphrase-MiniLM-L6-v2
+
+orchestration:
+  cache_expiration_days: 30
+  max_workers: 4

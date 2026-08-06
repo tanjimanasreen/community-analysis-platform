@@ -14,23 +14,42 @@ providers:
   gemini:
     rate_limit_rpm: 15
     models:
-      - "gemini-3.5-flash"
       - "gemini-3.1-flash-lite"
   nvidia:
     rate_limit_rpm: 40
     models:
-      - "meta/llama3-70b-instruct"
+      - "z-ai/glm-5.2"
   llm7:
     # Rate limits: anonymous=10rpm, free_token=40rpm, pro=1500rpm
     rate_limit_rpm: 10
     models:
-      - "fast"
-      - "turbo"
-      - "pro"
-  openai:
-    rate_limit_rpm: 60
+      - "minimax-m2.7"
+      - "gpt-oss:20b"
+  mistral:
+    rate_limit_rpm: 40
     models:
-      - "gpt-4o"
+      - "mistral-large-latest"
+      - "mistral-small-latest"
+      - "ministral-8b-latest"
+  openai:
+    rate_limit_rpm: 240
+    timeout_seconds: 300
+    max_retries: 2
+    # GPT-5 output budgets include hidden reasoning tokens. Start above the
+    # documented reasoning buffer and retry once at the bounded cap.
+    max_output_tokens: 32768
+    max_output_tokens_cap: 65536
+    reasoning_effort: low
+    # Content-filter decisions can be nondeterministic for research corpora.
+    # Retry a filtered prompt/completion once without changing the payload or
+    # token budget, then fail explicitly if the guardrail blocks it again.
+    content_filter_retries: 1
+    content_filter_retry_delay_seconds: 8
+    # Log only sanitized category/severity annotations from Azure's
+    # response.model_extra["content_filters"] extension.
+    log_content_filter_annotations: true
+    models:
+      - "gpt-5-nano"
   mock:
     rate_limit_rpm: 1000
     models:
@@ -42,20 +61,20 @@ providers:
 # fallback_chain: ordered list of fallback providers (real APIs only).
 #   When champion is determined, update primary and keep this chain intact.
 theme_provider:
-  primary: "mock"
-  fallback: true
+  primary: "openai:gpt-5-nano"
+  fallback: false
   fallback_chain:
-    - "llm7:fast"
-    - "nvidia:meta/llama3-70b-instruct"
-
-# Benchmark pipeline — each model evaluated independently.
+    - "llm7:gpt-oss:20b"
+  cache_backend: "sqlite"
+  cache_path: ".cache/theme_cache.sqlite3"
+  cache_failure_policy: "bypass"
 # evaluator_judge: the LLM used by DeepEval GEval scoring.
 #   Use "mock" for offline runs; set to a real provider for live evaluation.
 #   The judge respects the rate_limit_rpm of its provider above.
 benchmark:
   test_models:
-    - "gemini:gemini-3.5-flash"
     - "gemini:gemini-3.1-flash-lite"
-    - "nvidia:meta/llama3-70b-instruct"
-    - "llm7:fast"
+    - "nvidia:z-ai/glm-5.2"
+    - "llm7:minimax-m2.7"
+    - "llm7:gpt-oss:20b"
   evaluator_judge: "mock"

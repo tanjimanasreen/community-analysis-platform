@@ -7,7 +7,7 @@ include:
 data_type: twitter
 content_type: retweet_quote
 year: "2017"
-output_base_path: outputs/twitter/retweet-2017/
+output_base_path: local_output/twitter/retweet_quote/
 
 creator_relation: TWEETED
 spreader_relation: RETWEETED_BY
@@ -17,17 +17,28 @@ text_node_column: target
 date_column: created_at
 
 theme:
-  fallback: true
-  fallback_chain:
-    - "llm7:fast"
-    - "nvidia:meta/llama3-70b-instruct"
+  render_visuals: false
+  similarity_model: paraphrase-MiniLM-L6-v2
+  max_workers: 4
+
+theme_provider:
+  fallback: false
+  cache_backend: sqlite
+  cache_path: .cache/theme_cache.sqlite3
+  cache_failure_policy: bypass
+
+#theme:
+#  fallback: false
+#  fallback_chain:
+#    - "llm7:fast"
+#    - "nvidia:meta/llama-3.3-70b-instruct"
 
 # Input paths are relative to the project root via DATA_ROOT env var.
 # Set DATA_ROOT in your .env file (see .env.example).
 datasets:
   - id: "january"
     month: "01"
-    input_path: ${DATA_ROOT}/twitter/retweet_quote/2017/retweet_january_2017_sampled.csv
+    input_path: ${DATA_ROOT}/twitter/retweet_quote/2017/retweet_january_2017.csv
   - id: "february"
     month: "02"
     input_path: ${DATA_ROOT}/twitter/retweet_quote/2017/retweet_february_2017.csv
@@ -37,3 +48,7 @@ datasets:
   - id: "april"
     month: "04"
     input_path: ${DATA_ROOT}/twitter/retweet_quote/2017/retweet_april_2017.csv
+
+orchestration:
+  cache_expiration_days: 30
+  max_workers: 4

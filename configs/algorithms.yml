@@ -12,15 +12,25 @@ graph_thresholds:
   min_shared_post: 5
   min_members: 3
 
+louvain:
+  resolution: 1.0
+  seed: 123
+
 lda:
   num_topics: 15
   top_n_keywords: 50
+  random_state: 100
+  iterations: 100
+  chunksize: 20
+  passes: 80
+  alpha: auto
+  eta: auto
 
 theme:
-  # enable_gpt: false disables LLM theme generation (topic-only mode).
-  # Model selection is controlled exclusively via providers.yml theme_provider.
-  enable_gpt: false
   sleep_seconds: 2
+  # Reply networks intentionally use a zero-overlap threshold in the thesis
+  # workflow; other content types retain the 0.5 persistence threshold.
+  reply_transition_threshold: 0.0
   transition_threshold: 0.5
   render_visuals: false
   similarity_model: paraphrase-MiniLM-L6-v2

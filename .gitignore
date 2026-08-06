@@ -6,6 +6,7 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.cache/
 .coverage
 htmlcov/
 
@@ -27,7 +28,7 @@ dist/
 results/
 outputs/
 /reports/
-artifacts/
+/artifacts/
 data/generated/
 .prefect_results/
 
@@ -75,3 +76,16 @@ coverage/
 *.zip
 *.tar.gz
 *.tgz
+
+frontend/*.tsbuildinfo
+frontend/node_modules/.tmp/
+
+# New ignore rules
+local_output/
+data/raw/
+data/themes/
+node_modules/
+.prefect/
+.deepeval/
+*.log
+*.sha256

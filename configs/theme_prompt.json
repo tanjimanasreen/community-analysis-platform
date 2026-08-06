@@ -1,0 +1,4 @@
+{
+  "system_prompt": "You are an expert who can find meaningful themes from a list of keywords, that may contain specific events, people, locations, or topics.",
+  "user_prompt_template": "Based on the list of the keywords given below, provide the exact themes and their corresponding keywords. You MUST return a JSON object containing a single key 'themes', which is a list of objects. Each object must have a 'name' string field and a 'keywords' array of strings. There could be one theme or multiple themes for each set of keywords. Here is the list of keywords: {keywords}"
+}
