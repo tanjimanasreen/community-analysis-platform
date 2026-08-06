@@ -1,2 +1,0 @@
-month,absolute,weighted
-march,"{'min_msg_count': 1, 'day_of_min_msg': 31, 'max_msg_count': 32, 'day_of_max_msg': 7, 'std_msg_count': 10.074491779508513, 'avg_msg_count': 10.153846153846153}","{'min_msg_count': 1, 'day_of_min_msg': 31, 'max_msg_count': 32, 'day_of_max_msg': 7, 'std_msg_count': 10.074491779508513, 'avg_msg_count': 10.153846153846153}"
