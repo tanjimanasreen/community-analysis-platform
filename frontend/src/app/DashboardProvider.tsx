@@ -25,6 +25,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
   });
 
   const runs = runsQuery.data?.runs ?? [];
+  const facets = deriveRunFacets(runs);
   const requestedRunId = searchParams.get(RUN_PARAM);
   const selectedRunId = selectDefaultRunId(runs, requestedRunId);
   const metric = resolveMetric(searchParams.get(METRIC_PARAM));
@@ -64,15 +65,18 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     enabled: Boolean(selectedRunId),
   });
 
+  const selectedRun = runs.find((run) => run.run_id === selectedRunId) ?? null;
+  const selectedPlatform = selectedRun?.platform ?? facets.platforms[0] ?? '';
+
   const value: DashboardContextValue = {
     health: healthQuery.data ?? null,
     runs,
     selectedRunId,
-    selectedRun: runs.find((run) => run.run_id === selectedRunId) ?? null,
+    selectedRun,
     selectedRunDetail: runDetailQuery.data ?? null,
     verification: verificationQuery.data ?? null,
     metric,
-    facets: deriveRunFacets(runs),
+    facets,
     isLoading: healthQuery.isPending || runsQuery.isPending,
     isRunMetadataLoading:
       Boolean(selectedRunId) &&
@@ -83,6 +87,14 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     verificationError: verificationQuery.error,
     setSelectedRunId: (runId) =>
       setSearchParams(updateDashboardSearchParams(searchParams, { runId })),
+    selectedPlatform,
+    setSelectedPlatform: (platform) => {
+      const nextRun = runs.find((run) => run.status === 'completed' && run.platform === platform)
+        ?? runs.find((run) => run.platform === platform);
+      if (nextRun) {
+        setSearchParams(updateDashboardSearchParams(searchParams, { runId: nextRun.run_id }));
+      }
+    },
     setMetric: (nextMetric) =>
       setSearchParams(
         updateDashboardSearchParams(searchParams, { metric: nextMetric }),

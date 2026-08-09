@@ -3,7 +3,7 @@ const { chromium } = require('playwright');
 (async () => {
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage();
-  
+
   // Set viewport to a good desktop size
   await page.setViewportSize({ width: 1400, height: 900 });
 

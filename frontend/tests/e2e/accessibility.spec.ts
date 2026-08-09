@@ -6,7 +6,7 @@ const representativeRoutes = [
   '/',
   '/network?community=1',
   '/thematic',
-  '/transitions',
+  '/evolution',
   `/comparative?twitterRun=twitter-2017-04&telegramRun=${TELEGRAM_RUN}`,
   '/reports',
   '/methodology',
@@ -31,4 +31,15 @@ test('keyboard controls remain usable at 200% zoom and 320 CSS pixels', async ({
   await expect(page.getByLabel('Analysis run')).toBeFocused();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(2);
+});
+
+
+test('methodology network tabs support keyboard selection', async ({ page }) => {
+  await openVerifiedRoute(page, '/methodology');
+  const telegramTab = page.getByRole('tab', { name: 'Telegram' });
+  await telegramTab.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('tab', { name: 'Twitter · Retweet/Quote' })).toHaveAttribute('aria-selected', 'true');
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('tab', { name: 'Twitter · Reply' })).toHaveAttribute('aria-selected', 'true');
 });

@@ -138,10 +138,10 @@ export function transformNetworkResponse(
     links: network.edges.map((edge, index) => {
       const weight = Math.max(0, Number(edge.weight) || 0);
       const normalizedWeight = weight / maxWeight;
-      
+
       // Note: Backend might not return forwardWeight / reverseWeight directly in NetworkEdge,
       // but if the UI is expecting it (NetworkGraph.jsx), we should map it if available.
-      // The API doesn't seem to return forwardWeight/reverseWeight on edge in the NetworkEdge type, 
+      // The API doesn't seem to return forwardWeight/reverseWeight on edge in the NetworkEdge type,
       // but we map the properties anyway to be safe, or default them.
       return {
         id: `${String(edge.source)}-${String(edge.target)}-${index}`,

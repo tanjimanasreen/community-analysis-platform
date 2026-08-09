@@ -8,7 +8,6 @@ const routes = [
   ['thematic', '/thematic'],
   ['evolution', '/evolution'],
   ['comparison', `/comparative?twitterRun=twitter-2017-04&telegramRun=${TELEGRAM_RUN}`],
-  ['transitions', '/transitions'],
   ['top-communities', '/top-communities'],
   ['data-explorer', '/data'],
   ['reports', '/reports'],

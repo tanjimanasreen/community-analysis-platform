@@ -1,5 +1,5 @@
 import React, { lazy, Suspense, useEffect, useState } from 'react';
-import { Routes, Route, Outlet, BrowserRouter } from 'react-router-dom';
+import { Routes, Route, Outlet, BrowserRouter, Navigate, useLocation } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import Topbar from './components/Topbar';
 import LoadingState from './components/states/LoadingState';
@@ -13,13 +13,19 @@ import { useDashboardContext } from './hooks/useDashboardContext';
 const Overview = lazy(() => import('./pages/Overview'));
 const CommunityNetworkPage = lazy(() => import('./pages/CommunityNetwork'));
 const ThematicAnalysisPage = lazy(() => import('./pages/ThematicAnalysis'));
+const CommunityEvolutionPage = lazy(() => import('./pages/CommunityEvolution'));
 const EvolutionOverTimePage = lazy(() => import('./pages/EvolutionOverTime'));
 const ComparativeAnalysisPage = lazy(() => import('./pages/ComparativeAnalysis'));
-const CommunityTransitionsPage = lazy(() => import('./pages/CommunityTransitions'));
 const TopCommunitiesPage = lazy(() => import('./pages/TopCommunities'));
 const DataExplorerPage = lazy(() => import('./pages/DataExplorer'));
 const ReportsPage = lazy(() => import('./pages/Reports'));
 const MethodologyPage = lazy(() => import('./pages/Methodology'));
+
+
+function LegacyTransitionsRedirect() {
+  const location = useLocation();
+  return <Navigate replace to={`/evolution${location.search}`} />;
+}
 
 function DashboardContent() {
   const {
@@ -200,9 +206,10 @@ export default function App() {
             <Route index element={<Overview />} />
             <Route path="network" element={<CommunityNetworkPage />} />
             <Route path="thematic" element={<ThematicAnalysisPage />} />
-            <Route path="evolution" element={<EvolutionOverTimePage />} />
+            <Route path="evolution" element={<CommunityEvolutionPage />} />
+            <Route path="run-history" element={<EvolutionOverTimePage />} />
             <Route path="comparative" element={<ComparativeAnalysisPage />} />
-            <Route path="transitions" element={<CommunityTransitionsPage />} />
+            <Route path="transitions" element={<LegacyTransitionsRedirect />} />
             <Route path="top-communities" element={<TopCommunitiesPage />} />
             <Route path="data" element={<DataExplorerPage />} />
             <Route path="reports" element={<ReportsPage />} />

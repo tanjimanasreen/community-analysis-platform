@@ -1,5 +1,6 @@
 import React from 'react';
 import { useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { Database, Download, FileText, Search, ShieldCheck } from 'lucide-react';
 import { getArtifactDownloadUrl, getReportUrl } from '../api/reports';
 import ArtifactStatusBadge from '../components/ArtifactStatusBadge';
@@ -18,6 +19,7 @@ import { formatBytes, formatCount } from '../features/overview/overviewUtils';
 
 export default function ReportsPage() {
   const data = useArtifactLibrary();
+  const location = useLocation();
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('');
   const [stage, setStage] = useState('');
@@ -60,6 +62,12 @@ export default function ReportsPage() {
                 <FileText size={16} /> Open report
               </a>
             )}
+            <Link
+              to={`/run-history${location.search}`}
+              className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-semibold text-text-heading hover:bg-surface-soft"
+            >
+              Run history
+            </Link>
           </div>
         </div>
       </header>

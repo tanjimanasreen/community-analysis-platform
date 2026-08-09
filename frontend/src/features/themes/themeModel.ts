@@ -126,13 +126,13 @@ export function selectedMonthThemeSummary(
     };
   }
 
-  const topicBuckets = new Map<string, {
+  const themeBuckets = new Map<string, {
     pairs: Set<string>;
-    themeStrings: string[];
     keywords: Map<string, { display: string; index: number; pairs: Set<string> }>;
   }>();
-
+  const themedPairs = new Set<string>();
   let excludedRecordsWithoutCommunityPair = 0;
+  let keywordIndex = 0;
 
   for (const record of response.records) {
     const model = adaptThemeRecord(record, response.provider_metadata);
@@ -144,76 +144,46 @@ export function selectedMonthThemeSummary(
 
     const entries = themeEvidenceEntries(model);
     if (entries.length === 0) continue;
+    themedPairs.add(pairKey);
 
     for (const entry of entries) {
-      const normalizedName = normalizeDisplayText(entry.name);
-      if (!normalizedName) continue;
-
-      const topicKey = getTopicKey(model, normalizedName);
-      
-      const bucket = topicBuckets.get(topicKey) ?? {
+      const exactName = normalizeDisplayText(entry.name);
+      if (!exactName) continue;
+      const bucket = themeBuckets.get(exactName) ?? {
         pairs: new Set<string>(),
-        themeStrings: [] as string[],
         keywords: new Map<string, { display: string; index: number; pairs: Set<string> }>(),
       };
-      topicBuckets.set(topicKey, bucket);
-
+      themeBuckets.set(exactName, bucket);
       bucket.pairs.add(pairKey);
-      bucket.themeStrings.push(normalizedName);
 
-      entry.keywords.forEach((keyword, index) => {
+      for (const keyword of entry.keywords) {
         const displayKeyword = normalizeDisplayText(keyword);
-        if (!displayKeyword) return;
-        const keywordKey = displayKeyword.toLocaleLowerCase();
-        
-        const keywordEvidence = bucket.keywords.get(keywordKey) ?? {
+        if (!displayKeyword) continue;
+        const key = displayKeyword.toLocaleLowerCase();
+        const evidence = bucket.keywords.get(key) ?? {
           display: displayKeyword,
-          index: index,
+          index: keywordIndex++,
           pairs: new Set<string>(),
         };
-        keywordEvidence.pairs.add(pairKey);
-        keywordEvidence.index = Math.min(keywordEvidence.index, index);
-        bucket.keywords.set(keywordKey, keywordEvidence);
-      });
+        evidence.pairs.add(pairKey);
+        bucket.keywords.set(key, evidence);
+      }
     }
   }
 
-  const themedPairs = new Set<string>();
-
-  const themes = [...topicBuckets.values()].map((bucket) => {
-    bucket.pairs.forEach((p) => themedPairs.add(p));
-
-    const themeCounts = new Map<string, number>();
-    for (const name of bucket.themeStrings) {
-      themeCounts.set(name, (themeCounts.get(name) ?? 0) + 1);
-    }
-    
-    const representativeName = [...themeCounts.entries()].sort((a, b) => {
-      if (b[1] !== a[1]) return b[1] - a[1];
-      if (a[0].length !== b[0].length) return a[0].length - b[0].length;
-      return a[0].localeCompare(b[0]);
-    })[0][0];
-
-    const keywords = [...bucket.keywords.values()]
-      .sort((left, right) => right.pairs.size - left.pairs.size || left.index - right.index || left.display.localeCompare(right.display))
-      .slice(0, 3)
-      .map((entry) => entry.display);
-
-    return {
-      name: representativeName,
-      communityCount: bucket.pairs.size,
-      percentage: 0,
-      keywords,
-      color: stableThemeColor(representativeName),
-    };
-  });
-
   const denominator = themedPairs.size;
-  themes.forEach((t) => {
-    t.percentage = denominator > 0 ? (t.communityCount * 100) / denominator : 0;
-  });
-
-  themes.sort((left, right) => right.communityCount - left.communityCount || left.name.localeCompare(right.name));
+  const themes = [...themeBuckets.entries()]
+    .map(([name, bucket]) => ({
+      name,
+      communityCount: bucket.pairs.size,
+      percentage: denominator > 0 ? (bucket.pairs.size * 100) / denominator : 0,
+      keywords: [...bucket.keywords.values()]
+        .sort((left, right) => right.pairs.size - left.pairs.size || left.index - right.index || left.display.localeCompare(right.display))
+        .slice(0, 3)
+        .map((entry) => entry.display),
+      color: stableThemeColor(name),
+    }))
+    .sort((left, right) => right.communityCount - left.communityCount || left.name.localeCompare(right.name));
 
   return {
     incomplete: false,
@@ -223,15 +193,6 @@ export function selectedMonthThemeSummary(
     returnedRecords: response.records.length,
     totalRecords: response.total,
   };
-}
-
-function getTopicKey(model: ThemeViewModel, fallbackTheme: string): string {
-  const ifTopic = String(model.rawRecord.absolute_unigram_topic ?? '').trim();
-  const wifTopic = String(model.rawRecord.weighted_unigram_topic ?? '').trim();
-  if (ifTopic || wifTopic) {
-    return `topic:if=${ifTopic}|wif=${wifTopic}`;
-  }
-  return `theme:${fallbackTheme}`;
 }
 
 function matchedCommunityPairKey(ifCommunityId: string | null, wifCommunityId: string | null): string | null {

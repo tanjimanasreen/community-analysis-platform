@@ -8,9 +8,9 @@ const routeCopy = {
   '/': ['Overview Dashboard', 'Monitor validated run metrics and community structure.'],
   '/network': ['Community Network', 'Explore the structure of online communities and how they are connected.'],
   '/thematic': ['Thematic Analysis', 'Inspect LDA topics and downstream theme labels for the selected run.'],
-  '/evolution': ['Evolution Over Time', 'Track compatible completed runs and longitudinal artifacts.'],
+  '/evolution': ['Community Evolution', 'Follow persistent community paths through structure, membership, and themes.'],
+  '/run-history': ['Run History', 'Compare compatible completed runs and longitudinal artifacts.'],
   '/comparative': ['Comparative Analysis', 'Compare compatible platform runs using shared analytical definitions.'],
-  '/transitions': ['Community Transitions', 'Inspect member overlap and community paths across time.'],
   '/top-communities': ['Top Communities', 'Rank communities using canonical structural fields.'],
   '/data': ['Data Explorer', 'Inspect run-scoped analytical records and artifacts.'],
   '/reports': ['Reports', 'Browse read-only generated reports and artifacts.'],
@@ -34,7 +34,7 @@ export default function Topbar({
 }) {
   const location = useLocation();
   const [title, subtitle] = routeCopy[location.pathname] || routeCopy['/'];
-  const showMetric = !['/thematic', '/transitions', '/reports', '/methodology'].includes(location.pathname);
+  const showMetric = !['/thematic', '/evolution', '/transitions', '/reports', '/methodology'].includes(location.pathname);
   const helpTarget = `/methodology${location.search}`;
 
   return (

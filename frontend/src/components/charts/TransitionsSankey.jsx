@@ -72,7 +72,7 @@ export default function TransitionsSankey({
       </div>
       <div className="mt-4 flex flex-wrap justify-between gap-2 text-xs text-muted">
         <span>{formatCount(model.displayedLinks)} of {formatCount(model.totalLinks)} links displayed</span>
-        {compact && <Link className="text-primary hover:underline" to={`/transitions${search}`}>Open transitions</Link>}
+        {compact && <Link className="text-primary hover:underline" to={`/evolution${search}`}>Open Community Evolution</Link>}
       </div>
     </section>
   );

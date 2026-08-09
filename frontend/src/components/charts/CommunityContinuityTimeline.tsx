@@ -92,7 +92,7 @@ export default function CommunityContinuityTimeline({
             The API returned {formatCount(records.length)} of {formatCount(transitions?.total ?? 0)} transition records.
             Persistent paths are not ranked from a partial graph.
           </p>
-          <Link className="text-primary hover:underline" to={`/transitions${search}`}>Open Community Transitions</Link>
+          <Link className="text-primary hover:underline" to={`/evolution${search}`}>Open Community Evolution</Link>
         </div>
       </section>
     );
@@ -224,7 +224,7 @@ export default function CommunityContinuityTimeline({
 
       <div className="community-continuity__footer">
         <span>{formatCount(model.displayedPaths)} of {formatCount(model.totalPaths)} persistent paths displayed</span>
-        <Link className="text-primary hover:underline" to={`/transitions${search}`}>Open transitions</Link>
+        <Link className="text-primary hover:underline" to={`/evolution${search}`}>Open Community Evolution</Link>
       </div>
 
       <ul className="sr-only">

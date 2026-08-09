@@ -1,13 +1,32 @@
 import { expect, test } from '@playwright/test';
 import { PRIMARY_RUN, TELEGRAM_RUN, openVerifiedRoute } from './helpers';
 
-test('transition, persistence, and membership records render independently', async ({ page }) => {
-  await openVerifiedRoute(page, '/transitions');
-  await expect(page.getByRole('heading', { name: 'Transition records' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Persistent community sets' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Membership changes' })).toBeVisible();
-  await expect(page.getByText('03 / 1')).toBeVisible();
-  await expect(page.getByText('03:1 → 04:1')).toBeVisible();
+test('persistent-path structure, mobility, and themes render on one Community Evolution page', async ({ page }) => {
+  await openVerifiedRoute(page, '/evolution');
+  await expect(page.getByRole('heading', { name: 'Community Similarity over Time' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Member Mobility' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Thematic Similarity' })).toBeVisible();
+  await expect(page.getByText('Reappeared').first()).toBeVisible();
+  await expect(page.getByText(/paraphrase-MiniLM-L6-v2/i).first()).toBeVisible();
+});
+
+
+test('Community Evolution path selection uses the all-path master view and URL-backed detail context', async ({ page }) => {
+  await openVerifiedRoute(page, '/evolution');
+
+  const pathSelector = page.getByLabel('Inspect persistent path');
+  await expect(pathSelector).toBeVisible();
+  await expect(page.getByRole('button', { name: /Select Path 1/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Select Path 2/ })).toBeVisible();
+
+  const secondPathValue = await pathSelector.locator('option').nth(1).getAttribute('value');
+  expect(secondPathValue).toBeTruthy();
+  await pathSelector.selectOption(secondPathValue!);
+
+  await expect(page).toHaveURL(new RegExp(`path=${secondPathValue}`));
+  await expect(page.getByRole('button', { name: /Select Path 2/ })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('heading', { name: 'Member Mobility' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Thematic Similarity' })).toBeVisible();
 });
 
 test('cross-platform comparison requires and uses two explicit runs', async ({ page }) => {

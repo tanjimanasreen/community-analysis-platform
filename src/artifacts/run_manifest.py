@@ -102,6 +102,12 @@ _PUBLIC_SCHEMA_ALIASES = {
     "matched_communities_topics": "matched_lda",
     "partial_matched_communities_topics": "partial_matched_lda",
     "community_transitions": "community_transition",
+    "community_paths": "community_path",
+    "community_path_membership": "community_path_membership",
+    "community_path_theme_similarity": "community_path_theme_similarity",
+    "theme_canonical_families": "theme_canonical_family",
+    "theme_embeddings_clustering": "theme_embedding",
+    "theme_embeddings_similarity": "theme_embedding",
 }
 
 _EXPECTED_MEDIA_TYPES = {
@@ -555,10 +561,28 @@ def _canonical_location(
             ArtifactCategory.DATA,
             Path("data/topics") / _TOPIC_PATHS[base_key] / source.name,
         )
-    if str(key).strip().startswith("themes_"):
+    normalized_key = str(key).strip()
+    if normalized_key.startswith("theme_clusters_"):
+        return ArtifactCategory.DATA, Path("data/themes/clusters/monthly") / source.name
+    if normalized_key.startswith("theme_cluster_observations_"):
+        return (
+            ArtifactCategory.DATA,
+            Path("data/themes/clusters/evidence") / source.name,
+        )
+    if normalized_key == "theme_canonical_families":
+        return ArtifactCategory.DATA, Path("data/themes/clusters") / source.name
+    if normalized_key in {"theme_embeddings_clustering", "theme_embeddings_similarity"}:
+        return ArtifactCategory.DATA, Path("data/themes/embeddings") / source.name
+    if normalized_key.startswith("themes_"):
         return ArtifactCategory.DATA, Path("data/themes/monthly") / source.name
     if base_key == "community_transitions":
         return ArtifactCategory.DATA, Path("data/themes") / source.name
+    if base_key in {
+        "community_paths",
+        "community_path_membership",
+        "community_path_theme_similarity",
+    }:
+        return ArtifactCategory.DATA, Path("data/evolution") / source.name
     if base_key == "provider_run_summary":
         return ArtifactCategory.DATA, Path("data/themes") / source.name
     if base_key.startswith("visualization_"):
@@ -585,10 +609,17 @@ def _intermediate_path(root: Path, source: Path, base_key: str) -> Path:
 def _artifact_stage(key: str) -> str:
     if (
         key.startswith("themes_")
+        or key.startswith("theme_clusters_")
+        or key.startswith("theme_cluster_observations_")
+        or key == "theme_canonical_families"
+        or key in {"theme_embeddings_clustering", "theme_embeddings_similarity"}
         or key.startswith("visualization_")
         or key
         in {
             "community_transitions",
+            "community_paths",
+            "community_path_membership",
+            "community_path_theme_similarity",
             "provider_run_summary",
         }
     ):
@@ -695,8 +726,20 @@ def _required_columns(key: str) -> list[str]:
         from src.topics.topic_inputs import PARTIAL_MATCHED_COMMUNITY_COLUMNS
 
         return list(PARTIAL_MATCHED_COMMUNITY_COLUMNS)
+    normalized_key = str(key).strip()
     alias = _PUBLIC_SCHEMA_ALIASES.get(base_key)
-    if alias is None and str(key).strip().startswith("themes_"):
+    if normalized_key.startswith("theme_clusters_"):
+        alias = "theme_cluster_summary"
+    elif normalized_key.startswith("theme_cluster_observations_"):
+        alias = "theme_cluster_observation"
+    elif normalized_key == "theme_canonical_families":
+        alias = "theme_canonical_family"
+    elif normalized_key in {
+        "theme_embeddings_clustering",
+        "theme_embeddings_similarity",
+    }:
+        alias = "theme_embedding"
+    elif alias is None and normalized_key.startswith("themes_"):
         alias = "themed_output"
     if alias is None:
         return []

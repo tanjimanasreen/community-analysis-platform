@@ -30,6 +30,8 @@ from src.api.services.network_service import GraphLimits, NetworkService
 from src.api.services.overview_service import OverviewService
 from src.api.services.run_catalog import RunCatalog
 from src.api.services.topic_service import TopicService
+from src.api.services.theme_trend_service import ThemeTrendService
+from src.api.services.theme_cluster_service import ThemeClusterService
 
 API_PREFIX = "/api/v1"
 API_SCHEMA_VERSION = "1.0"
@@ -55,6 +57,8 @@ def create_app(
         catalog, parquet_cache_max_bytes=resolved.parquet_cache_max_bytes
     )
     topic_service = TopicService(reader)
+    theme_trend_service = ThemeTrendService(reader)
+    theme_cluster_service = ThemeClusterService(reader)
     evolution_service = EvolutionService(reader)
     network_service = NetworkService(
         reader,
@@ -99,6 +103,8 @@ def create_app(
     application.state.run_catalog = catalog
     application.state.artifact_reader = reader
     application.state.topic_service = topic_service
+    application.state.theme_trend_service = theme_trend_service
+    application.state.theme_cluster_service = theme_cluster_service
     application.state.evolution_service = evolution_service
     application.state.network_service = network_service
     application.state.overview_service = overview_service

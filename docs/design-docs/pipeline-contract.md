@@ -27,12 +27,13 @@ The production rebuild must cover this full sequence:
 21. Load monthly matched LDA outputs.
 22. Generate GPT themes from keywords.
 23. Compare communities across consecutive months.
-24. Build Sankey transition data.
-25. Render Sankey transition diagrams.
-26. Extract community transition paths.
-27. Render membership-change diagrams.
-28. Compute theme sentence similarity.
-29. Render theme similarity heatmaps.
+24. Persist the accepted community-transition table.
+25. Extract and persist thesis start-to-end DFS community paths.
+26. Persist per-path member mobility (existing/new/lost/reappearing).
+27. When enabled, compute and persist path-scoped theme cosine similarity plus the revision-pinned similarity embedding artifact.
+28. Optionally render Sankey transition diagrams.
+29. Optionally render membership-change diagrams.
+30. Optionally render theme-similarity heatmaps from the same evolution similarity contract.
 
 ## Pipeline Commands
 
@@ -92,6 +93,8 @@ Every run should be configurable with:
 - `theme.model`
 - `theme.sleep_seconds`
 - `theme.transition_threshold`
+- `theme.evolution_similarity_enabled`
+- `theme.similarity_model` and pinned `theme.similarity_model_revision`
 
 ## Output Preservation
 
@@ -114,9 +117,10 @@ database clients.
 
 The API exposes stable `/api/v1` routes for run discovery and filtering,
 overview summaries, bounded graph subsets, communities, centrality, topics,
-themes, transitions, persistent communities, membership changes, theme
-similarity, reports, and downloads. Large table responses are paginated and
-graph requests are limited by configured node and edge caps.
+themes, transitions, persisted Community Evolution paths, path-scoped member
+mobility and thematic similarity, legacy persistent/membership/similarity
+compatibility views, reports, and downloads. Large table responses are paginated
+and graph requests are limited by configured node and edge caps.
 
 Local commands:
 
@@ -171,3 +175,113 @@ Orchestrated pipeline execution owns the run lifecycle:
 
 Dashboard, API, and report consumers must use the run manifest rather than
 inferring arbitrary filesystem paths.
+
+## Theme Trend Publication
+
+The read-only API exposes additive deterministic views over existing theme
+artifacts:
+
+```text
+GET /api/v1/runs/{run_id}/theme-trends/monthly?period=YYYY-MM&scope=matched
+GET /api/v1/runs/{run_id}/theme-trends/timeline?period_start=YYYY-MM&period_end=YYYY-MM&scope=matched
+```
+
+These endpoints read every manifest-listed monthly theme Parquet needed for the
+request and are not constrained by ordinary table pagination. They publish
+available periods, source/exclusion counts, exact-label matched-pair coverage,
+keyword evidence, and the deterministic timeline leader.
+
+The existing topic and theme table endpoints accept `period=YYYY-MM`; the theme
+endpoint additionally accepts `exact_theme=<case-sensitive exact label>` before
+pagination. Existing month, community, pagination, artifact, and output
+contracts remain compatible. No analytical stage or public output category is
+changed.
+
+
+## Canonical Theme Cluster Publication
+
+After raw general GPT themes are written, runs with `theme.clustering_enabled`
+publish an additive two-stage semantic clustering result before community
+transition/similarity rendering:
+
+1. exact unique `general_theme_names` strings -> clustering TEI embeddings ->
+   immutable content-addressed `float32` Parquet embedding artifact;
+2. persisted/in-memory vectors expanded back to all theme observations ->
+   scikit-learn HDBSCAN monthly clusters;
+3. monthly cluster representatives -> the same embedding recorder/TEI profile ->
+   run-local HDBSCAN canonical families;
+4. canonical families -> distinct matched-pair counts and aggregated general LDA
+   keyword evidence.
+
+The raw `themes_*` artifacts are unchanged. New logical artifact keys are:
+
+- `theme_clusters_<YYYY-MM>`;
+- `theme_cluster_observations_<YYYY-MM>`;
+- `theme_canonical_families`;
+- `theme_embeddings_clustering`;
+- `theme_embeddings_similarity` when Community Evolution similarity analysis
+  is enabled.
+
+The embedding artifacts are canonically published under
+`data/themes/embeddings/` and are manifest-hashed like every other analytical
+artifact. TEI model IDs and exact Hugging Face revisions are configuration
+contracts; changing either changes embedding identity. Dashboard/API request
+handlers never compute or persist embeddings.
+
+Before a real longitudinal run, `make pipeline-preflight CONFIG=...` validates
+the locked dependency contract, required input CSVs, provider credentials,
+output writability, the scikit-learn HDBSCAN runtime, and only the TEI profiles
+actually required by that configuration. `make run-evolution-pipeline` depends
+on this preflight. Memgraph is intentionally not required for this CSV-backed
+workflow.
+
+The API exposes saved results only:
+
+```text
+GET /api/v1/runs/{run_id}/theme-clusters/monthly?period=YYYY-MM&scope=matched
+GET /api/v1/runs/{run_id}/theme-clusters/timeline?period_start=YYYY-MM&period_end=YYYY-MM&scope=matched
+GET /api/v1/runs/{run_id}/theme-clusters/evidence?period=YYYY-MM&canonical_theme_id=<id>
+```
+
+These request handlers must not import or execute HDBSCAN, TEI, LDA, provider,
+or community-detection code. Overview and Thematic Analysis share this read
+model. Community Evolution continues to use the existing persisted-community
+transition and `paraphrase-MiniLM-L6-v2` thematic-similarity path.
+
+
+## Community Evolution Publication
+
+Community Evolution is an artifact-first longitudinal read model over the accepted
+`community_transition.parquet` graph. It preserves the thesis transition threshold
+and the existing Sankey DFS path semantics rather than deriving persistence from
+connected components in the API. New logical artifacts are:
+
+- `community_paths` — one row per persistent path/month step, including member
+  count, prior-step Jaccard/retained count, and raw absolute/weighted/general
+  generated theme strings;
+- `community_path_membership` — per-path/month existing, new, lost, and
+  reappearing member sets/counts from the existing thesis mobility function;
+- `community_path_theme_similarity` — path-scoped upper-triangle cosine records
+  for general, absolute (IF), and weighted (WIF) raw generated themes, including
+  embedding model/revision provenance.
+
+`community_paths` and `community_path_membership` are always materialized after
+the transition table. `theme.evolution_similarity_enabled` controls the semantic
+similarity computation independently of `theme.render_visuals`; when the new flag
+is absent, the historical `render_visuals` value is used as the compatibility
+default. `render_visuals` now gates only PNG/HTML-style visual reports. Dedicated
+evolution configs enable similarity explicitly.
+
+The path-native API is read-only:
+
+```text
+GET /api/v1/runs/{run_id}/evolution/paths
+GET /api/v1/runs/{run_id}/evolution/paths/{path_id}/mobility
+GET /api/v1/runs/{run_id}/evolution/paths/{path_id}/theme-similarity?theme_type=general|absolute|weighted
+```
+
+Request handlers only read manifest-listed Parquet plus the secret-safe resolved
+configuration. They do not run DFS, member classification, embeddings, cosine
+similarity, HDBSCAN, NetworkX, GPT, or database clients. Community Evolution
+continues to use the independently pinned `paraphrase-MiniLM-L6-v2` similarity
+profile and does not consume Plan 039 canonical theme clusters.

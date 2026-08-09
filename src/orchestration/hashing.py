@@ -171,6 +171,16 @@ def theme_cache_key_fn(context: Any, parameters: dict[str, Any]) -> str:
         "similarity_model": theme.get(
             "similarity_model", raw.get("similarity_model_name")
         ),
+        "clustering_enabled": theme.get("clustering_enabled", False),
+        "clustering_provider": theme.get("clustering_provider", "tei"),
+        "clustering_model": theme.get(
+            "clustering_model", "sentence-transformers/all-MiniLM-L6-v2"
+        ),
+        "clustering_min_cluster_size": theme.get("clustering_min_cluster_size", 2),
+        "canonicalization_min_cluster_size": theme.get(
+            "canonicalization_min_cluster_size", 2
+        ),
+        "clustering_metric": theme.get("clustering_metric", "euclidean"),
         "transition_threshold": theme.get("transition_threshold"),
         "reply_transition_threshold": theme.get("reply_transition_threshold"),
         "max_workers": theme.get("max_workers"),
@@ -178,7 +188,7 @@ def theme_cache_key_fn(context: Any, parameters: dict[str, Any]) -> str:
 
     return build_stage_cache_key(
         stage="theme_generation",
-        semantic_version="1.1.0",
+        semantic_version="1.2.0",
         input_hashes=hashes,
         config_subset=config_subset,
     )

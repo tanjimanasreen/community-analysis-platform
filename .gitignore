@@ -89,3 +89,6 @@ node_modules/
 .deepeval/
 *.log
 *.sha256
+
+# Local service process state
+.runtime/

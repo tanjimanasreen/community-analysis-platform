@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { adaptThemeRecord, providerMetadataEntries, themeFrequencies } from '../themeModel';
+import { adaptThemeRecord, providerMetadataEntries, selectedMonthThemeSummary, themeFrequencies } from '../themeModel';
 
 const baseRecord = {
   month: '03',
@@ -43,6 +43,28 @@ describe('theme adapters', () => {
     expect(themeFrequencies({
       run_id: 'run-1', records: [baseRecord], total: 2, limit: 1, offset: 0, provider_metadata: null,
     })).toBeNull();
+  });
+
+
+  it('counts exact labels by distinct pair without merging labels that share topic evidence', () => {
+    const response = {
+      run_id: 'run-1',
+      records: [
+        baseRecord,
+        { ...baseRecord, general_theme_names: ['policy'], general_theme_gpt: { policy: ['alpha'] } },
+        { ...baseRecord, absolute_community: 3, weighted_community: 4, general_theme_names: ['Policy'] },
+      ],
+      total: 3,
+      limit: 500,
+      offset: 0,
+      provider_metadata: null,
+    };
+    const summary = selectedMonthThemeSummary(response);
+    expect(summary.totalThemedCommunityPairs).toBe(2);
+    expect(summary.themes.map((theme) => [theme.name, theme.communityCount])).toEqual([
+      ['Policy', 2],
+      ['policy', 1],
+    ]);
   });
 
   it('shows non-OpenAI provider metadata without assumptions', () => {

@@ -20,7 +20,9 @@ def get_network(
     community_id: str | None = None,
     period: str | None = Query(default=None, pattern=r"^\d{4}-(0[1-9]|1[0-2])$"),
     view: Literal["users", "communities"] = "users",
-    sampling: Literal["community_balanced", "strongest_edges", "full_graph"] | None = None,
+    sampling: (
+        Literal["community_balanced", "strongest_edges", "full_graph"] | None
+    ) = None,
     max_nodes: int = Query(default=200, ge=2),
     max_edges: int = Query(default=500, ge=1),
     min_weight: float = Query(default=0.0, ge=0.0),

@@ -25,6 +25,11 @@
     "min_weight"
   ],
   "/runs/{run_id}/downloads/{artifact_key}": [],
+  "/runs/{run_id}/evolution/paths": [],
+  "/runs/{run_id}/evolution/paths/{path_id}/mobility": [],
+  "/runs/{run_id}/evolution/paths/{path_id}/theme-similarity": [
+    "theme_type"
+  ],
   "/runs/{run_id}/membership-changes": [],
   "/runs/{run_id}/network": [
     "community_id",
@@ -36,27 +41,57 @@
   "/runs/{run_id}/overview": [],
   "/runs/{run_id}/persistent-communities": [],
   "/runs/{run_id}/report": [],
+  "/runs/{run_id}/theme-clusters/evidence": [
+    "canonical_theme_id",
+    "limit",
+    "offset",
+    "period"
+  ],
+  "/runs/{run_id}/theme-clusters/monthly": [
+    "period",
+    "scope"
+  ],
+  "/runs/{run_id}/theme-clusters/timeline": [
+    "period_end",
+    "period_start",
+    "scope"
+  ],
   "/runs/{run_id}/theme-similarity": [],
+  "/runs/{run_id}/theme-trends/monthly": [
+    "period",
+    "scope"
+  ],
+  "/runs/{run_id}/theme-trends/timeline": [
+    "period_end",
+    "period_start",
+    "scope"
+  ],
   "/runs/{run_id}/themes": [
     "community_id",
+    "exact_theme",
     "limit",
     "month",
-    "offset"
+    "offset",
+    "period"
   ],
   "/runs/{run_id}/themes/{community_id}": [
+    "exact_theme",
     "limit",
     "month",
-    "offset"
+    "offset",
+    "period"
   ],
   "/runs/{run_id}/topics": [
     "community_id",
     "limit",
     "offset",
+    "period",
     "type"
   ],
   "/runs/{run_id}/topics/{community_id}": [
     "limit",
     "offset",
+    "period",
     "type"
   ],
   "/runs/{run_id}/transitions": [

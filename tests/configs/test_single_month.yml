@@ -49,4 +49,3 @@ benchmark:
   evaluator_judge: "mock"
   offline_dataset:
     enabled: true
-

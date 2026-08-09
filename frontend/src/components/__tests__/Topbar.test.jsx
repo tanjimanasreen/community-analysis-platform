@@ -81,4 +81,20 @@ describe('Topbar', () => {
       '/methodology?run=twitter-reply-2017-03-long-id&metric=if',
     );
   });
+  it('uses the Community Evolution title and hides the unrelated global IF/WIF selector', () => {
+    const props = {
+      selectedRunId: runs[0].run_id, selectedRun: runs[0], runs, onRunChange: vi.fn(),
+      metric: 'if', onMetricChange: vi.fn(), health: { status: 'ok', read_only: true, schema_version: '1' },
+      verification: { run_id: runs[0].run_id, ok: true, status: 'valid', checked_artifacts: 9 },
+      toggleSidebar: vi.fn(),
+    };
+    render(
+      <MemoryRouter initialEntries={['/evolution?run=twitter-reply-2017-03-long-id&metric=if']}>
+        <Topbar {...props} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('heading', { name: 'Community Evolution' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Affinity metric')).not.toBeInTheDocument();
+  });
+
 });

@@ -16,7 +16,10 @@ Covers:
 import hashlib
 import json
 import os
+
+import pandas as pd
 import pytest
+
 pytestmark = pytest.mark.requires_loopback
 from pathlib import Path
 from unittest.mock import MagicMock, call, patch
@@ -85,12 +88,42 @@ def _config(tmp_path, **extra) -> ValidatedRunConfiguration:
 
 
 def _make_theme_outputs(out_dir: str, months=("march",), year="2017"):
-    """Simulate the files that run_theme_pipeline_from_monthly_data writes."""
+    """Simulate the immutable outputs produced by the theme pipeline."""
+    root = Path(out_dir)
+    root.mkdir(parents=True, exist_ok=True)
     for month in months:
-        Path(os.path.join(out_dir, f"{month}_{year}_with_themes.csv")).write_text(
-            "community,theme\n1,Technology"
+        pd.DataFrame([{"community": 1, "theme": "Technology"}]).to_parquet(
+            root / f"{month}_{year}_with_themes.parquet", index=False
         )
-    Path(os.path.join(out_dir, "community_transition.csv")).write_text("from,to\nA,B")
+    pd.DataFrame([{"from": "A", "to": "B"}]).to_parquet(
+        root / "community_transition.parquet", index=False
+    )
+    pd.DataFrame(
+        [
+            {
+                "path_id": "path-test",
+                "display_order": 1,
+                "step_index": 0,
+                "month": "march",
+                "community_key": "A",
+                "community_id": "A",
+                "member_count": 1,
+            }
+        ]
+    ).to_parquet(root / "community_paths.parquet", index=False)
+    pd.DataFrame(
+        [
+            {
+                "path_id": "path-test",
+                "display_order": 1,
+                "step_index": 0,
+                "month": "march",
+                "community_key": "A",
+                "community_id": "A",
+                "member_count": 1,
+            }
+        ]
+    ).to_parquet(root / "community_path_membership.parquet", index=False)
 
 
 # ---------------------------------------------------------------------------

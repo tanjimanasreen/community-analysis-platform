@@ -15,6 +15,12 @@ describe('Sidebar', () => {
       'href',
       '/methodology?run=run-1&metric=if',
     );
+    expect(screen.getByRole('link', { name: 'Community Evolution' })).toHaveAttribute(
+      'href',
+      '/evolution?run=run-1&metric=if',
+    );
+    expect(screen.queryByRole('link', { name: 'Community Transitions' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Evolution Over Time' })).not.toBeInTheDocument();
     expect(screen.queryByText('Settings')).not.toBeInTheDocument();
     expect(screen.queryByText('Aisha Rahman')).not.toBeInTheDocument();
     expect(screen.getByText('Read-only analytics')).toBeInTheDocument();

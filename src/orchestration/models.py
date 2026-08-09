@@ -124,6 +124,14 @@ class ThemeInputBundle:
 @dataclass(frozen=True)
 class ThemeOutputBundle:
     themes: tuple[ArtifactReference, ...]
-    community_transitions: ArtifactReference | None
-    visualizations: tuple[ArtifactReference, ...]
-    provider_run_summary: ArtifactReference | None
+    clustered_themes: tuple[ArtifactReference, ...] = ()
+    cluster_evidence: tuple[ArtifactReference, ...] = ()
+    canonical_theme_families: ArtifactReference | None = None
+    clustering_embeddings: ArtifactReference | None = None
+    similarity_embeddings: ArtifactReference | None = None
+    community_transitions: ArtifactReference | None = None
+    community_paths: ArtifactReference | None = None
+    community_path_membership: ArtifactReference | None = None
+    community_path_theme_similarity: ArtifactReference | None = None
+    visualizations: tuple[ArtifactReference, ...] = ()
+    provider_run_summary: ArtifactReference | None = None

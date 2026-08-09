@@ -15,6 +15,7 @@ def draw_theme_similarity_heatmap(
     output_dir: str,
     file_name: str,
     model_name: str = "paraphrase-MiniLM-L6-v2",
+    model=None,
 ):
     if not all_community_theme:
         logger.info(
@@ -41,7 +42,9 @@ def draw_theme_similarity_heatmap(
         themes = list(communities.values())
         if not themes:
             continue
-        similarity_matrix = calculate_sentence_similarity(themes, model_name=model_name)
+        similarity_matrix = calculate_sentence_similarity(
+            themes, model_name=model_name, model=model
+        )
         max_similarity = max(max_similarity, np.max(similarity_matrix))
         min_similarity = min(min_similarity, np.min(similarity_matrix))
 
@@ -57,7 +60,9 @@ def draw_theme_similarity_heatmap(
         if not themes:
             continue
 
-        similarity_matrix = calculate_sentence_similarity(themes, model_name=model_name)
+        similarity_matrix = calculate_sentence_similarity(
+            themes, model_name=model_name, model=model
+        )
 
         mask = np.tril(np.ones(similarity_matrix.shape, dtype=bool))
         similarity_matrix = np.where(mask, np.nan, similarity_matrix)

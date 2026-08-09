@@ -2,7 +2,10 @@ from fastapi import APIRouter, Depends, Query
 
 from src.api.dependencies import get_evolution_service
 from src.api.schemas.evolution import (
+    EvolutionPathsResponse,
     MembershipChangesResponse,
+    PathMembershipResponse,
+    PathThemeSimilarityResponse,
     PersistentCommunitiesResponse,
     ThemeSimilarityResponse,
     TransitionsResponse,
@@ -49,3 +52,38 @@ def get_theme_similarity(
     service: EvolutionService = Depends(get_evolution_service),
 ) -> ThemeSimilarityResponse:
     return ThemeSimilarityResponse(**service.theme_similarity(run_id))
+
+
+@router.get("/{run_id}/evolution/paths", response_model=EvolutionPathsResponse)
+def get_evolution_paths(
+    run_id: str,
+    service: EvolutionService = Depends(get_evolution_service),
+) -> EvolutionPathsResponse:
+    return EvolutionPathsResponse(**service.paths(run_id))
+
+
+@router.get(
+    "/{run_id}/evolution/paths/{path_id}/mobility",
+    response_model=PathMembershipResponse,
+)
+def get_evolution_path_mobility(
+    run_id: str,
+    path_id: str,
+    service: EvolutionService = Depends(get_evolution_service),
+) -> PathMembershipResponse:
+    return PathMembershipResponse(**service.path_membership(run_id, path_id))
+
+
+@router.get(
+    "/{run_id}/evolution/paths/{path_id}/theme-similarity",
+    response_model=PathThemeSimilarityResponse,
+)
+def get_evolution_path_theme_similarity(
+    run_id: str,
+    path_id: str,
+    theme_type: str = Query(default="general", pattern="^(general|absolute|weighted)$"),
+    service: EvolutionService = Depends(get_evolution_service),
+) -> PathThemeSimilarityResponse:
+    return PathThemeSimilarityResponse(
+        **service.path_theme_similarity(run_id, path_id, theme_type=theme_type)
+    )

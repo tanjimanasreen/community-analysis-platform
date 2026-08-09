@@ -40,8 +40,8 @@ export function resolveSamplingStrategy(value: string | null): import('../types/
 
 export function updateDashboardSearchParams(
   current: URLSearchParams,
-  update: { 
-    runId?: string | null; 
+  update: {
+    runId?: string | null;
     metric?: MetricName | null;
     period?: string | null;
     communityId?: string | null;

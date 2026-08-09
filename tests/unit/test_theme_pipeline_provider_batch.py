@@ -52,6 +52,16 @@ def test_one_provider_instance_handles_batch(monkeypatch, tmp_path):
         "extract_themes",
         lambda *_args, **_kwargs: {},
     )
+    monkeypatch.setattr(
+        theme_pipeline,
+        "build_community_path_artifact",
+        lambda *_args, **_kwargs: pd.DataFrame(),
+    )
+    monkeypatch.setattr(
+        theme_pipeline,
+        "build_membership_mobility_artifact",
+        lambda *_args, **_kwargs: pd.DataFrame(),
+    )
 
     theme_pipeline.run_theme_pipeline_from_monthly_data(
         monthly_data_dict=monthly_data,

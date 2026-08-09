@@ -417,8 +417,22 @@ def run_monthly_analysis_flow(
             all_artifacts.extend(topic_outputs.theme_inputs)
         if theme_outputs:
             all_artifacts.extend(theme_outputs.themes)
+            all_artifacts.extend(theme_outputs.clustered_themes)
+            all_artifacts.extend(theme_outputs.cluster_evidence)
+            if theme_outputs.canonical_theme_families:
+                all_artifacts.append(theme_outputs.canonical_theme_families)
+            if theme_outputs.clustering_embeddings:
+                all_artifacts.append(theme_outputs.clustering_embeddings)
+            if theme_outputs.similarity_embeddings:
+                all_artifacts.append(theme_outputs.similarity_embeddings)
             if theme_outputs.community_transitions:
                 all_artifacts.append(theme_outputs.community_transitions)
+            if theme_outputs.community_paths:
+                all_artifacts.append(theme_outputs.community_paths)
+            if theme_outputs.community_path_membership:
+                all_artifacts.append(theme_outputs.community_path_membership)
+            if theme_outputs.community_path_theme_similarity:
+                all_artifacts.append(theme_outputs.community_path_theme_similarity)
             all_artifacts.extend(theme_outputs.visualizations)
             if theme_outputs.provider_run_summary:
                 all_artifacts.append(theme_outputs.provider_run_summary)
@@ -489,8 +503,22 @@ def run_monthly_analysis_flow(
             failed_artifacts.extend(topic_outputs.theme_inputs)
         if theme_outputs:
             failed_artifacts.extend(theme_outputs.themes)
+            failed_artifacts.extend(theme_outputs.clustered_themes)
+            failed_artifacts.extend(theme_outputs.cluster_evidence)
+            if theme_outputs.canonical_theme_families:
+                failed_artifacts.append(theme_outputs.canonical_theme_families)
+            if theme_outputs.clustering_embeddings:
+                failed_artifacts.append(theme_outputs.clustering_embeddings)
+            if theme_outputs.similarity_embeddings:
+                failed_artifacts.append(theme_outputs.similarity_embeddings)
             if theme_outputs.community_transitions:
                 failed_artifacts.append(theme_outputs.community_transitions)
+            if theme_outputs.community_paths:
+                failed_artifacts.append(theme_outputs.community_paths)
+            if theme_outputs.community_path_membership:
+                failed_artifacts.append(theme_outputs.community_path_membership)
+            if theme_outputs.community_path_theme_similarity:
+                failed_artifacts.append(theme_outputs.community_path_theme_similarity)
             failed_artifacts.extend(theme_outputs.visualizations)
             if theme_outputs.provider_run_summary:
                 failed_artifacts.append(theme_outputs.provider_run_summary)
@@ -816,8 +844,22 @@ def run_evolution_analysis_flow(
             completed_stage_count += 1
 
             all_artifacts.extend(theme_outputs.themes)
+            all_artifacts.extend(theme_outputs.clustered_themes)
+            all_artifacts.extend(theme_outputs.cluster_evidence)
+            if theme_outputs.canonical_theme_families:
+                all_artifacts.append(theme_outputs.canonical_theme_families)
+            if theme_outputs.clustering_embeddings:
+                all_artifacts.append(theme_outputs.clustering_embeddings)
+            if theme_outputs.similarity_embeddings:
+                all_artifacts.append(theme_outputs.similarity_embeddings)
             if theme_outputs.community_transitions:
                 all_artifacts.append(theme_outputs.community_transitions)
+            if theme_outputs.community_paths:
+                all_artifacts.append(theme_outputs.community_paths)
+            if theme_outputs.community_path_membership:
+                all_artifacts.append(theme_outputs.community_path_membership)
+            if theme_outputs.community_path_theme_similarity:
+                all_artifacts.append(theme_outputs.community_path_theme_similarity)
             all_artifacts.extend(theme_outputs.visualizations)
             if theme_outputs.provider_run_summary:
                 all_artifacts.append(theme_outputs.provider_run_summary)

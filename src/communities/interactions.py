@@ -97,9 +97,9 @@ def build_prominent_community_interactions(
     result = pd.DataFrame(rows, columns=COMMUNITY_INTERACTION_COLUMNS)
     result["_source_sort"] = result["source_community_id"].map(_community_sort_key)
     result["_target_sort"] = result["target_community_id"].map(_community_sort_key)
-    result = result.sort_values(
-        ["_source_sort", "_target_sort"], kind="stable"
-    ).drop(columns=["_source_sort", "_target_sort"])
+    result = result.sort_values(["_source_sort", "_target_sort"], kind="stable").drop(
+        columns=["_source_sort", "_target_sort"]
+    )
     return result.reset_index(drop=True)
 
 

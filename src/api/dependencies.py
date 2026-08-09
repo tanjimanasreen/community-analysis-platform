@@ -12,6 +12,8 @@ from src.api.services.network_service import NetworkService
 from src.api.services.overview_service import OverviewService
 from src.api.services.run_catalog import RunCatalog
 from src.api.services.topic_service import TopicService
+from src.api.services.theme_trend_service import ThemeTrendService
+from src.api.services.theme_cluster_service import ThemeClusterService
 
 
 @dataclass(frozen=True)
@@ -96,6 +98,14 @@ def get_topic_service(request: Request) -> TopicService:
 
 def get_evolution_service(request: Request) -> EvolutionService:
     return request.app.state.evolution_service
+
+
+def get_theme_trend_service(request: Request) -> ThemeTrendService:
+    return request.app.state.theme_trend_service
+
+
+def get_theme_cluster_service(request: Request) -> ThemeClusterService:
+    return request.app.state.theme_cluster_service
 
 
 def _positive_int(value: str | None, default: int) -> int:

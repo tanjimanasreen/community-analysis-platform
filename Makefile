@@ -1,8 +1,8 @@
-.PHONY: help install install-dev test test-unit test-integration format lint mlflow-ui \
-	db-up db-down db-check tei-up validate-config ingest-sample run-network-sample \
+.PHONY: help bootstrap install install-dev test test-unit test-integration format lint mlflow-ui \
+	db-up db-down db-check tei-up tei-down tei-check validate-config ingest-sample run-network-sample \
 	run-topic-sample run-theme-sample evaluate-sample run-pipeline-test \
 	run-pipeline-sample run-dashboard-sample run-longitudinal-sample \
-	run-evolution-pipeline-test run-evolution-pipeline verify-output-contract \
+	run-evolution-pipeline-test pipeline-preflight run-evolution-pipeline verify-output-contract \
 	verify-evolution-output-contract api-smoke-test run-api demo demo-api \
 	demo-frontend frontend-install frontend-build frontend-lint frontend-typecheck \
 	frontend-test frontend-coverage frontend-e2e frontend-check dashboard-fixture \
@@ -32,6 +32,7 @@ THEME_PROVIDER := mock
 
 help:
 	@echo "Available targets:"
+	@echo "  bootstrap            - Synchronize the locked development/orchestration environment"
 	@echo "  install              - Create .venv and install runtime dependencies"
 	@echo "  install-dev          - Create .venv and install runtime + dev dependencies"
 	@echo "  test                 - Run the full test suite"
@@ -49,6 +50,8 @@ help:
 	@echo "  run-pipeline-test    - Run the legacy stage-by-stage offline test pipeline"
 	@echo "  run-dashboard-sample - Publish a canonical manifest-backed sample run"
 	@echo "  run-evolution-pipeline-test - Run two-month offline evolution pipeline and transitions"
+	@echo "  pipeline-preflight   - Fail fast on dependencies, inputs, credentials, and required TEI profiles"
+	@echo "  run-evolution-pipeline - Run a real longitudinal pipeline after preflight (CONFIG=...)"
 	@echo "  verify-output-contract - Validate generated one-month test artifact schemas"
 	@echo "  verify-evolution-output-contract - Validate generated evolution artifact schemas"
 	@echo "  api-smoke-test       - Run read-only dashboard API smoke tests"
@@ -70,6 +73,9 @@ help:
 	@echo "  clean-cache          - Remove Python/test/Vite caches and egg-info"
 	@echo "  build-report         - Build a markdown artifact index for sample outputs"
 	@echo "  benchmark-performance - Compare legacy and indexed message aggregation"
+
+bootstrap:
+	$(UV) sync --frozen --extra orchestration
 
 install:
 	$(UV) sync --frozen --no-dev
@@ -102,6 +108,12 @@ db-down:
 
 tei-up:
 	bash scripts/start_tei.sh
+
+tei-down:
+	bash scripts/stop_tei.sh
+
+tei-check:
+	$(UV) run --frozen --extra orchestration python scripts/check_tei.py
 
 db-check:
 	$(PYTHON) -m src.cli db-check --config $(SAMPLE_CONFIG)
@@ -146,8 +158,8 @@ run-longitudinal-sample: run-evolution-pipeline-test
 run-evolution-pipeline-test:
 	@mkdir -p $(EVOLUTION_OUTPUT)
 	@mkdir -p /tmp/prefect
-	$(PYTHON) -m src.cli ingest-interactions --file tests/fixtures/longitudinal/twitter_reply_03_2017.csv --config $(TEST_EVOLUTION_CONFIG) --month 03 --out $(EVOLUTION_OUTPUT)/interactions_03.csv --no-db
-	$(PYTHON) -m src.cli ingest-interactions --file tests/fixtures/longitudinal/twitter_reply_04_2017.csv --config $(TEST_EVOLUTION_CONFIG) --month 04 --out $(EVOLUTION_OUTPUT)/interactions_04.csv --no-db
+	$(PYTHON) -m src.cli ingest-interactions --file tests/fixtures/longitudinal/twitter_reply_03_2017.csv --config $(TEST_EVOLUTION_CONFIG) --dataset-id 03 --out $(EVOLUTION_OUTPUT)/interactions_03.csv --no-db
+	$(PYTHON) -m src.cli ingest-interactions --file tests/fixtures/longitudinal/twitter_reply_04_2017.csv --config $(TEST_EVOLUTION_CONFIG) --dataset-id 04 --out $(EVOLUTION_OUTPUT)/interactions_04.csv --no-db
 	PREFECT_HOME=/tmp/prefect PREFECT_API_DATABASE_CONNECTION_URL="sqlite+aiosqlite:////tmp/prefect/prefect.db" MPLBACKEND=Agg MPLCONFIGDIR=/tmp $(PYTHON) -m src.cli run-evolution-pipeline --config $(TEST_EVOLUTION_CONFIG) --theme-provider $(THEME_PROVIDER)
 	$(PYTHON) -m src.cli build-report --config $(TEST_EVOLUTION_CONFIG) --out $(EVOLUTION_REPORT)
 
@@ -157,12 +169,16 @@ verify-output-contract:
 verify-evolution-output-contract:
 	$(PYTHON) -m src.cli verify-output-contract --config $(TEST_EVOLUTION_CONFIG) --longitudinal
 
-run-evolution-pipeline:
+pipeline-preflight:
 	@if [ -z "$(CONFIG)" ]; then \
-		echo "Error: CONFIG is not set. Usage: make run-evolution-pipeline CONFIG=configs/twitter/reply_evolution.yml"; \
+		echo "Error: CONFIG is not set. Usage: make pipeline-preflight CONFIG=configs/twitter/reply_evolution.yml"; \
 		exit 1; \
 	fi
-	PREFECT_HOME=/tmp/prefect PREFECT_API_DATABASE_CONNECTION_URL="sqlite+aiosqlite:////tmp/prefect/prefect.db" MPLBACKEND=Agg MPLCONFIGDIR=/tmp $(PYTHON) -m src.cli run-evolution-pipeline --config $(CONFIG) $(if $(EVOLUTION_THEME_PROVIDER),--theme-provider $(EVOLUTION_THEME_PROVIDER))
+	$(UV) run --frozen --extra orchestration python -m src.cli pipeline-preflight --config $(CONFIG) $(if $(EVOLUTION_THEME_PROVIDER),--theme-provider $(EVOLUTION_THEME_PROVIDER))
+
+run-evolution-pipeline: pipeline-preflight
+	@mkdir -p /tmp/prefect
+	PREFECT_HOME=/tmp/prefect PREFECT_API_DATABASE_CONNECTION_URL="sqlite+aiosqlite:////tmp/prefect/prefect.db" MPLBACKEND=Agg MPLCONFIGDIR=/tmp $(UV) run --frozen --extra orchestration python -m src.cli run-evolution-pipeline --config $(CONFIG) $(if $(EVOLUTION_THEME_PROVIDER),--theme-provider $(EVOLUTION_THEME_PROVIDER))
 
 api-smoke-test:
 	uv run --frozen --extra orchestration --extra tracking python -m pytest tests/unit/test_backend_api.py

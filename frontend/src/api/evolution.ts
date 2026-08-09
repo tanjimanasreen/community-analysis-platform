@@ -1,5 +1,9 @@
 import type {
+  EvolutionPathsResponse,
+  EvolutionThemeType,
   MembershipChangesResponse,
+  PathMembershipResponse,
+  PathThemeSimilarityResponse,
   PersistentCommunitiesResponse,
   ThemeSimilarityResponse,
   TransitionsResponse,
@@ -39,3 +43,29 @@ export const getThemeSimilarity = (runId: string, signal?: AbortSignal) =>
     fillRoute(API_ROUTES.themeSimilarity, { run_id: runId }),
     { signal },
   );
+
+
+export const getEvolutionPaths = (runId: string, signal?: AbortSignal) =>
+  getJson<EvolutionPathsResponse>(
+    fillRoute(API_ROUTES.evolutionPaths, { run_id: runId }),
+    { signal },
+  );
+
+export const getEvolutionPathMobility = (
+  runId: string,
+  pathId: string,
+  signal?: AbortSignal,
+) => getJson<PathMembershipResponse>(
+  fillRoute(API_ROUTES.evolutionPathMobility, { run_id: runId, path_id: pathId }),
+  { signal },
+);
+
+export const getEvolutionPathThemeSimilarity = (
+  runId: string,
+  pathId: string,
+  themeType: EvolutionThemeType = 'general',
+  signal?: AbortSignal,
+) => getJson<PathThemeSimilarityResponse>(
+  fillRoute(API_ROUTES.evolutionPathThemeSimilarity, { run_id: runId, path_id: pathId }),
+  { params: { theme_type: themeType }, signal },
+);

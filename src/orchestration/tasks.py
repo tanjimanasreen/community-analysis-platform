@@ -772,9 +772,23 @@ def _build_provider_summary(
                     "similarity_model",
                     raw.get("similarity_model_name", "paraphrase-MiniLM-L6-v2"),
                 ),
+                "clustering_enabled": theme_settings.get("clustering_enabled", False),
+                "clustering_provider": theme_settings.get("clustering_provider", "tei"),
+                "clustering_model": theme_settings.get(
+                    "clustering_model", "sentence-transformers/all-MiniLM-L6-v2"
+                ),
+                "clustering_min_cluster_size": theme_settings.get(
+                    "clustering_min_cluster_size", 2
+                ),
+                "canonicalization_min_cluster_size": theme_settings.get(
+                    "canonicalization_min_cluster_size", 2
+                ),
+                "clustering_metric": theme_settings.get(
+                    "clustering_metric", "euclidean"
+                ),
             }
         ),
-        "semantic_task_version": "1.1.0",
+        "semantic_task_version": "1.2.0",
     }
     if run_metrics:
         safe_metrics = dict(run_metrics)
@@ -886,6 +900,12 @@ def run_monthly_themes_task(
     if not isinstance(orchestration_settings, Mapping):
         orchestration_settings = {}
 
+    render_visuals_enabled = bool(
+        theme_settings.get("render_visuals", raw.get("render_visuals", True))
+    )
+    evolution_similarity_enabled = bool(
+        theme_settings.get("evolution_similarity_enabled", render_visuals_enabled)
+    )
     run_theme_pipeline_from_monthly_data(
         monthly_data_dict=monthly_data_dict,
         year=year,
@@ -893,9 +913,7 @@ def run_monthly_themes_task(
         output_dir=vis_dir,
         config=raw,
         provider=None,  # Domain constructs provider exactly once via build_theme_provider
-        render_visuals=bool(
-            theme_settings.get("render_visuals", raw.get("render_visuals", True))
-        ),
+        render_visuals=render_visuals_enabled,
         similarity_model_name=str(
             theme_settings.get(
                 "similarity_model",
@@ -928,7 +946,95 @@ def run_monthly_themes_task(
             )
         )
 
-    # --- 5. Community transition artifact (explicit expected path) ---
+    # --- 5. Clustered/canonical theme artifacts (additive, when enabled) ---
+    clustered_themes = []
+    cluster_evidence = []
+    canonical_theme_families = None
+    clustering_embeddings = None
+    if bool(theme_settings.get("clustering_enabled", False)):
+        from src.config.loader import normalize_month
+
+        cluster_root = os.path.join(vis_dir, "theme_clusters")
+        for month in monthly_data_dict:
+            period = f"{int(year):04d}-{normalize_month(month):02d}"
+            summary_path = os.path.join(cluster_root, "monthly", f"{period}.parquet")
+            evidence_path = os.path.join(cluster_root, "evidence", f"{period}.parquet")
+            validate_artifact_output(
+                summary_path, vis_dir, label=f"theme_clusters_{period}"
+            )
+            validate_artifact_output(
+                evidence_path, vis_dir, label=f"theme_cluster_observations_{period}"
+            )
+            clustered_themes.append(
+                ArtifactReference(
+                    path=summary_path,
+                    sha256=hash_file(summary_path),
+                    media_type="application/octet-stream",
+                    byte_size=os.path.getsize(summary_path),
+                    row_count=_artifact_row_count(summary_path),
+                    asset_key=f"theme_clusters_{period}",
+                )
+            )
+            cluster_evidence.append(
+                ArtifactReference(
+                    path=evidence_path,
+                    sha256=hash_file(evidence_path),
+                    media_type="application/octet-stream",
+                    byte_size=os.path.getsize(evidence_path),
+                    row_count=_artifact_row_count(evidence_path),
+                    asset_key=f"theme_cluster_observations_{period}",
+                )
+            )
+        families_path = os.path.join(cluster_root, "canonical_families.parquet")
+        validate_artifact_output(
+            families_path, vis_dir, label="theme_canonical_families"
+        )
+        canonical_theme_families = ArtifactReference(
+            path=families_path,
+            sha256=hash_file(families_path),
+            media_type="application/octet-stream",
+            byte_size=os.path.getsize(families_path),
+            row_count=_artifact_row_count(families_path),
+            asset_key="theme_canonical_families",
+        )
+        embeddings_path = os.path.join(
+            cluster_root, "embeddings", "clustering_general_themes.parquet"
+        )
+        validate_artifact_output(
+            embeddings_path, vis_dir, label="theme_embeddings_clustering"
+        )
+        clustering_embeddings = ArtifactReference(
+            path=embeddings_path,
+            sha256=hash_file(embeddings_path),
+            media_type="application/octet-stream",
+            byte_size=os.path.getsize(embeddings_path),
+            row_count=_artifact_row_count(embeddings_path),
+            asset_key="theme_embeddings_clustering",
+        )
+
+    similarity_embeddings = None
+    if evolution_similarity_enabled:
+        similarity_embeddings_path = os.path.join(
+            vis_dir,
+            "theme_similarity",
+            "embeddings",
+            "similarity_themes.parquet",
+        )
+        validate_artifact_output(
+            similarity_embeddings_path,
+            vis_dir,
+            label="theme_embeddings_similarity",
+        )
+        similarity_embeddings = ArtifactReference(
+            path=similarity_embeddings_path,
+            sha256=hash_file(similarity_embeddings_path),
+            media_type="application/octet-stream",
+            byte_size=os.path.getsize(similarity_embeddings_path),
+            row_count=_artifact_row_count(similarity_embeddings_path),
+            asset_key="theme_embeddings_similarity",
+        )
+
+    # --- 6. Community transition artifact (explicit expected path) ---
     transitions_path = os.path.join(vis_dir, "community_transition.parquet")
     validate_artifact_output(
         transitions_path, isolated_output, label="community_transition"
@@ -941,6 +1047,45 @@ def run_monthly_themes_task(
         row_count=_artifact_row_count(transitions_path),
         asset_key="community_transitions",
     )
+
+    paths_path = os.path.join(vis_dir, "community_paths.parquet")
+    membership_path = os.path.join(vis_dir, "community_path_membership.parquet")
+    validate_artifact_output(paths_path, vis_dir, label="community_paths")
+    validate_artifact_output(
+        membership_path, vis_dir, label="community_path_membership"
+    )
+    community_paths_ref = ArtifactReference(
+        path=paths_path,
+        sha256=hash_file(paths_path),
+        media_type="application/octet-stream",
+        byte_size=os.path.getsize(paths_path),
+        row_count=_artifact_row_count(paths_path),
+        asset_key="community_paths",
+    )
+    community_path_membership_ref = ArtifactReference(
+        path=membership_path,
+        sha256=hash_file(membership_path),
+        media_type="application/octet-stream",
+        byte_size=os.path.getsize(membership_path),
+        row_count=_artifact_row_count(membership_path),
+        asset_key="community_path_membership",
+    )
+    community_path_theme_similarity_ref = None
+    if evolution_similarity_enabled:
+        path_similarity_path = os.path.join(
+            vis_dir, "community_path_theme_similarity.parquet"
+        )
+        validate_artifact_output(
+            path_similarity_path, vis_dir, label="community_path_theme_similarity"
+        )
+        community_path_theme_similarity_ref = ArtifactReference(
+            path=path_similarity_path,
+            sha256=hash_file(path_similarity_path),
+            media_type="application/octet-stream",
+            byte_size=os.path.getsize(path_similarity_path),
+            row_count=_artifact_row_count(path_similarity_path),
+            asset_key="community_path_theme_similarity",
+        )
 
     # --- 6. Visualization artifacts (bounded, allowlisted, non-recursive) ---
     visualizations = []
@@ -1002,7 +1147,15 @@ def run_monthly_themes_task(
 
     return ThemeOutputBundle(
         themes=tuple(themes_artifacts),
+        clustered_themes=tuple(clustered_themes),
+        cluster_evidence=tuple(cluster_evidence),
+        canonical_theme_families=canonical_theme_families,
+        clustering_embeddings=clustering_embeddings,
+        similarity_embeddings=similarity_embeddings,
         community_transitions=transition_ref,
+        community_paths=community_paths_ref,
+        community_path_membership=community_path_membership_ref,
+        community_path_theme_similarity=community_path_theme_similarity_ref,
         visualizations=tuple(visualizations),
         provider_run_summary=provider_run_summary,
     )

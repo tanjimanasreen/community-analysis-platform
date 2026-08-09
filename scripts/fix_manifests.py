@@ -14,33 +14,33 @@ def fix_manifests(api_root: Path):
     runs_dir = api_root / "runs"
     if not runs_dir.exists():
         return
-        
+
     for run_dir in runs_dir.iterdir():
         if not run_dir.is_dir():
             continue
-            
+
         manifest_path = run_dir / "manifest.json"
         if not manifest_path.exists():
             continue
-            
+
         with open(manifest_path, "r", encoding="utf-8") as f:
             manifest = json.load(f)
-            
+
         modified = False
         for artifact in manifest.get("artifacts", []):
             file_path = run_dir / artifact["path"]
             if not file_path.exists():
                 continue
-                
+
             actual_size = file_path.stat().st_size
             actual_hash = hash_file(file_path)
-            
+
             if artifact.get("byte_size") != actual_size or artifact.get("sha256") != actual_hash:
                 print(f"Updating manifest for {artifact['key']} in run {run_dir.name}")
                 artifact["byte_size"] = actual_size
                 artifact["sha256"] = actual_hash
                 modified = True
-                
+
         if modified:
             with open(manifest_path, "w", encoding="utf-8") as f:
                 json.dumps(manifest, indent=2, sort_keys=True, ensure_ascii=False)

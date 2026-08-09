@@ -97,4 +97,8 @@ The harness is satisfied when:
 - Existing LDA defaults and outputs are preserved.
 - Theme generation is optional and can be skipped in offline tests.
 - Month-to-month transition, membership-change, and theme similarity outputs are covered.
+- General-theme semantic clustering is an additive upstream artifact stage: raw GPT/LDA evidence is preserved, tests inject embeddings, and dashboard/API requests never run TEI or HDBSCAN.
+- Clustering uses first-party `sklearn.cluster.HDBSCAN`; unique TEI vectors from both semantic profiles are persisted as content-addressed float32 Parquet run artifacts when produced, while duplicate theme observations remain in the clustering population.
+- Local semantic infrastructure can run both revision-pinned TEI profiles through one `make tei-up` command.
+- Real longitudinal runs have a mandatory `pipeline-preflight` dependency that fails before expensive work on stale dependencies, missing inputs/credentials, or required TEI failures.
 - All generated output categories from the current scripts have documented target locations.

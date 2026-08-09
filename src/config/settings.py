@@ -1,8 +1,13 @@
 from typing import Literal, Optional
-from pydantic import AnyHttpUrl, Field, SecretStr
+from pydantic import AliasChoices, AnyHttpUrl, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from src.config.defaults import DEFAULT_CONFIG
+
+DEFAULT_SIMILARITY_MODEL_ID = "sentence-transformers/paraphrase-MiniLM-L6-v2"
+DEFAULT_SIMILARITY_MODEL_REVISION = "c9a2bfebc254878aee8c3aca9e6844d5bbb102d1"
+DEFAULT_CLUSTERING_MODEL_ID = "sentence-transformers/all-MiniLM-L6-v2"
+DEFAULT_CLUSTERING_MODEL_REVISION = "1110a243fdf4706b3f48f1d95db1a4f5529b4d41"
 
 
 class DatabaseSettings(BaseSettings):
@@ -22,15 +27,72 @@ class DatabaseSettings(BaseSettings):
 
 
 class TEIClientSettings(BaseSettings):
-    """Settings used by the application when calling TEI."""
+    """Settings for the similarity TEI profile with legacy ``TEI_*`` aliases."""
 
-    base_url: AnyHttpUrl = Field(default="http://127.0.0.1:8080")
+    base_url: AnyHttpUrl = Field(
+        default="http://127.0.0.1:8080",
+        validation_alias=AliasChoices("TEI_SIMILARITY_BASE_URL", "TEI_BASE_URL"),
+    )
+    api_key: Optional[SecretStr] = Field(
+        default=None,
+        validation_alias=AliasChoices("TEI_SIMILARITY_API_KEY", "TEI_API_KEY"),
+    )
+    client_batch_size: int = Field(
+        default=32,
+        ge=1,
+        validation_alias=AliasChoices(
+            "TEI_SIMILARITY_CLIENT_BATCH_SIZE", "TEI_CLIENT_BATCH_SIZE"
+        ),
+    )
+    timeout_seconds: float = Field(
+        default=60.0,
+        gt=0,
+        validation_alias=AliasChoices(
+            "TEI_SIMILARITY_TIMEOUT_SECONDS", "TEI_TIMEOUT_SECONDS"
+        ),
+    )
+    model_id: str = Field(
+        default=DEFAULT_SIMILARITY_MODEL_ID,
+        validation_alias=AliasChoices("TEI_SIMILARITY_MODEL_ID", "TEI_MODEL_ID"),
+    )
+    revision: str = Field(
+        default=DEFAULT_SIMILARITY_MODEL_REVISION,
+        validation_alias=AliasChoices("TEI_SIMILARITY_REVISION", "TEI_REVISION"),
+    )
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        env_ignore_empty=True,
+        extra="ignore",
+        populate_by_name=True,
+    )
+
+
+class TEIClusteringClientSettings(BaseSettings):
+    """Settings used by the theme-clustering TEI profile."""
+
+    base_url: AnyHttpUrl = Field(default="http://127.0.0.1:8081")
     api_key: Optional[SecretStr] = None
     client_batch_size: int = Field(default=32, ge=1)
     timeout_seconds: float = Field(default=60.0, gt=0)
+    model_id: str = DEFAULT_CLUSTERING_MODEL_ID
+    revision: str = DEFAULT_CLUSTERING_MODEL_REVISION
 
     model_config = SettingsConfigDict(
-        env_prefix="TEI_",
+        env_prefix="TEI_CLUSTERING_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        env_ignore_empty=True,
+        extra="ignore",
+    )
+
+
+class ThemeClusteringSettings(BaseSettings):
+    provider: Literal["tei", "mock"] = "tei"
+
+    model_config = SettingsConfigDict(
+        env_prefix="THEME_CLUSTERING_",
         env_file=".env",
         env_file_encoding="utf-8",
         env_ignore_empty=True,
@@ -144,7 +206,16 @@ def get_database_settings() -> DatabaseSettings:
 
 
 def get_tei_client_settings() -> TEIClientSettings:
+    """Return similarity-profile settings; explicit aliases beat legacy ``TEI_*``."""
     return TEIClientSettings()
+
+
+def get_clustering_tei_client_settings() -> TEIClusteringClientSettings:
+    return TEIClusteringClientSettings()
+
+
+def get_clustering_settings() -> ThemeClusteringSettings:
+    return ThemeClusteringSettings()
 
 
 def get_similarity_settings() -> ThemeSimilaritySettings:

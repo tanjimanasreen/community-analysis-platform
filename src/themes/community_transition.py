@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 from src.config.defaults import DEFAULT_CONFIG
@@ -28,11 +29,20 @@ TRANSITION_COLUMNS = [
 ]
 
 
+def _native_member(value: Any) -> Any:
+    """Convert NumPy scalar member IDs to stable Python scalar values."""
+    return value.item() if isinstance(value, np.generic) else value
+
+
+def _normalize_members(values: list[Any] | tuple[Any, ...] | set[Any]) -> list[Any]:
+    return [_native_member(value) for value in values]
+
+
 def _members(value: Any) -> list[Any]:
     if isinstance(value, list):
-        return value
+        return _normalize_members(value)
     if isinstance(value, tuple):
-        return list(value)
+        return _normalize_members(value)
     if value is None or (not isinstance(value, (list, tuple, str)) and pd.isna(value)):
         return []
     if isinstance(value, str):
@@ -40,10 +50,13 @@ def _members(value: Any) -> list[Any]:
             parsed = ast.literal_eval(value)
         except (SyntaxError, ValueError):
             return []
-        return list(parsed) if isinstance(parsed, (list, tuple, set)) else []
+        return (
+            _normalize_members(parsed) if isinstance(parsed, (list, tuple, set)) else []
+        )
     if hasattr(value, "tolist"):
         parsed = value.tolist()
-        return list(parsed) if isinstance(parsed, list) else [parsed]
+        values = parsed if isinstance(parsed, list) else [parsed]
+        return [_native_member(member) for member in values]
     return []
 
 

@@ -475,12 +475,19 @@ def test_topic_theme_pagination_and_lda_provenance(tmp_path):
         "beta",
     ]
 
-    themes = client.get("/api/v1/runs/run-03/themes?month=03&limit=1")
+    themes = client.get(
+        "/api/v1/runs/run-03/themes?month=03&exact_theme=Policy&limit=1"
+    )
     assert themes.status_code == 200
     body = themes.json()
+    assert body["total"] == 2
     assert body["records"][0]["general_theme_names"] == ["Policy"]
     assert body["records"][0]["absolute_unigram_keywords"] == ["alpha", "beta"]
     assert body["provider_metadata"]["configured_primary_provider"] == "mock"
+
+    no_theme = client.get("/api/v1/runs/run-03/themes?month=03&exact_theme=policy")
+    assert no_theme.status_code == 200
+    assert no_theme.json()["total"] == 0
 
 
 def test_evolution_and_report_endpoints(tmp_path):
@@ -570,7 +577,15 @@ def test_openapi_contract_and_invalid_filters(tmp_path):
         "/api/v1/runs/{run_id}/communities",
         "/api/v1/runs/{run_id}/topics",
         "/api/v1/runs/{run_id}/themes",
+        "/api/v1/runs/{run_id}/theme-trends/monthly",
+        "/api/v1/runs/{run_id}/theme-trends/timeline",
+        "/api/v1/runs/{run_id}/theme-clusters/monthly",
+        "/api/v1/runs/{run_id}/theme-clusters/timeline",
+        "/api/v1/runs/{run_id}/theme-clusters/evidence",
         "/api/v1/runs/{run_id}/transitions",
+        "/api/v1/runs/{run_id}/evolution/paths",
+        "/api/v1/runs/{run_id}/evolution/paths/{path_id}/mobility",
+        "/api/v1/runs/{run_id}/evolution/paths/{path_id}/theme-similarity",
         "/api/v1/runs/{run_id}/report",
     }
     assert expected.issubset(schema["paths"])
@@ -585,6 +600,7 @@ def test_api_requests_do_not_import_analytical_modules(tmp_path):
         "src.pipelines.theme_pipeline",
         "src.topics.lda",
         "src.themes.theme_similarity",
+        "src.themes.theme_clustering",
         "networkx",
     ]:
         sys.modules.pop(module_name, None)
@@ -598,4 +614,5 @@ def test_api_requests_do_not_import_analytical_modules(tmp_path):
     assert "src.pipelines.theme_pipeline" not in sys.modules
     assert "src.topics.lda" not in sys.modules
     assert "src.themes.theme_similarity" not in sys.modules
+    assert "src.themes.theme_clustering" not in sys.modules
     assert "networkx" not in sys.modules

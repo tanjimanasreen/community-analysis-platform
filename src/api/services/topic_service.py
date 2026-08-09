@@ -10,6 +10,7 @@ from src.api.errors import (
 )
 from src.api.services.artifact_reader import ArtifactReader, filter_by_community
 from src.api.services.periods import default_year, select_period_record
+from src.api.services.theme_trend_service import exact_theme_names
 
 
 class TopicService:
@@ -85,6 +86,7 @@ class TopicService:
         month: str | None,
         community_id: str | None,
         period: str | None = None,
+        exact_theme: str | None = None,
         limit: int,
         offset: int,
     ) -> dict[str, Any]:
@@ -92,16 +94,30 @@ class TopicService:
             self.reader.find_records(run_id, key_prefix="themes_"),
             key=lambda record: record.key,
         )
-        if month is not None:
+        if not artifacts:
+            raise ArtifactUnavailableError(run_id, "themes_*")
+        if period is not None:
+            manifest = self.reader.catalog.get_manifest(run_id)
+            config = self.reader.read_safe_config(run_id)
+            artifacts = [
+                select_period_record(
+                    artifacts,
+                    period=period,
+                    fallback_year=default_year(config, manifest),
+                    run_id=run_id,
+                    artifact_key="themes",
+                )
+            ]
+        elif month is not None:
             artifacts = [
                 artifact
                 for artifact in artifacts
                 if _theme_month(artifact.key) == month
             ]
         if not artifacts:
-            raise ArtifactUnavailableError(run_id, f"themes_{month or '*'}")
+            raise ArtifactUnavailableError(run_id, f"themes_{period or month or '*'}")
 
-        if community_id is None:
+        if community_id is None and exact_theme is None:
             frame, total = self._theme_page(
                 run_id,
                 artifacts,
@@ -120,6 +136,7 @@ class TopicService:
                 pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
             )
             combined = filter_by_community(combined, community_id)
+            combined = _filter_by_exact_theme(combined, exact_theme)
             page, total = self.reader.page(combined, limit=limit, offset=offset)
 
         provider_metadata = None
@@ -176,3 +193,18 @@ class TopicService:
 
 def _theme_month(key: str) -> str:
     return key.split("themes_", 1)[1] if key.startswith("themes_") else key
+
+
+def _filter_by_exact_theme(
+    frame: pd.DataFrame, exact_theme: str | None
+) -> pd.DataFrame:
+    if exact_theme is None:
+        return frame
+    wanted = " ".join(exact_theme.strip().split())
+    if not wanted or frame.empty:
+        return frame.iloc[0:0]
+    mask = frame.apply(
+        lambda row: wanted in exact_theme_names(row.to_dict()),
+        axis=1,
+    )
+    return frame.loc[mask]

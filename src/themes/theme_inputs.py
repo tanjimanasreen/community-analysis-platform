@@ -246,8 +246,11 @@ def _parse_list_columns(frame: pd.DataFrame) -> pd.DataFrame:
 def _parse_list(value: Any) -> list:
     if isinstance(value, list):
         return value
+    if isinstance(value, tuple):
+        return list(value)
     if hasattr(value, "tolist"):
-        return value.tolist()
+        converted = value.tolist()
+        return converted if isinstance(converted, list) else [converted]
 
     try:
         if pd.isna(value):

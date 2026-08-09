@@ -16,8 +16,17 @@ def validate_config(config_path, dataset_id=None):
     try:
         config = load_config(config_path)
         if dataset_id:
-            datasets = config.get("datasets", [])
-            ds = next((d for d in datasets if d.get("id") == dataset_id), None)
+            datasets = config.get("datasets", []) + config.get(
+                "longitudinal_datasets", []
+            )
+            ds = next(
+                (
+                    d
+                    for d in datasets
+                    if d.get("id") == dataset_id or d.get("month") == dataset_id
+                ),
+                None,
+            )
             if ds:
                 config.update(ds)
             else:
@@ -186,6 +195,22 @@ def main():
         "--theme-provider",
         required=False,
         help="Override theme_provider.primary for this run",
+    )
+
+    parser_preflight = subparsers.add_parser(
+        "pipeline-preflight",
+        help="Validate dependencies, inputs, providers, and required embedding services",
+    )
+    parser_preflight.add_argument("--config", required=True, help="Path to config file")
+    parser_preflight.add_argument(
+        "--theme-provider",
+        required=False,
+        help="Override theme_provider.primary for the planned run",
+    )
+    parser_preflight.add_argument(
+        "--skip-services",
+        action="store_true",
+        help="Skip live TEI requests (useful only for offline configuration checks)",
     )
 
     parser_report = subparsers.add_parser(
@@ -618,6 +643,29 @@ def main():
             dataset_id=getattr(args, "dataset_id", None),
             theme_provider=args.theme_provider,
         )
+
+    elif args.command == "pipeline-preflight":
+        from src.preflight import PipelinePreflightError, run_pipeline_preflight
+
+        config = validate_config(args.config)
+        if args.theme_provider:
+            provider_cfg = config.setdefault("theme_provider", {})
+            provider_cfg["primary"] = args.theme_provider
+        try:
+            checks = run_pipeline_preflight(
+                config,
+                project_root=Path.cwd(),
+                check_services=not args.skip_services,
+            )
+        except PipelinePreflightError as exc:
+            for check in exc.checks:
+                status = "OK" if check.ok else "FAIL"
+                print(f"[{status}] {check.name}: {check.detail}")
+            print(str(exc), file=sys.stderr)
+            sys.exit(1)
+        for check in checks:
+            print(f"[OK] {check.name}: {check.detail}")
+        print("Pipeline preflight passed.")
 
     elif args.command == "run-theme-analysis":
         _run_theme_analysis_command(

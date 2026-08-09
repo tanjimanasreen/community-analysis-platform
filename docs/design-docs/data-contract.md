@@ -191,6 +191,14 @@ generated downstream by GPT or rule‑based systems.
 | `CommunityTheme`         | `community_id: str`, `theme_type: str`                          | `'general'`, `'absolute'`, or `'weighted'`.                   |
 |                          | `theme_names: List[str]`                                         | Names assigned by GPT.                                        |
 |                          | `theme_descriptions: List[str]`                                   | Optional descriptive text.                                    |
+| `ThemeEmbedding`          | `embedding_key: str`, `text: str`, `embedding: float32[384]` | Content-addressed clustering or similarity vector; profile, model ID/revision, text/vector hashes, dtype, dimensions, normalization and contract versions are persisted. |
+| `MonthlyThemeCluster`     | `period: str`, `monthly_cluster_id: str`                    | HDBSCAN cluster over `general_theme_names`; noise is evidence-only. |
+|                          | `representative_theme: str`, `source_theme_labels: List[str]`   | Representative is a deterministic semantic medoid.             |
+| `CanonicalTheme`         | `canonical_theme_id: str`, `canonical_theme_label: str`        | Run-local cross-month canonical family; Stage-B noise is singleton. |
+|                          | `monthly_cluster_ids: List[str]`, `periods: List[str]`         | Stable linkage across monthly semantic clusters.                |
+| `CanonicalThemeMonth`    | `canonical_theme_id: str`, `period: str`                       | Monthly reporting record.                                      |
+|                          | `community_count: int`, `community_pairs: List[...]`           | Counts distinct matched IF/WIF pairs.                           |
+|                          | `prominent_keywords: List[str]`, `percentage: float`           | General LDA evidence and themed-pair denominator.               |
 
 ### 3.3 Transitions and Similarity
 

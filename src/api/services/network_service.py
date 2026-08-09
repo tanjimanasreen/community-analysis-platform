@@ -30,7 +30,14 @@ class GraphLimits:
 
 _GRAPH_COLUMNS = ["source", "target", "community_number", "direction", "weight"]
 _MEMBERSHIP_COLUMNS = ["source", "target", "community_number"]
-_SUMMARY_COLUMNS = ["community_id", "node_count", "edge_count", "total_weight", "x", "y"]
+_SUMMARY_COLUMNS = [
+    "community_id",
+    "node_count",
+    "edge_count",
+    "total_weight",
+    "x",
+    "y",
+]
 _NODE_INDEX_COLUMNS = ["node_id", "x", "y"]
 _INTERACTION_COLUMNS = [
     "source_community_id",
@@ -170,7 +177,10 @@ class NetworkService:
 
     def _read_graph_sample_frame(
         self, run_id: str, metric: str, *, period: str | None = None
-    ) -> tuple[pd.DataFrame, int, int, pd.DataFrame, dict[str, tuple[float, float]]] | None:
+    ) -> (
+        tuple[pd.DataFrame, int, int, pd.DataFrame, dict[str, tuple[float, float]]]
+        | None
+    ):
         """Read additive dashboard edges plus exact summary/index totals."""
         try:
             sample_records = self._records_for_key(
@@ -230,7 +240,12 @@ class NetworkService:
                         continue
                     node_id = _identifier_string(row["node_id"])
                     node_ids.add(node_id)
-                    if "x" in row and "y" in row and not pd.isna(row["x"]) and not pd.isna(row["y"]):
+                    if (
+                        "x" in row
+                        and "y" in row
+                        and not pd.isna(row["x"])
+                        and not pd.isna(row["y"])
+                    ):
                         node_layouts[node_id] = (float(row["x"]), float(row["y"]))
             available_nodes = len(node_ids)
             # Store the node layouts in the summary dict or as an extra return value.
@@ -517,7 +532,9 @@ class NetworkService:
             sample = self._read_graph_sample_frame(run_id, metric, period=period)
 
         if sample is not None:
-            sample_frame, available_nodes, available_edges, summary, node_layouts = sample
+            sample_frame, available_nodes, available_edges, summary, node_layouts = (
+                sample
+            )
             frame = _normalize_graph_frame(sample_frame)
         else:
             frame = _normalize_graph_frame(
@@ -556,9 +573,17 @@ class NetworkService:
                             run_id, record, columns=_NODE_INDEX_COLUMNS
                         )
                         for row in node_frame.to_dict(orient="records"):
-                            if "x" in row and "y" in row and not pd.isna(row["x"]) and not pd.isna(row["y"]):
+                            if (
+                                "x" in row
+                                and "y" in row
+                                and not pd.isna(row["x"])
+                                and not pd.isna(row["y"])
+                            ):
                                 node_id = _identifier_string(row["node_id"])
-                                node_layouts[node_id] = (float(row["x"]), float(row["y"]))
+                                node_layouts[node_id] = (
+                                    float(row["x"]),
+                                    float(row["y"]),
+                                )
                     except (ValueError, TypeError):
                         pass
             except ArtifactUnavailableError:
@@ -588,9 +613,7 @@ class NetworkService:
             selected_rows = frame.to_dict(orient="records")
             selected_nodes = {
                 _identifier_string(row["source"]) for row in selected_rows
-            } | {
-                _identifier_string(row["target"]) for row in selected_rows
-            }
+            } | {_identifier_string(row["target"]) for row in selected_rows}
         else:
             selected_rows, selected_nodes = _strongest_edge_selection(
                 frame, max_nodes=max_nodes, max_edges=max_edges
@@ -1025,12 +1048,12 @@ def _normalize_summary_frame(frame: pd.DataFrame) -> pd.DataFrame:
         )
     result = frame[_SUMMARY_COLUMNS].copy()
     result["community_id"] = result["community_id"].map(_identifier_string)
-    result["node_count"] = pd.to_numeric(
-        result["node_count"], errors="coerce"
-    ).fillna(0).astype(int)
-    result["edge_count"] = pd.to_numeric(
-        result["edge_count"], errors="coerce"
-    ).fillna(0).astype(int)
+    result["node_count"] = (
+        pd.to_numeric(result["node_count"], errors="coerce").fillna(0).astype(int)
+    )
+    result["edge_count"] = (
+        pd.to_numeric(result["edge_count"], errors="coerce").fillna(0).astype(int)
+    )
     result["total_weight"] = pd.to_numeric(
         result["total_weight"], errors="coerce"
     ).fillna(0.0)
@@ -1185,9 +1208,7 @@ def _community_balanced_selection(
                 -math.sqrt(
                     max(
                         1,
-                        summary_sizes.get(
-                            community, len(community_nodes[community])
-                        ),
+                        summary_sizes.get(community, len(community_nodes[community])),
                     )
                 )
                 / (quotas[community] + 1),
@@ -1252,9 +1273,7 @@ def _coverage(
     cross_community_edges_available: bool,
     cross_community_edges_reason: str | None = None,
 ) -> dict[str, Any]:
-    ratio = (
-        represented_weight / available_weight if available_weight > 0 else None
-    )
+    ratio = represented_weight / available_weight if available_weight > 0 else None
     return {
         "is_complete": is_complete,
         "scope": scope,

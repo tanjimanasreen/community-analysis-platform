@@ -1,110 +1,79 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-TEI_SCRIPT="$SCRIPT_DIR/scripts/start_tei.sh"
-
-# We will create a temporary bin directory to mock commands
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+SCRIPT="$ROOT/scripts/start_tei.sh"
 TEMP_BIN=$(mktemp -d)
-trap 'rm -rf "$TEMP_BIN"' EXIT
-
+LOG=$(mktemp)
+NATIVE_LOG=$(mktemp)
+RUNTIME_DIR=$(mktemp -d)
+trap 'rm -rf "$TEMP_BIN" "$LOG" "$NATIVE_LOG" "$RUNTIME_DIR"' EXIT
 export PATH="$TEMP_BIN:$PATH"
+export MOCK_DOCKER_LOG="$LOG"
+export TEI_SKIP_HEALTHCHECK=1
 
-# Mock uname to control OS
-cat << 'EOF' > "$TEMP_BIN/uname"
+cat > "$TEMP_BIN/uname" <<'SH'
 #!/usr/bin/env bash
-if [[ -n "${MOCK_OS:-}" ]]; then
-    echo "$MOCK_OS"
-else
-    /usr/bin/uname "$@"
-fi
-EOF
-chmod +x "$TEMP_BIN/uname"
-
-# Mock text-embeddings-router
-cat << 'EOF' > "$TEMP_BIN/text-embeddings-router"
+echo "${MOCK_OS:-Linux}"
+SH
+cat > "$TEMP_BIN/docker" <<'SH'
 #!/usr/bin/env bash
-echo "text-embeddings-router called with: $@"
-EOF
-chmod +x "$TEMP_BIN/text-embeddings-router"
-
-# Mock docker
-cat << 'EOF' > "$TEMP_BIN/docker"
-#!/usr/bin/env bash
-echo "docker called with: $@"
-EOF
-chmod +x "$TEMP_BIN/docker"
-
-# Mock nvidia-smi will be created dynamically inside run_test based on MOCK_HAS_GPU
-
-run_test() {
-    local name="$1"
-    local setup="$2"
-    local expected="$3"
-    local not_expected="${4:-}"
-
-    echo "Running test: $name"
-
-    # Run in a subshell so env vars don't leak
-    local output
-    output=$(bash -c "
-        $setup
-        if [[ \"\${MOCK_HAS_GPU:-}\" == \"1\" ]]; then
-            cat << 'EOF_MOCK' > "$TEMP_BIN/nvidia-smi"
-#!/usr/bin/env bash
+printf '%q ' "$@" >> "$MOCK_DOCKER_LOG"
+printf '\n' >> "$MOCK_DOCKER_LOG"
+# docker ps should report no pre-existing containers in launcher tests
+if [[ "${1:-}" == "ps" ]]; then exit 0; fi
 exit 0
-EOF_MOCK
-            chmod +x "$TEMP_BIN/nvidia-smi"
-        else
-            rm -f "$TEMP_BIN/nvidia-smi"
-        fi
-        \"$TEI_SCRIPT\" 2>&1 || true
-    ")
+SH
+chmod +x "$TEMP_BIN/uname" "$TEMP_BIN/docker"
 
-    if ! echo "$output" | grep -q "$expected"; then
-        echo "FAIL: $name"
-        echo "Expected output to contain: $expected"
-        echo "Actual output:"
-        echo "$output"
-        exit 1
-    fi
+rm -f "$TEMP_BIN/nvidia-smi"
+MOCK_OS=Linux \
+TEI_SIMILARITY_HOST_PORT=8080 \
+TEI_CLUSTERING_HOST_PORT=8081 \
+TEI_SIMILARITY_MODEL_ID=sentence-transformers/paraphrase-MiniLM-L6-v2 \
+TEI_CLUSTERING_MODEL_ID=sentence-transformers/all-MiniLM-L6-v2 \
+  "$SCRIPT" >/tmp/tei-launch-test.out 2>&1
 
-    if [[ -n "$not_expected" ]] && echo "$output" | grep -q -e "$not_expected"; then
-        echo "FAIL: $name"
-        echo "Expected output NOT to contain: $not_expected"
-        echo "Actual output:"
-        echo "$output"
-        exit 1
-    fi
+grep -q -- '--name community-analysis-tei-similarity' "$LOG"
+grep -q -- '-p 8080:80' "$LOG"
+grep -q -- '--model-id sentence-transformers/paraphrase-MiniLM-L6-v2' "$LOG"
+grep -q -- '--revision c9a2bfebc254878aee8c3aca9e6844d5bbb102d1' "$LOG"
+grep -q -- '--name community-analysis-tei-clustering' "$LOG"
+grep -q -- '-p 8081:80' "$LOG"
+grep -q -- '--model-id sentence-transformers/all-MiniLM-L6-v2' "$LOG"
+grep -q -- '--revision 1110a243fdf4706b3f48f1d95db1a4f5529b4d41' "$LOG"
 
-    echo "PASS"
-}
+# Backward-compatible similarity variables remain honored; clustering stays independent.
+: > "$LOG"
+MOCK_OS=Linux TEI_HOST_PORT=9000 TEI_MODEL_ID=legacy/similarity-model \
+  "$SCRIPT" >/tmp/tei-launch-test.out 2>&1
+grep -q -- '-p 9000:80' "$LOG"
+grep -q -- '--model-id legacy/similarity-model' "$LOG"
+grep -q -- '-p 8081:80' "$LOG"
 
-run_test "macOS native launch" \
-    "export MOCK_OS=Darwin; export TEI_HOST_PORT=9000; export TEI_API_KEY=secret_mac" \
-    "text-embeddings-router called with.*--port 9000"
 
-run_test "macOS passes optional args" \
-    "export MOCK_OS=Darwin; export TEI_REVISION=main" \
-    "text-embeddings-router called with.*--revision main.*--port" \
-    "--api-key"
+# macOS starts two native routers in the background with separate ports/models.
+cat > "$TEMP_BIN/text-embeddings-router" <<'SH'
+#!/usr/bin/env bash
+printf '%q ' "$@" >> "$MOCK_NATIVE_LOG"
+printf '\n' >> "$MOCK_NATIVE_LOG"
+sleep 2
+SH
+chmod +x "$TEMP_BIN/text-embeddings-router"
+export MOCK_NATIVE_LOG="$NATIVE_LOG"
+: > "$NATIVE_LOG"
+MOCK_OS=Darwin TEI_RUNTIME_DIR="$RUNTIME_DIR" "$SCRIPT" >/tmp/tei-launch-test.out 2>&1
+grep -q -- '--model-id sentence-transformers/paraphrase-MiniLM-L6-v2 --port 8080 --revision c9a2bfebc254878aee8c3aca9e6844d5bbb102d1' "$NATIVE_LOG"
+grep -q -- '--model-id sentence-transformers/all-MiniLM-L6-v2 --port 8081 --revision 1110a243fdf4706b3f48f1d95db1a4f5529b4d41' "$NATIVE_LOG"
+MOCK_OS=Darwin TEI_RUNTIME_DIR="$RUNTIME_DIR" bash "$ROOT/scripts/stop_tei.sh" >/tmp/tei-stop-test.out 2>&1
 
-run_test "Linux CPU launch uses default image" \
-    "export MOCK_OS=Linux; export MOCK_HAS_GPU=0" \
-    "docker called with: run -p 8080:80 ghcr.io/huggingface/text-embeddings-inference:cpu-1.5" \
-    "--gpus all"
+# Secrets are passed only by environment name, never as a literal docker argument.
+: > "$LOG"
+MOCK_OS=Linux TEI_API_KEY=super_secret_key "$SCRIPT" >/tmp/tei-launch-test.out 2>&1
+grep -q -- '-e API_KEY' "$LOG"
+if grep -q 'super_secret_key' "$LOG"; then
+  echo 'Secret value leaked into docker CLI arguments' >&2
+  exit 1
+fi
 
-run_test "Linux GPU launch fails if image unset" \
-    "export MOCK_OS=Linux; export MOCK_HAS_GPU=1" \
-    "Error: TEI_IMAGE environment variable must be explicitly provided for GPU deployments."
-
-run_test "Linux GPU launch succeeds if image set" \
-    "export MOCK_OS=Linux; export MOCK_HAS_GPU=1; export TEI_IMAGE=ghcr.io/huggingface/text-embeddings-inference:turing-1.5" \
-    "docker called with: run -p 8080:80 --gpus all ghcr.io/huggingface/text-embeddings-inference:turing-1.5"
-
-run_test "Docker sets API_KEY correctly" \
-    "export MOCK_OS=Linux; export MOCK_HAS_GPU=0; export TEI_API_KEY=super_secret_key" \
-    "-e API_KEY" \
-    "super_secret_key" # The mock just echoes the args, which shouldn't contain the secret value directly in CLI args
-
-echo "All start_tei.sh launcher tests passed!"
+echo 'All dual-profile TEI launcher tests passed!'

@@ -7,9 +7,67 @@ import os
 # Reduce parallelism for tokenizers to avoid warnings
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-# Global model cache to avoid reloading for every path
+# Global model cache to avoid rebuilding the TEI client for every path.
 _GLOBAL_MODEL = None
 logger = logging.getLogger(__name__)
+
+
+class OfflineThemeEmbeddingModel:
+    """Deterministic test-only similarity embedder."""
+
+    def encode(self, sentences):
+        return _offline_theme_embeddings(list(sentences)).astype(np.float32, copy=False)
+
+
+def build_similarity_embedder(config=None, model_name="paraphrase-MiniLM-L6-v2"):
+    """Build the configured similarity embedder without loading local models."""
+    from src.config.settings import (
+        DEFAULT_SIMILARITY_MODEL_REVISION,
+        get_similarity_settings,
+        get_tei_client_settings,
+    )
+
+    theme = (config or {}).get("theme", {})
+    theme = theme if isinstance(theme, dict) else {}
+    runtime = get_similarity_settings()
+    provider = str(theme.get("similarity_provider", runtime.provider)).strip().lower()
+    if provider == "mock":
+        return (
+            OfflineThemeEmbeddingModel(),
+            "mock:theme-similarity",
+            "deterministic-mock-v1",
+            4,
+        )
+    if provider != "tei":
+        raise ValueError(f"unsupported theme similarity provider: {provider!r}")
+
+    settings = get_tei_client_settings()
+    requested_model = str(theme.get("similarity_model", model_name)).strip()
+    if "/" not in requested_model:
+        requested_model = f"sentence-transformers/{requested_model}"
+    requested_revision = str(
+        theme.get("similarity_model_revision", DEFAULT_SIMILARITY_MODEL_REVISION)
+    ).strip()
+    if (
+        str(settings.model_id) != requested_model
+        or str(settings.revision) != requested_revision
+    ):
+        raise ValueError(
+            "configured similarity model/revision does not match the TEI "
+            "similarity profile: "
+            f"config={requested_model}@{requested_revision} "
+            f"runtime={settings.model_id}@{settings.revision}"
+        )
+    from src.themes.tei_client import TEIClient
+
+    client = TEIClient(
+        base_url=str(settings.base_url),
+        api_key=settings.api_key.get_secret_value() if settings.api_key else None,
+        client_batch_size=settings.client_batch_size,
+        timeout_seconds=settings.timeout_seconds,
+        normalize=True,
+    )
+    return client, requested_model, requested_revision, 384
 
 
 def get_similarity_model(model_name="paraphrase-MiniLM-L6-v2"):

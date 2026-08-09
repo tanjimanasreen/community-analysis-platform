@@ -85,7 +85,7 @@ def _community_summary(
     columns = ["community_id", "node_count", "edge_count", "total_weight"]
     if interactions is not None:
         columns.extend(["x", "y"])
-        
+
     if frame is None or frame.empty:
         return pd.DataFrame(columns=columns)
 
@@ -123,27 +123,34 @@ def _community_summary(
     summary["node_count"] = summary["node_count"].fillna(0).astype(int)
     summary["edge_count"] = summary["edge_count"].astype(int)
     summary["total_weight"] = summary["total_weight"].astype(float)
-    
+
     if interactions is not None:
         if not interactions.empty:
             import networkx as nx
-            
+
             G = nx.from_pandas_edgelist(
                 interactions,
                 source="source_community_id",
                 target="target_community_id",
                 edge_attr=["total_weight"],
-                create_using=nx.Graph()
+                create_using=nx.Graph(),
             )
             G.add_nodes_from(summary["community_id"])
             layout = nx.spring_layout(G, seed=42)
-            
+
             coords = [
-                (str(node), float(layout[node][0] * 1000), float(layout[node][1] * 1000))
-                if node in layout else (str(node), 0.0, 0.0)
+                (
+                    (
+                        str(node),
+                        float(layout[node][0] * 1000),
+                        float(layout[node][1] * 1000),
+                    )
+                    if node in layout
+                    else (str(node), 0.0, 0.0)
+                )
                 for node in summary["community_id"]
             ]
-            
+
             coords_df = pd.DataFrame(coords, columns=["community_id", "x", "y"])
             summary = summary.merge(coords_df, on="community_id", how="left")
         else:
@@ -159,13 +166,21 @@ def _community_node_index(frame: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame(columns=["node_id", "x", "y"])
 
     # Extract unique nodes
-    nodes = pd.concat(
-        [frame["source"], frame["target"]],
-        ignore_index=True,
-    ).dropna().astype(str).drop_duplicates().sort_values().reset_index(drop=True)
+    nodes = (
+        pd.concat(
+            [frame["source"], frame["target"]],
+            ignore_index=True,
+        )
+        .dropna()
+        .astype(str)
+        .drop_duplicates()
+        .sort_values()
+        .reset_index(drop=True)
+    )
 
     # Calculate layout using networkx
     import networkx as nx
+
     G = nx.from_pandas_edgelist(
         frame, "source", "target", ["weight"], create_using=nx.Graph()
     )
@@ -179,8 +194,11 @@ def _community_node_index(frame: pd.DataFrame) -> pd.DataFrame:
     # Default coordinates to 0.0 if missing (shouldn't happen, but safe)
     # We scale coordinates up slightly to match the expected ForceGraph space
     coords = [
-        (str(node), float(layout[node][0] * 1000), float(layout[node][1] * 1000))
-        if node in layout else (str(node), 0.0, 0.0)
+        (
+            (str(node), float(layout[node][0] * 1000), float(layout[node][1] * 1000))
+            if node in layout
+            else (str(node), 0.0, 0.0)
+        )
         for node in nodes
     ]
 
@@ -447,17 +465,13 @@ def run_community_phase(
         _community_summary(per_community, per_community_interactions),
     )
     save_csv_to_directory(
-        os.path.join(
-            output_dir, data_type, "communities", "interactions", "absolute"
-        ),
+        os.path.join(output_dir, data_type, "communities", "interactions", "absolute"),
         content_type,
         f"{month}.csv",
         abs_community_interactions,
     )
     save_csv_to_directory(
-        os.path.join(
-            output_dir, data_type, "communities", "interactions", "weighted"
-        ),
+        os.path.join(output_dir, data_type, "communities", "interactions", "weighted"),
         content_type,
         f"{month}.csv",
         per_community_interactions,

@@ -16,6 +16,7 @@ class TEIClient:
         client_batch_size: int = 32,
         timeout_seconds: float = 60.0,
         session: requests.Session | None = None,
+        normalize: bool = True,
     ):
         self.base_url = base_url.rstrip("/")
         self.embed_endpoint = f"{self.base_url}/embed"
@@ -25,6 +26,7 @@ class TEIClient:
             self.headers["Authorization"] = f"Bearer {api_key}"
         self.client_batch_size = max(1, int(client_batch_size))
         self.timeout_seconds = float(timeout_seconds)
+        self.normalize = bool(normalize)
         self._session = session or requests.Session()
 
     def _post(self, endpoint: str, payload: dict):
@@ -54,7 +56,7 @@ class TEIClient:
         all_embeddings: list = []
         for start in range(0, len(sentences), self.client_batch_size):
             batch = sentences[start : start + self.client_batch_size]
-            payload = {"inputs": batch, "normalize": True}
+            payload = {"inputs": batch, "normalize": self.normalize}
             response = self._post(self.embed_endpoint, payload)
             if response.status_code == 404:
                 response = self._post(self.predict_endpoint, payload)

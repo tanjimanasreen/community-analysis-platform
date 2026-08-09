@@ -2,7 +2,6 @@ import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   Activity,
-  ArrowRightLeft,
   BookOpen,
   ChevronLeft,
   ChevronRight,
@@ -20,9 +19,8 @@ const navItems = [
   { name: 'Overview', icon: LayoutDashboard, path: '/' },
   { name: 'Community Network', icon: Network, path: '/network' },
   { name: 'Thematic Analysis', icon: Activity, path: '/thematic' },
-  { name: 'Evolution Over Time', icon: TrendingUp, path: '/evolution' },
+  { name: 'Community Evolution', icon: TrendingUp, path: '/evolution' },
   { name: 'Comparative Analysis', icon: GitMerge, path: '/comparative' },
-  { name: 'Community Transitions', icon: ArrowRightLeft, path: '/transitions' },
   { name: 'Top Communities', icon: Users, path: '/top-communities' },
   { name: 'Data Explorer', icon: Database, path: '/data' },
   { name: 'Reports', icon: FileText, path: '/reports' },

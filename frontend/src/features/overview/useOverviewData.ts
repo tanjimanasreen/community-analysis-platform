@@ -10,7 +10,7 @@ import {
 } from '../../api/networks';
 import { getOverview } from '../../api/overview';
 import { getArtifacts } from '../../api/runs';
-import { getThemes, getTopics } from '../../api/topics';
+import { getMonthlyThemeClusters, getThemes, getTopics } from '../../api/topics';
 import {
   COMMUNITY_PARAM,
   NETWORK_VIEW_PARAM,
@@ -208,19 +208,29 @@ export function useOverviewData(communityOffset: number, communityLimit = 5) {
 
   const artifacts = artifactsQuery.data?.artifacts ?? [];
   const hasThemes = artifacts.some((artifact) => artifact.key.startsWith('themes_'));
+  const hasThemeClusters = artifacts.some((artifact) => artifact.key.startsWith('theme_clusters_'));
   const hasMatchedTopics = artifacts.some((artifact) => artifact.key.startsWith('matched_communities_topics'));
   const hasTransitions = artifacts.some((artifact) => artifact.key === 'community_transitions');
-  const selectedMonth = selectedPeriod ? selectedPeriod.slice(5, 7) : undefined;
-
   const themesQuery = useQuery({
-    queryKey: ['overview-themes', selectedRunId, selectedMonth, 500],
+    queryKey: ['overview-themes', selectedRunId, selectedPeriod, 500],
     queryFn: ({ signal }) =>
       getThemes(
         selectedRunId,
-        { month: selectedMonth, limit: 500, offset: 0 },
+        { period: selectedPeriod, limit: 500, offset: 0 },
         signal,
       ),
     enabled: periodEnabled && artifactsQuery.isSuccess && hasThemes,
+  });
+  const themeClustersQuery = useQuery({
+    queryKey: ['overview-theme-clusters', selectedRunId, selectedPeriod],
+    queryFn: ({ signal }) =>
+      getMonthlyThemeClusters(
+        selectedRunId,
+        { period: selectedPeriod, scope: 'matched' },
+        signal,
+      ),
+    enabled: periodEnabled && artifactsQuery.isSuccess && hasThemeClusters,
+    retry: false,
   });
   const communityTopicsQuery = useQuery({
     queryKey: [
@@ -340,8 +350,10 @@ export function useOverviewData(communityOffset: number, communityLimit = 5) {
     centralityLeadersQuery,
     artifactsQuery,
     themesQuery,
+    themeClustersQuery,
     transitionsQuery,
     hasThemes,
+    hasThemeClusters,
     hasMatchedTopics,
     hasTransitions,
     retryOverview: () => {
@@ -356,6 +368,7 @@ export function useOverviewData(communityOffset: number, communityLimit = 5) {
         }
         void communitiesQuery.refetch();
         if (hasThemes) void themesQuery.refetch();
+        if (hasThemeClusters) void themeClustersQuery.refetch();
       }
       if (hasTransitions) void transitionsQuery.refetch();
     },

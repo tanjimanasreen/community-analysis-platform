@@ -26,7 +26,7 @@ export default function ProviderMetadata({
           {entries.map(([key, value]) => (
             <div key={key} className="rounded-lg border border-border/70 bg-bg/30 p-3">
               <dt className="break-all text-[11px] text-muted">{key}</dt>
-              <dd className="mt-1 break-words text-sm font-semibold text-text-heading">
+              <dd className="mt-1 whitespace-pre-wrap break-words text-sm font-semibold text-text-heading">
                 {displayArtifactValue(value)}
               </dd>
             </div>

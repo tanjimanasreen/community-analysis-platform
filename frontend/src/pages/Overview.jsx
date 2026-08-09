@@ -159,18 +159,18 @@ export default function Overview() {
       <div id="themes">
         <TopThemesPanel
           period={data.selectedPeriod}
-          themes={data.themesQuery.data}
-          hasArtifact={data.hasThemes}
-          isLoading={data.artifactsQuery.isPending || (data.hasThemes && data.themesQuery.isPending)}
-          error={data.artifactsQuery.error || data.themesQuery.error}
+          themes={data.themeClustersQuery.data}
+          hasArtifact={data.hasThemeClusters}
+          isLoading={data.artifactsQuery.isPending || (data.hasThemeClusters && data.themeClustersQuery.isPending)}
+          error={data.artifactsQuery.error || data.themeClustersQuery.error}
           onRetry={() => {
             void data.artifactsQuery.refetch();
-            if (data.hasThemes) void data.themesQuery.refetch();
+            if (data.hasThemeClusters) void data.themeClustersQuery.refetch();
           }}
           search={location.search}
         />
       </div>
-      
+
       <div id="continuity">
         <CommunityContinuityTimeline
           transitions={data.transitionsQuery.data}
@@ -228,7 +228,7 @@ export default function Overview() {
         </div>
       )}
       </div>
-      
+
       <div className="hidden sm:flex w-14 shrink-0 sticky top-0 h-screen flex-col justify-center pointer-events-none z-40 ml-4 sm:ml-6">
         <PageNavigationRail sections={overviewSections} />
       </div>

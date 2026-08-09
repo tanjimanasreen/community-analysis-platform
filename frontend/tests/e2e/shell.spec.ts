@@ -47,6 +47,25 @@ test('mobile navigation opens, navigates, and dismisses at 320 CSS pixels', asyn
   await page.getByRole('button', { name: 'Open navigation' }).click();
   await page.getByRole('link', { name: 'Methodology' }).click();
   await expect(page).toHaveURL(/\/methodology\?/);
-  await expect(page.getByRole('heading', { name: 'Methodology and run provenance' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Methodology', exact: true })).toBeVisible();
   await expect(page.locator('aside[aria-label="Primary navigation"]')).toHaveClass(/-left-80/);
+});
+
+
+test('methodology presents the thesis workflow and switches platform network models', async ({ page }) => {
+  await openVerifiedRoute(page, '/methodology');
+  await expect(page.getByRole('heading', { name: 'Methodology', exact: true })).toBeVisible();
+  await expect(page.getByText('What is the impact of different user affinities on community detection?')).toBeVisible();
+  await expect(page.getByText('What topics do communities engage with?')).toBeVisible();
+  await expect(page.getByText('How do communities evolve over time?')).toBeVisible();
+  await expect(page.getByText('How do individuals migrate between communities?')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Methodological Workflow' })).toBeVisible();
+
+  await page.getByRole('tab', { name: 'Twitter · Retweet/Quote' }).click();
+  await expect(page.getByText('RETWEETED_BY')).toBeVisible();
+  await page.getByRole('tab', { name: 'Twitter · Reply' }).click();
+  await expect(page.getByText('REPLIED_TO')).toBeVisible();
+
+  await page.getByText('Selected run · resolved metadata').click();
+  await expect(page.getByText('Run and dataset')).toBeVisible();
 });

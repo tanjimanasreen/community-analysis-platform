@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
-import type { OverviewResponse, RunDetail, RunSummary, ThemesResponse, VerificationResponse } from '../../../types/api';
+import type { MonthlyClusteredThemeResponse, OverviewResponse, RunDetail, RunSummary, VerificationResponse } from '../../../types/api';
 import RunConfigurationPanel from '../RunConfigurationPanel';
 import RunProvenancePanel from '../RunProvenancePanel';
 import TopThemesPanel from '../TopThemesPanel';
@@ -110,39 +110,93 @@ describe('Overview metadata panels', () => {
 });
 
 
-const overviewWithThemes: OverviewResponse = {
-  ...overview,
-  top_themes: [
-    { name: 'Immigration policy', count: 12 },
-    { name: 'Public protest', count: 8 },
+const selectedMonthThemes: MonthlyClusteredThemeResponse = {
+  run_id: overview.run_id,
+  scope: 'matched',
+  period: '2017-04',
+  complete: true,
+  source_observation_count: 3,
+  excluded_records_missing_general_theme: 0,
+  excluded_records_ambiguous_general_theme_serialization: 0,
+  monthly_noise_observation_count: 0,
+  total_themed_community_pairs: 2,
+  distinct_clustered_theme_count: 2,
+  embedding_provider: 'tei',
+  embedding_model: 'sentence-transformers/all-MiniLM-L6-v2',
+  monthly_cluster_contract_version: '1.0',
+  canonicalization_contract_version: '1.0',
+  themes: [
+    {
+      theme_id: 'ct_immigration',
+      name: 'Immigration policy',
+      community_count: 1,
+      percentage: 50,
+      keywords: ['immigration', 'ban'],
+      monthly_cluster_ids: ['mc_1'],
+      monthly_representative_themes: ['US Immigration Policy'],
+      source_theme_labels: ['US Immigration Policy', 'Trump Immigration Policy'],
+      community_pairs: [],
+      mean_membership_probability: 0.9,
+    },
+    {
+      theme_id: 'ct_protest',
+      name: 'Public protest',
+      community_count: 1,
+      percentage: 50,
+      keywords: ['protest', 'rights'],
+      monthly_cluster_ids: ['mc_2'],
+      monthly_representative_themes: ['Public protest'],
+      source_theme_labels: ['Public protest'],
+      community_pairs: [],
+      mean_membership_probability: 0.95,
+    },
   ],
-  model_metadata: {
-    configured_primary_provider: 'openai',
-    configured_primary_model: 'gpt-5-nano',
-  },
 };
 
 describe('TopThemesPanel', () => {
-  it('shows selected-month distinct community counts, percentages, and LDA keywords', () => {
+  it('shows selected-month distinct pair counts, percentages, and LDA keywords', () => {
     render(
       <MemoryRouter>
-        <TopThemesPanel overview={overviewWithThemes} />
+        <TopThemesPanel period="2017-04" themes={selectedMonthThemes} />
       </MemoryRouter>,
     );
-    expect(screen.getByText('Top Themes')).toBeInTheDocument();
+    expect(screen.getByText('Top Themes · Apr 2017')).toBeInTheDocument();
     expect(screen.getByText('Immigration policy')).toBeInTheDocument();
-    expect(screen.getByText('12')).toBeInTheDocument();
-    expect(screen.getByText('openai')).toBeInTheDocument();
-    expect(screen.getByText('gpt-5-nano')).toBeInTheDocument();
+    expect(screen.getByText('1 of 2 themed communities')).toBeInTheDocument();
+    expect(screen.getByText('50.0%')).toBeInTheDocument();
+    expect(screen.getByText('immigration')).toBeInTheDocument();
   });
 
-  it('does not rank an incomplete monthly response', () => {
+  it('bounds unusually long keyword evidence and reports ambiguous-source exclusions', () => {
+    const longKeyword = 'community_led_cross_platform_public_accountability_discussion';
+    const guarded = {
+      ...selectedMonthThemes,
+      excluded_records_ambiguous_general_theme_serialization: 1,
+      themes: [
+        {
+          ...selectedMonthThemes.themes[0],
+          name: 'Cross-platform civic discussion of public accountability and institutional response across multiple communities',
+          keywords: [longKeyword],
+        },
+      ],
+    };
+
     render(
       <MemoryRouter>
-        <TopThemesPanel overview={{ ...overviewWithThemes, top_themes: [] }} />
+        <TopThemesPanel period="2017-04" themes={guarded} />
       </MemoryRouter>,
     );
-    expect(screen.getByText('No theme summary available')).toBeInTheDocument();
-    expect(screen.queryByText('Immigration policy')).not.toBeInTheDocument();
+
+    expect(screen.getByText(longKeyword)).toHaveClass('truncate', 'max-w-48');
+    expect(screen.getByText(/1 matched source record contained an ambiguous legacy general-theme serialization/i)).toBeInTheDocument();
+  });
+
+  it('shows a safe empty state when no canonical themes are published', () => {
+    render(
+      <MemoryRouter>
+        <TopThemesPanel period="2017-04" themes={{ ...selectedMonthThemes, themes: [], total_themed_community_pairs: 0 }} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('No clustered theme summary available')).toBeInTheDocument();
   });
 });

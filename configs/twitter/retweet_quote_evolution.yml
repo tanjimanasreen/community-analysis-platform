@@ -17,6 +17,7 @@ date_column: created_at
 
 theme:
   render_visuals: false
+  evolution_similarity_enabled: true
   similarity_model: paraphrase-MiniLM-L6-v2
   max_workers: 4
 

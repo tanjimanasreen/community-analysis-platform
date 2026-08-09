@@ -284,4 +284,3 @@ export const designSystem = {
 } as const;
 
 export default designSystem;
-

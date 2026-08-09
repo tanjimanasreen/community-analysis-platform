@@ -186,9 +186,12 @@ Input:
 Output categories:
 
 - `LDA/matched_theme`
+- canonical general-theme cluster summaries/evidence (additive production artifacts)
 - `LDA/community_transition/community_transition.csv`
 - `LDA/community_transition/community_transition.png`
 - `LDA/community_transition/community_transition.html`
+- persisted Community Evolution path-step and member-mobility artifacts
+- persisted path-scoped theme-similarity records
 - `LDA/membership_change_graphs`
 - `LDA/theme_similarity`
 
@@ -202,6 +205,21 @@ Target command:
 python -m src.cli run-theme-analysis --config configs/twitter_mixed_2017.yml
 ```
 
+### Community Evolution Read Model
+
+The accepted monthly `community_transition` table is transformed upstream into
+deterministic start-to-end DFS path rows, per-path membership mobility rows, and
+(optional) path-scoped raw-theme cosine-similarity rows. These are immutable
+manifest artifacts published under `data/evolution/`. The FastAPI layer reads
+those artifacts only; it does not reconstruct paths, classify members, or execute
+embedding/similarity code during requests.
+
+The dashboard canonical route is `/evolution`. It presents Community Similarity
+over Time, Member Mobility, and Thematic Similarity on one page controlled by one
+persistent-path selection and a sticky right-side section rail. `/transitions` is a
+compatibility redirect; the prior completed-run history remains available at
+`/run-history`.
+
 ## Local Services
 
 Default production local services:
@@ -209,6 +227,15 @@ Default production local services:
 - Memgraph Community Edition for local graph storage.
 - Optional Neo4j exporter compatibility for existing database exports.
 - Optional OpenAI API key for GPT theme generation.
+- Two revision-pinned TEI embedding profiles for production semantic work:
+  similarity on `8080` (`paraphrase-MiniLM-L6-v2`) and general-theme clustering
+  on `8081` (`all-MiniLM-L6-v2`).
+- TEI is an inference boundary, not an embedding database. Theme-clustering
+  vectors and Community Evolution thematic-similarity vectors are content-addressed,
+  persisted as immutable float32 Parquet run artifacts, and registered in the
+  canonical manifest.
+- Batch semantic clustering uses first-party `sklearn.cluster.HDBSCAN`; Memgraph
+  remains graph storage and is not used as a vector store.
 
 ## Configuration
 

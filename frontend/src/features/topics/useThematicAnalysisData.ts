@@ -1,16 +1,19 @@
 import { useQuery } from '@tanstack/react-query';
-import { getThemeSimilarity } from '../../api/evolution';
 import { getOverview } from '../../api/overview';
-import { getThemes, getTopics } from '../../api/topics';
+import {
+  getClusteredThemeEvidence,
+  getClusteredThemeTimeline,
+  getThemes,
+  getTopics,
+} from '../../api/topics';
 import { useDashboardContext } from '../../hooks/useDashboardContext';
-import type { TopicType } from '../../types/api';
-
-const SUMMARY_LIMIT = 500;
 
 interface ThematicDataOptions {
-  topicType: TopicType;
   communityId: string | null;
   month: string | null;
+  canonicalThemeId: string | null;
+  timelineStart: string | null;
+  timelineEnd: string | null;
   topicOffset: number;
   topicLimit: number;
   themeOffset: number;
@@ -18,9 +21,11 @@ interface ThematicDataOptions {
 }
 
 export function useThematicAnalysisData({
-  topicType,
   communityId,
   month,
+  canonicalThemeId,
+  timelineStart,
+  timelineEnd,
   topicOffset,
   topicLimit,
   themeOffset,
@@ -39,13 +44,14 @@ export function useThematicAnalysisData({
   });
   const topicsQuery = useQuery({
     queryKey: [
-      'thematic-topics', selectedRunId, topicType, communityId, topicLimit, topicOffset,
+      'thematic-topics', selectedRunId, 'matched', communityId, month, topicLimit, topicOffset,
     ],
     queryFn: ({ signal }) => getTopics(
       selectedRunId,
       {
-        type: topicType,
+        type: 'matched',
         community_id: communityId ?? undefined,
+        period: month ?? undefined,
         limit: topicLimit,
         offset: topicOffset,
       },
@@ -61,7 +67,7 @@ export function useThematicAnalysisData({
     queryFn: ({ signal }) => getThemes(
       selectedRunId,
       {
-        month: month ?? undefined,
+        period: month ?? undefined,
         community_id: communityId ?? undefined,
         limit: themeLimit,
         offset: themeOffset,
@@ -71,31 +77,34 @@ export function useThematicAnalysisData({
     enabled,
     retry: false,
   });
-  const themeSummaryQuery = useQuery({
-    queryKey: ['thematic-theme-summary', selectedRunId, month, communityId, SUMMARY_LIMIT],
-    queryFn: ({ signal }) => getThemes(
+  const timelineQuery = useQuery({
+    queryKey: ['thematic-theme-timeline', selectedRunId, timelineStart, timelineEnd],
+    queryFn: ({ signal }) => getClusteredThemeTimeline(
       selectedRunId,
       {
-        month: month ?? undefined,
-        community_id: communityId ?? undefined,
-        limit: SUMMARY_LIMIT,
-        offset: 0,
+        period_start: timelineStart ?? undefined,
+        period_end: timelineEnd ?? undefined,
+        scope: 'matched',
       },
       signal,
     ),
     enabled,
     retry: false,
   });
-  const themeCatalogQuery = useQuery({
-    queryKey: ['thematic-theme-catalog', selectedRunId, SUMMARY_LIMIT],
-    queryFn: ({ signal }) => getThemes(selectedRunId, { limit: SUMMARY_LIMIT, offset: 0 }, signal),
-    enabled,
-    retry: false,
-  });
-  const similarityQuery = useQuery({
-    queryKey: ['thematic-similarity', selectedRunId],
-    queryFn: ({ signal }) => getThemeSimilarity(selectedRunId, signal),
-    enabled,
+
+  const clusterEvidenceQuery = useQuery({
+    queryKey: ['thematic-cluster-evidence', selectedRunId, month, canonicalThemeId],
+    queryFn: ({ signal }) => getClusteredThemeEvidence(
+      selectedRunId,
+      {
+        period: month ?? '',
+        canonical_theme_id: canonicalThemeId ?? '',
+        limit: 100,
+        offset: 0,
+      },
+      signal,
+    ),
+    enabled: enabled && Boolean(month && canonicalThemeId),
     retry: false,
   });
 
@@ -104,16 +113,14 @@ export function useThematicAnalysisData({
     overviewQuery,
     topicsQuery,
     themesQuery,
-    themeSummaryQuery,
-    themeCatalogQuery,
-    similarityQuery,
+    timelineQuery,
+    clusterEvidenceQuery,
     retrySemanticData: () => {
       void overviewQuery.refetch();
       void topicsQuery.refetch();
       void themesQuery.refetch();
-      void themeSummaryQuery.refetch();
-      void themeCatalogQuery.refetch();
-      void similarityQuery.refetch();
+      void timelineQuery.refetch();
+      if (canonicalThemeId) void clusterEvidenceQuery.refetch();
     },
   };
 }

@@ -185,6 +185,31 @@ def _write_public_outputs(config, months):
         contract.COMMUNITY_TRANSITION_COLUMNS,
         transition_rows,
     )
+    _write_csv(
+        theme_dir / "community_paths.csv",
+        contract.COMMUNITY_PATH_COLUMNS,
+    )
+    _write_csv(
+        theme_dir / "community_path_membership.csv",
+        contract.COMMUNITY_PATH_MEMBERSHIP_COLUMNS,
+    )
+
+
+def test_evolution_output_checks_include_path_contract(tmp_path):
+    config = _config(tmp_path)
+    checks = {
+        check.name: check for check in contract.get_public_artifact_checks(config)
+    }
+
+    assert checks["community_path"].required is True
+    assert checks["community_path_membership"].required is True
+    assert checks["community_path_theme_similarity"].required is False
+
+    config["theme"]["evolution_similarity_enabled"] = True
+    enabled = {
+        check.name: check for check in contract.get_public_artifact_checks(config)
+    }
+    assert enabled["community_path_theme_similarity"].required is True
 
 
 def test_output_contract_column_constants_match_internal_contract_modules():
@@ -341,3 +366,8 @@ def test_longitudinal_contract_rejects_empty_transition(tmp_path):
 
     with pytest.raises(OutputContractError, match="must contain at least one row"):
         verify_output_contract(config, longitudinal=True)
+
+
+def test_theme_cluster_summary_contract_includes_ambiguous_serialization_diagnostic():
+    columns = contract.get_required_columns_by_artifact()["theme_cluster_summary"]
+    assert "excluded_records_ambiguous_general_theme_serialization" in columns

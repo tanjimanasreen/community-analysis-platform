@@ -83,6 +83,166 @@ THEMED_OUTPUT_COLUMNS = MATCHED_LDA_COLUMNS + [
     "weighted_theme_gpt",
     "weighted_theme_names",
 ]
+
+COMMUNITY_PATH_COLUMNS = [
+    "path_id",
+    "display_order",
+    "step_index",
+    "month",
+    "community_key",
+    "community_id",
+    "member_count",
+    "members",
+    "previous_month",
+    "previous_community_key",
+    "previous_community_id",
+    "jaccard_from_previous",
+    "retained_count",
+    "absolute_theme",
+    "weighted_theme",
+    "general_theme",
+]
+COMMUNITY_PATH_MEMBERSHIP_COLUMNS = [
+    "path_id",
+    "display_order",
+    "step_index",
+    "month",
+    "community_key",
+    "community_id",
+    "member_count",
+    "size_delta",
+    "existing_count",
+    "new_count",
+    "lost_count",
+    "reappearing_count",
+    "members",
+    "existing_members",
+    "new_members",
+    "lost_members",
+    "reappearing_members",
+]
+COMMUNITY_PATH_THEME_SIMILARITY_COLUMNS = [
+    "path_id",
+    "display_order",
+    "theme_type",
+    "left_step_index",
+    "right_step_index",
+    "left_month",
+    "right_month",
+    "left_community_key",
+    "right_community_key",
+    "left_theme",
+    "right_theme",
+    "cosine_similarity",
+    "embedding_provider",
+    "embedding_model",
+    "embedding_model_revision",
+]
+THEME_CLUSTER_SUMMARY_COLUMNS = [
+    "period",
+    "canonical_theme_id",
+    "canonical_theme_label",
+    "monthly_cluster_ids",
+    "monthly_representative_themes",
+    "source_general_theme_labels",
+    "community_count",
+    "total_themed_community_pairs",
+    "percentage",
+    "prominent_keywords",
+    "community_pairs",
+    "mean_membership_probability",
+    "source_observation_count",
+    "cluster_observation_count",
+    "monthly_cluster_count",
+    "excluded_records_missing_general_theme",
+    "excluded_records_ambiguous_general_theme_serialization",
+    "monthly_noise_observation_count",
+    "embedding_provider",
+    "embedding_model",
+    "embedding_model_revision",
+    "embedding_contract_version",
+    "embedding_dtype",
+    "embedding_normalized",
+    "hdbscan_implementation",
+    "hdbscan_version",
+    "clustering_min_cluster_size",
+    "canonicalization_min_cluster_size",
+    "clustering_metric",
+    "monthly_cluster_contract_version",
+    "canonicalization_contract_version",
+    "source_artifact_sha256",
+]
+THEME_CLUSTER_OBSERVATION_COLUMNS = [
+    "period",
+    "absolute_community",
+    "weighted_community",
+    "pair_key",
+    "source_general_theme_label",
+    "general_keywords",
+    "source_index",
+    "hdbscan_label",
+    "membership_probability",
+    "is_monthly_noise",
+    "monthly_cluster_id",
+    "monthly_representative_theme",
+    "canonical_theme_id",
+    "canonical_theme_label",
+    "embedding_provider",
+    "embedding_model",
+    "embedding_model_revision",
+    "embedding_contract_version",
+    "embedding_dtype",
+    "embedding_normalized",
+    "hdbscan_implementation",
+    "hdbscan_version",
+    "clustering_min_cluster_size",
+    "canonicalization_min_cluster_size",
+    "clustering_metric",
+    "source_artifact_sha256",
+    "monthly_cluster_contract_version",
+    "canonicalization_contract_version",
+]
+THEME_EMBEDDING_COLUMNS = [
+    "embedding_key",
+    "text",
+    "text_sha256",
+    "profile",
+    "provider",
+    "model_id",
+    "model_revision",
+    "normalized",
+    "preprocessing_version",
+    "embedding_contract_version",
+    "dimensions",
+    "dtype",
+    "embedding_sha256",
+    "embedding",
+]
+THEME_CANONICAL_FAMILY_COLUMNS = [
+    "canonical_theme_id",
+    "canonical_theme_label",
+    "monthly_cluster_ids",
+    "monthly_representatives",
+    "periods",
+    "months_present",
+    "stage_b_hdbscan_label",
+    "singleton_canonical_theme",
+    "embedding_provider",
+    "embedding_model",
+    "embedding_model_revision",
+    "embedding_contract_version",
+    "embedding_dtype",
+    "embedding_normalized",
+    "hdbscan_implementation",
+    "hdbscan_version",
+    "clustering_min_cluster_size",
+    "canonicalization_min_cluster_size",
+    "clustering_metric",
+    "source_artifact_sha256s",
+    "monthly_cluster_contract_version",
+    "canonicalization_contract_version",
+]
+
 COMMUNITY_TRANSITION_COLUMNS = [
     "start_month",
     "end_month",
@@ -241,7 +401,13 @@ def get_public_artifact_checks(
     """Return public artifact checks for a run without reading any artifacts."""
     params = get_output_contract_params(config)
     months = get_output_contract_months(config, longitudinal=longitudinal)
-    return _public_artifact_checks(params, months)
+    theme = _theme_config(config)
+    evolution_similarity_enabled = bool(
+        theme.get("evolution_similarity_enabled", theme.get("render_visuals", False))
+    )
+    return _public_artifact_checks(
+        params, months, evolution_similarity_enabled=evolution_similarity_enabled
+    )
 
 
 def get_required_columns_by_artifact() -> dict[str, list[str]]:
@@ -262,7 +428,14 @@ def get_required_columns_by_artifact() -> dict[str, list[str]]:
         "matched_lda": MATCHED_LDA_COLUMNS,
         "partial_matched_lda": PARTIAL_MATCHED_LDA_COLUMNS,
         "themed_output": THEMED_OUTPUT_COLUMNS,
+        "theme_cluster_summary": THEME_CLUSTER_SUMMARY_COLUMNS,
+        "theme_cluster_observation": THEME_CLUSTER_OBSERVATION_COLUMNS,
+        "theme_canonical_family": THEME_CANONICAL_FAMILY_COLUMNS,
+        "theme_embedding": THEME_EMBEDDING_COLUMNS,
         "community_transition": COMMUNITY_TRANSITION_COLUMNS,
+        "community_path": COMMUNITY_PATH_COLUMNS,
+        "community_path_membership": COMMUNITY_PATH_MEMBERSHIP_COLUMNS,
+        "community_path_theme_similarity": COMMUNITY_PATH_THEME_SIMILARITY_COLUMNS,
     }
 
 
@@ -317,7 +490,10 @@ def _base(params: Mapping[str, str]) -> Path:
 
 
 def _public_artifact_checks(
-    params: Mapping[str, str], months: Iterable[str]
+    params: Mapping[str, str],
+    months: Iterable[str],
+    *,
+    evolution_similarity_enabled: bool = False,
 ) -> list[ArtifactCheck]:
     base = _base(params)
     theme_output = Path(params["theme_output_dir"])
@@ -448,13 +624,31 @@ def _public_artifact_checks(
             ]
         )
 
-    checks.append(
-        ArtifactCheck(
-            "community_transition",
-            theme_output / "community_transition.csv",
-            COMMUNITY_TRANSITION_COLUMNS,
-            non_empty=len(list(months)) > 1,
-        )
+    checks.extend(
+        [
+            ArtifactCheck(
+                "community_transition",
+                theme_output / "community_transition.csv",
+                COMMUNITY_TRANSITION_COLUMNS,
+                non_empty=len(list(months)) > 1,
+            ),
+            ArtifactCheck(
+                "community_path",
+                theme_output / "community_paths.parquet",
+                COMMUNITY_PATH_COLUMNS,
+            ),
+            ArtifactCheck(
+                "community_path_membership",
+                theme_output / "community_path_membership.parquet",
+                COMMUNITY_PATH_MEMBERSHIP_COLUMNS,
+            ),
+            ArtifactCheck(
+                "community_path_theme_similarity",
+                theme_output / "community_path_theme_similarity.parquet",
+                COMMUNITY_PATH_THEME_SIMILARITY_COLUMNS,
+                required=evolution_similarity_enabled,
+            ),
+        ]
     )
     return checks
 

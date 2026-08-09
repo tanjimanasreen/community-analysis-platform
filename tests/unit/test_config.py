@@ -44,3 +44,52 @@ def test_invalid_enabled_tracking_config_is_rejected():
     }
     with pytest.raises(ValueError, match="escapes the repository root"):
         validate_run_config(config)
+
+
+def test_similarity_tei_profile_prefers_explicit_profile_environment(monkeypatch):
+    from src.config.settings import get_tei_client_settings
+
+    monkeypatch.setenv("TEI_BASE_URL", "http://legacy.test:8080")
+    monkeypatch.setenv("TEI_MODEL_ID", "legacy/model")
+    monkeypatch.setenv("TEI_SIMILARITY_BASE_URL", "http://similarity.test:9080")
+    monkeypatch.setenv(
+        "TEI_SIMILARITY_MODEL_ID",
+        "sentence-transformers/paraphrase-MiniLM-L6-v2",
+    )
+    monkeypatch.setenv("TEI_SIMILARITY_REVISION", "pinned-revision")
+
+    settings = get_tei_client_settings()
+
+    assert str(settings.base_url).rstrip("/") == "http://similarity.test:9080"
+    assert settings.model_id == "sentence-transformers/paraphrase-MiniLM-L6-v2"
+    assert settings.revision == "pinned-revision"
+
+
+def test_similarity_tei_profile_reads_profile_values_from_dotenv(monkeypatch, tmp_path):
+    from src.config.settings import get_tei_client_settings
+
+    for name in (
+        "TEI_SIMILARITY_BASE_URL",
+        "TEI_SIMILARITY_MODEL_ID",
+        "TEI_SIMILARITY_REVISION",
+        "TEI_BASE_URL",
+        "TEI_MODEL_ID",
+        "TEI_REVISION",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    (tmp_path / ".env").write_text(
+        "TEI_BASE_URL=http://legacy.test:8080\n"
+        "TEI_SIMILARITY_BASE_URL=http://similarity.test:9080\n"
+        "TEI_MODEL_ID=legacy/model\n"
+        "TEI_SIMILARITY_MODEL_ID=sentence-transformers/paraphrase-MiniLM-L6-v2\n"
+        "TEI_REVISION=legacy-revision\n"
+        "TEI_SIMILARITY_REVISION=pinned-revision\n",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+
+    settings = get_tei_client_settings()
+
+    assert str(settings.base_url).rstrip("/") == "http://similarity.test:9080"
+    assert settings.model_id == "sentence-transformers/paraphrase-MiniLM-L6-v2"
+    assert settings.revision == "pinned-revision"

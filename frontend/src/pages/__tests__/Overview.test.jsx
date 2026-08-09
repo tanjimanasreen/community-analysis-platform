@@ -68,9 +68,11 @@ describe('Overview page', () => {
       },
       artifactsQuery: { isPending: false, error: null, data: { artifacts: [] }, refetch: vi.fn() },
       themesQuery: { isPending: false, error: null, data: { run_id: 'run-empty', records: [], total: 0, limit: 500, offset: 0, provider_metadata: null }, refetch: vi.fn() },
+      themeClustersQuery: { isPending: false, error: null, data: { run_id: 'run-empty', scope: 'matched', period: '2017-03', complete: true, source_observation_count: 0, excluded_records_missing_general_theme: 0, excluded_records_ambiguous_general_theme_serialization: 0, monthly_noise_observation_count: 0, total_themed_community_pairs: 0, distinct_clustered_theme_count: 0, themes: [], embedding_provider: null, embedding_model: null, monthly_cluster_contract_version: null, canonicalization_contract_version: null }, refetch: vi.fn() },
       transitionsQuery: { isPending: false, error: null, data: undefined, refetch: vi.fn() },
       history: [],
       hasThemes: true,
+      hasThemeClusters: true,
       hasTransitions: false,
       retryOverview: vi.fn(),
     });
@@ -85,7 +87,7 @@ describe('Overview page', () => {
     expect(screen.getAllByText('Unavailable for this run').length).toBeGreaterThan(0);
     expect(screen.getByText('No communities available')).toBeInTheDocument();
     expect(screen.getByText('Artifact not generated')).toBeInTheDocument();
-    expect(screen.getByText('No theme summary available')).toBeInTheDocument();
+    expect(screen.getByText('No clustered theme summary available')).toBeInTheDocument();
     expect(screen.queryByText('C-1124')).not.toBeInTheDocument();
     expect(screen.queryByText('May 1')).not.toBeInTheDocument();
     expect(screen.queryByText('Platforms: Both')).not.toBeInTheDocument();

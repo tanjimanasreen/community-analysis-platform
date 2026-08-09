@@ -7,8 +7,8 @@ import {
 } from '../../utils/artifactValues';
 import { normalizeCommunityId } from '../../utils/communityIds';
 
-export type TokenView = 'unigram' | 'bigram';
-export type SemanticMetricView = MetricName | 'both';
+export type TokenView = 'unigram' | 'bigram' | 'combined';
+export type SemanticMetricView = MetricName | 'general' | 'both';
 
 export interface TopicViewModel {
   recordType: TopicType;
@@ -66,8 +66,10 @@ export function topicKeywords(
   tokenView: TokenView,
 ): string[] {
   if (metric === 'if') {
+    if (tokenView === 'combined') return [...new Set([...topic.ifUnigramKeywords, ...topic.ifBigramKeywords])];
     return tokenView === 'unigram' ? topic.ifUnigramKeywords : topic.ifBigramKeywords;
   }
+  if (tokenView === 'combined') return [...new Set([...topic.wifUnigramKeywords, ...topic.wifBigramKeywords])];
   return tokenView === 'unigram' ? topic.wifUnigramKeywords : topic.wifBigramKeywords;
 }
 
@@ -76,6 +78,7 @@ export function topicLabel(
   metric: MetricName,
   tokenView: TokenView,
 ): string {
+  if (tokenView === 'combined') return 'Combined saved unigram and bigram evidence';
   const value = metric === 'if'
     ? tokenView === 'unigram'
       ? topic.ifUnigramTopic

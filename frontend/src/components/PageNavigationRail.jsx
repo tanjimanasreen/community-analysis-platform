@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { 
-  Activity, 
-  BarChart2, 
-  Network, 
-  List, 
-  Hash, 
-  Clock, 
+import {
+  Activity,
+  BarChart2,
+  Network,
+  List,
+  Hash,
+  Clock,
   Database,
   FileText,
   Users
@@ -64,16 +64,19 @@ export default function PageNavigationRail({ sections, containerId = "main-conte
   const scrollToSection = (id) => {
     const el = document.getElementById(id);
     const container = document.getElementById(containerId);
-    
+
     if (el && container) {
       const containerRect = container.getBoundingClientRect();
       const elRect = el.getBoundingClientRect();
-      
+
       container.scrollTo({
         top: container.scrollTop + (elRect.top - containerRect.top) - 20,
         behavior: 'smooth'
       });
       setActiveSection(id);
+      if (typeof el.focus === 'function' && el.hasAttribute('tabindex')) {
+        window.requestAnimationFrame(() => el.focus({ preventScroll: true }));
+      }
     }
   };
 
@@ -84,7 +87,7 @@ export default function PageNavigationRail({ sections, containerId = "main-conte
       {sections.map(({ id, label, icon: iconName }) => {
         const Icon = SECTION_ICONS[iconName] || List;
         const isActive = activeSection === id;
-        
+
         return (
           <button
             key={id}

@@ -7,9 +7,10 @@ The current route-to-component map is:
 | `/` | `Overview` |
 | `/network` | `CommunityNetworkPage` |
 | `/thematic` | `ThematicAnalysisPage` |
-| `/evolution` | `EvolutionOverTimePage` |
+| `/evolution` | `CommunityEvolutionPage` |
+| `/run-history` | `EvolutionOverTimePage` |
 | `/comparative` | `ComparativeAnalysisPage` |
-| `/transitions` | `CommunityTransitionsPage` |
+| `/transitions` | Redirects to `/evolution` with query parameters preserved |
 | `/top-communities` | `TopCommunitiesPage` |
 | `/data` | `DataExplorerPage` |
 | `/reports` | `ReportsPage` |

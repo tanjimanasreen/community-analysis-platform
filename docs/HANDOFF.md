@@ -28,7 +28,7 @@
 |---|---|
 | Overview | period-aware overview, complete published community summaries, deterministic monthly user samples, centrality leaders, monthly themes, optional run-level transitions |
 | Community Network | network, communities, community detail, centrality, optional topics/themes |
-| Thematic Analysis | overview, matched/partial topics, themes, optional theme similarity |
+| Thematic Analysis | overview, complete monthly/timeline exact-theme trends, matched topics, period/exact-label themes, and provider provenance |
 | Evolution | run catalog plus compatible-run overviews |
 | Community Transitions | transitions, persistent communities, membership changes, theme similarity |
 | Comparative Analysis | explicit Twitter/X and Telegram run overviews and theme labels |
@@ -48,6 +48,17 @@ models and manifest validation. It includes real API shapes plus no-run,
 missing-optional, empty-table, sampled-graph, and tampered-checksum variants.
 The generator does not call databases, providers, TEI, models, or pipeline
 analysis.
+
+## Thematic Analysis handoff
+
+- The default timeline spans all available monthly matched-theme artifacts; the evidence month defaults to the latest month inside the selected range.
+- Monthly coverage counts distinct matched IF/WIF pairs, not raw theme rows. One pair may count toward multiple exact labels.
+- Every selected month displays up to five saved labels with matched-community counts, percentages, and prominent LDA keywords.
+- Aggregate progression is derived only from those monthly top-five summaries. Identical labels connect only across adjacent months; gaps break lines and later occurrences are marked as re-entry. Similar labels are not merged.
+- The route requests no community transitions or theme-similarity artifacts. Persisted paths, Jaccard continuity, member mobility, and thematic similarity belong to Community Evolution.
+- The evidence explorer is matched-only on this route and preserves period/exact-label filtering, independent pagination, provider provenance, and IF/WIF network deep links.
+- The four-month `twitter-2017-04-retweet` dashboard fixture exercises monthly matched-theme trends and aggregate progression; its existing transition artifacts remain available to Community Evolution.
+- In the supplied frontend-review archive, full API/fixture tests may remain constrained by omitted repository modules or unavailable package registries. Run the normal quality commands in the complete checkout and record exact blockers rather than weakening checks.
 
 ## Quality commands
 
@@ -108,8 +119,8 @@ with an explicit reason; they are never manufactured by the test harness.
 - Published prominent-community graph artifacts are induced within-community subgraphs; the API exposes this limitation and never fabricates inter-community edges.
 - Sorting/filtering is labelled page-local where the API does not provide a
   server-wide operation.
-- Theme-frequency charts are withheld when a complete safe result set cannot be
-  obtained.
+- Theme rankings use complete server-side matched-pair aggregations rather than capped theme pages. Exact labels remain separate, and aggregate progression never reads or infers community transitions.
+- Theme evidence tables remain paginated; `period` and case-sensitive `exact_theme` filters are applied server-side before pagination.
 - Visual regression baselines must be generated and reviewed on each supported
   browser/OS target before claiming a visual release gate for that target.
 
@@ -183,3 +194,35 @@ python -m build
 docker build -t community-analysis:local .
 docker run --rm community-analysis:local --help
 ```
+
+
+## Plan 039 — canonical general-theme clustering
+
+- Raw matched-community theme artifacts remain unchanged.
+- New clustered reporting uses `general_theme_names` only, HDBSCAN monthly
+  clustering, and automated run-local cross-month canonicalization.
+- The clustering embedding profile is TEI `all-MiniLM-L6-v2` on local port
+  `8081`; existing Community Evolution similarity remains TEI
+  `paraphrase-MiniLM-L6-v2` on `8080`. Both profiles pin exact Hugging Face
+  model revisions so reruns do not silently drift when a model repository moves.
+- `make tei-up`, `make tei-check`, and `make tei-down` manage both services.
+- Theme-clustering embeddings are content-addressed, stored as immutable
+  `float32` Parquet run artifacts, and reused across the monthly and cross-month
+  clustering stages. They are analytical artifacts, not Memgraph/vector-DB data.
+- Overview Top Themes and Thematic Analysis now share saved canonical cluster
+  artifacts. Exact-label theme trends remain available for compatibility/audit.
+- Dashboard API handlers read saved artifacts only and do not execute TEI or
+  HDBSCAN.
+- The production clustering contract uses `sklearn.cluster.HDBSCAN` with
+  explicit `min_cluster_size`, translated `min_samples=min_cluster_size+1`,
+  Euclidean distance, EOM cluster selection, and no prediction-data state. The
+  translation preserves the documented neighborhood-count convention when
+  migrating from the prior contrib implementation. Membership probabilities and
+  the exact scikit-learn version remain in artifact provenance.
+- Run `make bootstrap` after dependency changes, then use
+  `make pipeline-preflight CONFIG=<longitudinal-config>` before an expensive
+  evolution run. The real `run-evolution-pipeline` Make target depends on this
+  preflight and fails early on dependency-lock, input, provider, TEI
+  model/revision, and output-path problems.
+- Historical manually standardized thesis tables are reference results, not
+  byte-for-byte golden outputs.

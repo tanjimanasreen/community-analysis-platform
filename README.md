@@ -541,20 +541,57 @@ export LOG_LEVEL=INFO
 export LOG_FORMAT=json
 ```
 
-Real theme-similarity outputs require TEI. When `theme.render_visuals=false`, the
-TEI/heatmap stage is skipped completely. When it is enabled, TEI failure stops
-the analytical similarity stage rather than silently substituting mock
-embeddings.
+Real semantic runs use two explicit, revision-pinned TEI profiles. `make tei-up`
+starts both, `make tei-check` verifies both with a lightweight embedding request,
+and `make tei-down` stops both:
+
+- similarity: `sentence-transformers/paraphrase-MiniLM-L6-v2` on local port
+  `8080` (existing Community Evolution thematic similarity);
+- clustering: `sentence-transformers/all-MiniLM-L6-v2` on local port `8081`
+  (general-theme HDBSCAN clustering/canonicalization).
+
+Use profile-specific `TEI_SIMILARITY_*` and `TEI_CLUSTERING_*` settings. Legacy
+`TEI_*` similarity settings remain backward compatible. Model revisions are
+pinned independently because the two analytical tasks intentionally use
+different models. When `theme.render_visuals=false`, the Community Evolution
+TEI/heatmap stage is skipped; theme clustering is controlled independently by
+`theme.clustering_enabled`. Real TEI failures stop the affected analytical stage
+rather than silently substituting mock embeddings.
+
+Theme clustering uses `sklearn.cluster.HDBSCAN`; the standalone `hdbscan` Python
+package is not required. TEI inference is deduplicated by exact content-addressed
+text/model contract, but duplicate theme observations are expanded back before
+clustering so density semantics are preserved. Unique vectors produced by the clustering profile, and by the similarity
+profile when heatmaps are rendered, are persisted as immutable `float32` Parquet
+run artifacts under `data/themes/embeddings/`; no vector database or Memgraph
+vector storage is used.
 
 ## Full Twitter Runs
 
-Run these sequentially to avoid nested multicore pressure:
+Bootstrap the locked local environment once, then preflight each real
+longitudinal configuration before spending compute/provider quota:
+
+```bash
+make bootstrap
+make tei-up
+make pipeline-preflight CONFIG=configs/twitter/reply_evolution.yml
+```
+
+`make run-evolution-pipeline` runs the same preflight automatically. Run the
+real pipelines sequentially to avoid nested multicore pressure:
 
 ```bash
 make run-evolution-pipeline CONFIG=configs/twitter/reply_evolution.yml
 make run-evolution-pipeline CONFIG=configs/twitter/retweet_quote_evolution.yml
 python -m src.cli run-all --config configs/twitter/retweet_quote.yml
 ```
+
+The preflight checks the locked direct dependency contract,
+`sklearn.cluster.HDBSCAN`, required input CSVs, output writability, live-provider
+credentials, and only the TEI profiles required by the selected config. Memgraph
+is not checked for the longitudinal command because that path consumes exported
+relationship CSVs directly. Tracking remains opt-in; install the `tracking`
+extra only when a config enables MLflow.
 
 The evolution commands each produce one January-April longitudinal run. The
 last command processes every dataset entry in `retweet_quote.yml` and publishes
