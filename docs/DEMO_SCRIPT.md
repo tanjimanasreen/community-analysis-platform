@@ -63,12 +63,8 @@ the development proxy and remains read-only.
 2. **Overview** — show canonical KPIs, top themes, bounded network preview,
    compatible-run history, community table, deterministic insights, and CSV
    export. Point out the sampled-graph badge on `twitter-2017-04`.
-3. **Community Network** — select a node/community, adjust minimum weight, toggle
-   labels, and show returned-versus-available graph counts. Degree is explicitly
-   labelled as a returned-subgraph presentation value.
-4. **Top Communities and Data Explorer** — demonstrate server pagination,
-   page-local filtering/sorting labels, real structural fields, semantic links,
-   and manifest-key downloads.
+3. **Communities** — choose a month and IF/WIF partition, browse the community directory, select one community, adjust the member-network minimum visible edge weight, and show structural summary, published neighbor context, LDA evidence, downstream themes, and returned-versus-available coverage. Community IDs are explicitly month-local.
+4. **Data & Reports** — move through Structural (RQ1), Semantic (RQ2), Temporal (RQ3/RQ4), and Run Outputs. Show period-correct community records, period-scoped LDA/theme evidence, the local IF/WIF control only on structural views, and a community deep link into the unified workspace.
 5. **Thematic Analysis** — switch matched/partial records, unigram/bigram
    evidence, and IF/WIF/side-by-side views. Explain that LDA keywords are the
    analytical output and provider labels are downstream interpretations.
@@ -78,8 +74,7 @@ the development proxy and remains read-only.
 7. **Comparative Analysis** — explicitly choose one Twitter/X and one Telegram
    run. Review only shared overview fields, exact theme-label overlap, and
    compatibility warnings; there is no fabricated message-overlap Venn.
-8. **Reports** — open the verified HTML report and show that intermediate
-   artifacts cannot be downloaded.
+8. **Data & Reports · Artifacts & Reports** — open the verified HTML report, filter manifest metadata, and show that intermediate artifacts remain visible for provenance but cannot be downloaded.
 9. **Methodology** — contrast protected thesis defaults with the selected run's
    resolved configuration and provider/model metadata.
 
@@ -95,8 +90,8 @@ make frontend-e2e
 ```
 
 The suite starts its own fixture-backed API and Vite servers. It covers run and
-metric history, deep links, semantic controls, transitions, comparison, report
-URLs, tampered verification, missing optional artifacts, mobile navigation,
+metric history, deep links, semantic controls, transitions, comparison, Data & Reports
+routes, tampered verification, missing optional artifacts, mobile navigation,
 axe checks, and browser back/forward state.
 
 Refresh reviewed visual baselines only when the UI change is intentional:

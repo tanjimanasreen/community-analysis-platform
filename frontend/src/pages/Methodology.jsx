@@ -1,24 +1,19 @@
 import React from 'react';
-import { HelpCircle } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
-import PageNavigationRail from '../components/PageNavigationRail';
-import AimScopePanel from '../features/methodology/components/AimScopePanel';
+import { PageNavigationRailSlot } from '../components/PageNavigationRail';
 import MethodologyWorkflow from '../features/methodology/components/MethodologyWorkflow';
 import NetworkArchitecture from '../features/methodology/components/NetworkArchitecture';
 import ReproducibilityPanel from '../features/methodology/components/ReproducibilityPanel';
-import ResearchQuestionGrid from '../features/methodology/components/ResearchQuestionGrid';
-import ResearchQuestionMapping from '../features/methodology/components/ResearchQuestionMapping';
+import ResearchFraming from '../features/methodology/components/ResearchFraming';
 import SystemArchitecture from '../features/methodology/components/SystemArchitecture';
 import { methodologyRunView } from '../features/methodology/methodologyModel';
 import { useMethodologyData } from '../features/methodology/useMethodologyData';
 
 const METHODOLOGY_SECTIONS = [
-  { id: 'methodology-overview', label: 'Aim & Scope', icon: 'kpis' },
-  { id: 'methodology-rqs', label: 'Research Questions', icon: 'themes' },
+  { id: 'methodology-framing', label: 'Research Framing', icon: 'themes' },
   { id: 'methodology-workflow', label: 'Workflow', icon: 'continuity' },
-  { id: 'methodology-system', label: 'System Architecture', icon: 'metadata' },
-  { id: 'methodology-network', label: 'Network Architecture', icon: 'network' },
-  { id: 'methodology-rq-map', label: 'Method → RQs', icon: 'trends' },
+  { id: 'methodology-network', label: 'Network Models', icon: 'network' },
+  { id: 'methodology-system', label: 'Implementation', icon: 'metadata' },
   { id: 'methodology-reproducibility', label: 'Reproducibility', icon: 'provenance' },
 ];
 
@@ -49,7 +44,7 @@ export default function MethodologyPage() {
   return (
     <div className="mx-auto flex max-w-[1600px] items-start px-1 sm:px-2">
       <div className="min-w-0 flex-1 space-y-6 pb-16">
-        <section id="methodology-overview" className="scroll-mt-6" tabIndex={-1}>
+        <section id="methodology-framing" className="scroll-mt-6" tabIndex={-1}>
           <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
             <div className="max-w-3xl">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Research design · thesis methodology</p>
@@ -63,7 +58,7 @@ export default function MethodologyPage() {
               Jump to section
               <select
                 aria-label="Jump to Methodology section"
-                defaultValue="methodology-overview"
+                defaultValue="methodology-framing"
                 onChange={(event) => jumpToSection(event.target.value)}
                 className="mt-1 w-full rounded-xl border border-border bg-surface px-3 py-2.5 text-sm font-semibold text-text-heading"
               >
@@ -72,33 +67,19 @@ export default function MethodologyPage() {
             </label>
           </div>
 
-          <div className="mt-5"><AimScopePanel /></div>
-        </section>
-
-        <section id="methodology-rqs" className="scroll-mt-6" tabIndex={-1}>
-          <SectionHeading
-            icon={HelpCircle}
-            eyebrow="Research questions"
-            title="Four questions guide the analysis"
-            description="Each question maps directly to a dashboard analysis while preserving the thesis wording."
-          />
-          <div className="mt-4"><ResearchQuestionGrid search={search} /></div>
+          <div className="mt-5"><ResearchFraming search={search} /></div>
         </section>
 
         <section id="methodology-workflow" className="scroll-mt-6" tabIndex={-1}>
           <MethodologyWorkflow />
         </section>
 
-        <section id="methodology-system" className="scroll-mt-6" tabIndex={-1}>
-          <SystemArchitecture />
-        </section>
-
         <section id="methodology-network" className="scroll-mt-6" tabIndex={-1}>
           <NetworkArchitecture />
         </section>
 
-        <section id="methodology-rq-map" className="scroll-mt-6" tabIndex={-1}>
-          <ResearchQuestionMapping search={search} />
+        <section id="methodology-system" className="scroll-mt-6" tabIndex={-1}>
+          <SystemArchitecture />
         </section>
 
         <section id="methodology-reproducibility" className="scroll-mt-6" tabIndex={-1}>
@@ -112,22 +93,7 @@ export default function MethodologyPage() {
         </section>
       </div>
 
-      <div className="pointer-events-none sticky top-0 z-40 ml-4 hidden h-screen w-14 shrink-0 flex-col justify-center md:flex lg:ml-6">
-        <PageNavigationRail sections={METHODOLOGY_SECTIONS} />
-      </div>
-    </div>
-  );
-}
-
-function SectionHeading({ icon: Icon, eyebrow, title, description }) {
-  return (
-    <div className="flex items-start gap-3">
-      <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><Icon size={18} aria-hidden="true" /></span>
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">{eyebrow}</p>
-        <h2 className="mt-1 text-lg font-bold text-text-heading">{title}</h2>
-        <p className="mt-1 max-w-3xl text-sm leading-6 text-muted">{description}</p>
-      </div>
+      <PageNavigationRailSlot sections={METHODOLOGY_SECTIONS} />
     </div>
   );
 }

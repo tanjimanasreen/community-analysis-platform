@@ -1,18 +1,32 @@
 import { expect, test } from '@playwright/test';
 import { MISSING_RUN, dashboardUrl, openVerifiedRoute } from './helpers';
 
-test('selected community deep link survives reload and metric changes update graph metadata', async ({ page }) => {
-  await openVerifiedRoute(page, '/network?community=1');
+test('selected monthly community deep link survives reload and partition changes clear month-local identity', async ({ page }) => {
+  await openVerifiedRoute(page, '/communities?community=1');
+  await expect(page).toHaveURL(/period=/);
   await expect(page).toHaveURL(/community=1/);
-  await expect(page.getByRole('heading', { name: '1' })).toBeVisible();
-  await expect(page.getByText('Sampled graph')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'C1' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Member Interaction Network' })).toBeVisible();
 
   await page.reload();
   await expect(page).toHaveURL(/community=1/);
-  await expect(page.getByRole('heading', { name: '1' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'C1' })).toBeVisible();
 
   await page.getByLabel('Affinity metric').selectOption('wif');
-  await expect(page.getByText('Weighted Interaction Frequency (WIF)', { exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/metric=wif/);
+  await expect(page).not.toHaveURL(/community=1/);
+  await expect(page.getByRole('heading', { name: 'Select a community' })).toBeVisible();
+});
+
+test('legacy community routes redirect to the unified workspace with query state preserved', async ({ page }) => {
+  await openVerifiedRoute(page, '/network?community=1&minWeight=2');
+  await expect(page).toHaveURL(/\/communities\?/);
+  await expect(page).toHaveURL(/community=1/);
+  await expect(page).toHaveURL(/minWeight=2/);
+
+  await openVerifiedRoute(page, '/top-communities?community=1');
+  await expect(page).toHaveURL(/\/communities\?/);
+  await expect(page).toHaveURL(/community=1/);
 });
 
 test('aggregate matched-community themes and evidence controls are reproducible', async ({ page }) => {
@@ -40,6 +54,26 @@ test('aggregate matched-community themes and evidence controls are reproducible'
 
   await expect(page.getByText(/Persistent paths/i)).toHaveCount(0);
   await expect(page.getByText(/Saved theme similarity/i)).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Selected Canonical Theme · Cluster Evidence' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Source Evidence Explorer' })).toBeVisible();
+  const evidenceOrder = await page.evaluate(() => {
+    const canonical = document.getElementById('thematic-canonical-evidence');
+    const explorer = document.getElementById('thematic-evidence-explorer');
+    return canonical && explorer
+      ? canonical.compareDocumentPosition(explorer) & Node.DOCUMENT_POSITION_FOLLOWING
+      : 0;
+  });
+  expect(evidenceOrder).toBeTruthy();
+
+  const rail = page.locator('aside[aria-label="Page section navigation"]');
+  const main = page.locator('#main-content');
+  const [railBox, mainBox] = await Promise.all([rail.boundingBox(), main.boundingBox()]);
+  expect(railBox).not.toBeNull();
+  expect(mainBox).not.toBeNull();
+  if (railBox && mainBox) {
+    expect(railBox.y).toBeGreaterThanOrEqual(mainBox.y);
+    expect(railBox.y + railBox.height).toBeLessThanOrEqual(mainBox.y + mainBox.height + 2);
+  }
 
   await page.getByLabel('Token representation').selectOption('bigram');
   await expect(page).toHaveURL(/token=bigram/);

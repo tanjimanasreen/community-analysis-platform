@@ -6,24 +6,20 @@ import {
   ChevronLeft,
   ChevronRight,
   Database,
-  FileText,
   GitMerge,
   LayoutDashboard,
   Network,
   TrendingUp,
-  Users,
   X,
 } from 'lucide-react';
 
 const navItems = [
   { name: 'Overview', icon: LayoutDashboard, path: '/' },
-  { name: 'Community Network', icon: Network, path: '/network' },
+  { name: 'Communities', icon: Network, path: '/communities' },
   { name: 'Thematic Analysis', icon: Activity, path: '/thematic' },
   { name: 'Community Evolution', icon: TrendingUp, path: '/evolution' },
   { name: 'Comparative Analysis', icon: GitMerge, path: '/comparative' },
-  { name: 'Top Communities', icon: Users, path: '/top-communities' },
-  { name: 'Data Explorer', icon: Database, path: '/data' },
-  { name: 'Reports', icon: FileText, path: '/reports' },
+  { name: 'Data & Reports', icon: Database, path: '/data-reports' },
   { name: 'Methodology', icon: BookOpen, path: '/methodology' },
 ];
 

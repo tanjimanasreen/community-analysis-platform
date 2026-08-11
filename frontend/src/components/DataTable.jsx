@@ -41,7 +41,7 @@ export default function DataTable({
     params.set('run', runId);
     params.set('metric', metric);
     params.set('community', communityId);
-    navigate(`/network?${params.toString()}`);
+    navigate(`/communities?${params.toString()}`);
   };
 
   const exportVisible = () => {
@@ -62,7 +62,7 @@ export default function DataTable({
     <section className="panel flex flex-col overflow-hidden">
       <div className="control-panel" style={{ alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <h2 className="panel-title">Top Communities · {metric.toUpperCase()}</h2>
+          <h2 className="panel-title">Communities · {metric.toUpperCase()}</h2>
           <p className="panel-subtitle">Canonical structural fields from the selected community partition.</p>
         </div>
         <button
@@ -125,7 +125,7 @@ export default function DataTable({
                       onClick={() => viewCommunity(row.community_id)}
                       className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-primary/80"
                     >
-                      View in Network
+                      Explore Community
                       <ExternalLink size={13} />
                     </button>
                   </td>

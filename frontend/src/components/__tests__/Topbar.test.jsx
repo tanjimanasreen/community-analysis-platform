@@ -97,4 +97,20 @@ describe('Topbar', () => {
     expect(screen.queryByLabelText('Affinity metric')).not.toBeInTheDocument();
   });
 
+  it('uses the Research Data & Reports title and hides the global affinity selector on the unified workspace', () => {
+    const props = {
+      selectedRunId: runs[0].run_id, selectedRun: runs[0], runs, onRunChange: vi.fn(),
+      metric: 'if', onMetricChange: vi.fn(), health: { status: 'ok', read_only: true, schema_version: '1' },
+      verification: { run_id: runs[0].run_id, ok: true, status: 'valid', checked_artifacts: 9 },
+      toggleSidebar: vi.fn(),
+    };
+    render(
+      <MemoryRouter initialEntries={['/data-reports?run=twitter-reply-2017-03-long-id&metric=if&view=communities']}>
+        <Topbar {...props} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('heading', { name: 'Research Data & Reports' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Affinity metric')).not.toBeInTheDocument();
+  });
+
 });

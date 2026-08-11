@@ -134,28 +134,24 @@ skipped rather than accepting a fabricated image. Functional and axe workflows
 remain independent of visual baselines. Playwright traces and screenshots are
 kept only for failures, and generated reports are ignored by Git.
 
-## Structural analysis routes
+## Structural analysis and Data & Reports route
 
-The Network, Top Communities, and Data Explorer routes consume only canonical,
-run-scoped API records:
+The Communities and Research Data & Reports routes consume only canonical persisted API records:
 
-- **Community Network** requests a bounded graph for the selected `run` and
-  `metric`. Its selected `community` and applied `minWeight` filter are stored in
-  the URL. Degree values shown by the graph are presentation calculations within
-  the returned subgraph, not new thesis metrics. Sampling labels use the API's
-  available and returned counts.
-- **Top Communities** uses server pagination and displays only community ID, node
-  count, edge count, and metric-aware total weight. Sorting is explicitly local
-  to the loaded page because the backend does not expose a sort parameter.
-- **Data Explorer** provides independent modes for communities, centrality,
-  matched topics, partial topics, themes, transitions, and artifacts. Exact
-  community-ID filtering is used only where the endpoint supports it; other
-  filters are labelled “Filter this page.”
+- **Communities** is the canonical structural drill-down workspace. It is keyed
+  by `(run, period, metric, community_id)`, because community IDs are month-local.
+  The first section is a paginated monthly Community Directory; one selected
+  community then drives its structural summary, bounded member interaction graph,
+  LDA evidence, downstream theme labels, and graph coverage/provenance. The
+  `minWeight` URL control filters only the returned member graph and never reruns
+  Louvain or changes community membership. Degree values shown in graph tooltips
+  describe only the returned graph and are not new thesis metrics.
+- Legacy **`/network`** and **`/top-communities`** URLs redirect to
+  **`/communities`** while preserving their query state.
+- **Research Data & Reports** (`/data-reports`) is the canonical persisted-record and run-output workspace. Its `view=` state is URL-backed and grouped by thesis dimension: Structural · RQ1 (Communities, Centrality), Semantic · RQ2 (Matched LDA, Partial-match LDA, Generated Themes), Temporal · RQ3/RQ4 (Community Transitions), and Run Outputs (Artifacts & Reports). Month-local evidence resolves a canonical `period`; Communities/Centrality alone expose a local IF/WIF control, while paired semantic and longitudinal evidence do not pretend to use one global affinity filter. Exact community-ID filtering remains server-side where supported.
+- Legacy **`/evidence`**, **`/data`**, and **`/reports`** URLs redirect to **`/data-reports`** while preserving query state. `/data` defaults to `view=communities`; `/reports` defaults to `view=outputs` when no explicit view is supplied.
 
-Community identifiers are preserved as strings and IF/WIF identifiers remain
-separate. Semantic enrichment is shown only when an exact metric-aware match is
-available. Artifact downloads use manifest keys, and intermediate artifacts are
-shown as unavailable for download in accordance with the backend contract.
+Community identifiers are preserved as strings and interpreted within their canonical month/metric scope. Artifact downloads use manifest keys, and intermediate artifacts remain visible for provenance but unavailable for download in accordance with the backend contract.
 
 ## Semantic analysis route
 
@@ -180,7 +176,7 @@ Topic and theme records link to the corresponding IF or WIF community while
 preserving the selected run. Community detail panels provide the reverse link
 back to the semantic route with the exact metric-aware community filter.
 
-## Longitudinal, comparison, report, and methodology routes
+## Longitudinal, comparison, output, and methodology routes
 
 The remaining analytical routes are read-only views over canonical run
 artifacts:
@@ -197,8 +193,7 @@ artifacts:
   Telegram run. It compares only shared overview fields and exact normalized
   top-theme label overlap, with visible content, date, configuration, model, and
   artifact-availability warnings.
-- **Reports** is a manifest-backed artifact library. It does not create or
-  schedule reports, and intermediate artifacts remain unavailable for download.
+- **Data & Reports · Artifacts & Reports** is the single manifest-backed output library. It does not create or schedule reports; it opens only already-produced report artifacts and keeps intermediate artifacts unavailable for download.
 - **Methodology** separates protected thesis defaults from selected-run
   configuration, provider/model metadata, and artifact categories. Theme labels
   are shown as downstream interpretations of LDA keyword evidence.

@@ -14,13 +14,14 @@ def test_louvain_defaults():
 
 
 def test_lda_defaults():
+    assert DEFAULT_CONFIG.lda.implementation == "ldamulticore"
     assert DEFAULT_CONFIG.lda.num_topics == 15
     assert DEFAULT_CONFIG.lda.top_n_keywords == 50
     assert DEFAULT_CONFIG.lda.random_state == 100
     assert DEFAULT_CONFIG.lda.iterations == 100
     assert DEFAULT_CONFIG.lda.chunksize == 20
     assert DEFAULT_CONFIG.lda.passes == 80
-    assert DEFAULT_CONFIG.lda.alpha == "auto"
+    assert DEFAULT_CONFIG.lda.alpha == "symmetric"
     assert DEFAULT_CONFIG.lda.eta == "auto"
 
 

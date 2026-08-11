@@ -4,7 +4,9 @@ Status: implemented; environment acceptance gates pending
 
 Owner: agent
 
-Last updated: 2026-08-08
+Last updated: 2026-08-10
+
+Presentation note: Plan 047 refines the implemented seven-section card hierarchy into five diagrammatic sections; the thesis-content and analytical constraints defined here remain authoritative.
 
 ## Goal
 

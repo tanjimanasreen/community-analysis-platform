@@ -66,7 +66,7 @@ The final system must support:
 - Preserve the existing `shared_post` and `weighted_post` metric behavior.
 - Preserve graph filtering defaults unless explicitly changed in a documented experiment: `min_total_post=10`, `min_shared_post=5`.
 - Preserve Louvain defaults unless explicitly changed in a documented experiment: `resolution=1`, `seed=123`.
-- Preserve LDA defaults unless explicitly changed in a documented experiment: `num_topics=15`, `random_state=100`, `iterations=100`, `chunksize=20`, `passes=80`, `alpha='auto'`, `eta='auto'`.
+- Preserve the approved production LdaMulticore defaults unless explicitly changed in a documented experiment: `num_topics=15`, `random_state=100`, `iterations=100`, `chunksize=20`, `passes=80`, `alpha='symmetric'`, `eta='auto'`. The `alpha` value is the documented LdaMulticore compatibility migration from the thesis-era `alpha='auto'` setting.
 - Do not commit secrets or real database credentials.
 - Do not hard-code local absolute paths such as external drive paths.
 - Do not remove Telegram support while making Twitter/reply workflows configurable.

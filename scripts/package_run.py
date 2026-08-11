@@ -108,12 +108,13 @@ config = {
     "graph_thresholds": {"min_total_post": 10, "min_shared_post": 5},
     "louvain": {"resolution": 1, "seed": 123},
     "lda": {
+        "implementation": "ldamulticore",
         "num_topics": 15,
         "random_state": 100,
         "iterations": 100,
         "chunksize": 20,
         "passes": 80,
-        "alpha": "auto",
+        "alpha": "symmetric",
         "eta": "auto",
     },
     "theme": {

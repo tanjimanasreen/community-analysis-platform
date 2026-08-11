@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo } from 'react';
 import { Activity, CalendarRange, GitBranch, Timer } from 'lucide-react';
 import { useLocation, useSearchParams } from 'react-router-dom';
-import PageNavigationRail from '../components/PageNavigationRail';
+import { PageNavigationRailSlot } from '../components/PageNavigationRail';
 import ArtifactUnavailableState from '../components/states/ArtifactUnavailableState';
 import ErrorState from '../components/states/ErrorState';
 import LoadingState from '../components/states/LoadingState';
@@ -258,9 +258,7 @@ export default function CommunityEvolution() {
         </section>
       </div>
 
-      <div className="pointer-events-none sticky top-0 z-40 ml-4 hidden h-screen w-14 shrink-0 flex-col justify-center md:flex lg:ml-6">
-        <PageNavigationRail sections={EVOLUTION_SECTIONS} />
-      </div>
+      <PageNavigationRailSlot sections={EVOLUTION_SECTIONS} />
     </div>
   );
 }

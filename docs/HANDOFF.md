@@ -15,7 +15,11 @@
   `sampling`, and optional `community` search state. Its KPI cards and graph are
   monthly; its longitudinal summary is run-level. The default community structure
   map uses the complete published monthly community summary. The optional user
-  view is a deterministic bounded sample.
+  view remains a deterministic bounded sample.
+- The Communities route owns the structural drill-down identity
+  `(run, period, metric, community_id)`. It defaults to the latest canonical month,
+  clears month-local community selection when the partition changes, and keeps
+  `minWeight` presentation-scoped to the selected member graph.
 - Each route owns its filters, pagination, TanStack Query keys, and canonical
   record adapters. Community IDs remain strings and IF/WIF identifiers stay
   distinct.
@@ -27,14 +31,12 @@
 | Route | Canonical API data |
 |---|---|
 | Overview | period-aware overview, complete published community summaries, deterministic monthly user samples, centrality leaders, monthly themes, optional run-level transitions |
-| Community Network | network, communities, community detail, centrality, optional topics/themes |
+| Communities | period-aware overview, communities, selected community detail/member graph, published community-map context, optional matched topics/themes |
 | Thematic Analysis | overview, complete monthly/timeline exact-theme trends, matched topics, period/exact-label themes, and provider provenance |
 | Evolution | run catalog plus compatible-run overviews |
 | Community Transitions | transitions, persistent communities, membership changes, theme similarity |
 | Comparative Analysis | explicit Twitter/X and Telegram run overviews and theme labels |
-| Top Communities | communities, community detail, optional topic/theme enrichment |
-| Data Explorer | communities, centrality, topics, themes, transitions, artifacts |
-| Reports | artifacts, verified inline report, manifest-key downloads |
+| Data & Reports | period-aware communities/centrality, period-scoped matched/partial LDA and themes, longitudinal transitions, verified artifacts/reports, manifest-key downloads |
 | Methodology | run detail, overview config/model metadata, verification, artifact categories |
 
 ## Deterministic dashboard fixture
@@ -56,7 +58,7 @@ analysis.
 - Every selected month displays up to five saved labels with matched-community counts, percentages, and prominent LDA keywords.
 - Aggregate progression is derived only from those monthly top-five summaries. Identical labels connect only across adjacent months; gaps break lines and later occurrences are marked as re-entry. Similar labels are not merged.
 - The route requests no community transitions or theme-similarity artifacts. Persisted paths, Jaccard continuity, member mobility, and thematic similarity belong to Community Evolution.
-- The evidence explorer is matched-only on this route and preserves period/exact-label filtering, independent pagination, provider provenance, and IF/WIF network deep links.
+- The evidence explorer is matched-only on this route and preserves period/exact-label filtering, independent pagination, provider provenance, and IF/WIF Communities deep links.
 - The four-month `twitter-2017-04-retweet` dashboard fixture exercises monthly matched-theme trends and aggregate progression; its existing transition artifacts remain available to Community Evolution.
 - In the supplied frontend-review archive, full API/fixture tests may remain constrained by omitted repository modules or unavailable package registries. Run the normal quality commands in the complete checkout and record exact blockers rather than weakening checks.
 
@@ -117,8 +119,7 @@ with an explicit reason; they are never manufactured by the test harness.
 - The dashboard is read-only and provides no authentication or cloud deployment.
 - Large network reads remain bounded by backend caps and presentation limits.
 - Published prominent-community graph artifacts are induced within-community subgraphs; the API exposes this limitation and never fabricates inter-community edges.
-- Sorting/filtering is labelled page-local where the API does not provide a
-  server-wide operation.
+- Community IDs are month-local. Structural drill-down links preserve `run`, `period`, `metric`, and `community`; legacy `/network` and `/top-communities` URLs redirect to `/communities` without dropping query state.
 - Theme rankings use complete server-side matched-pair aggregations rather than capped theme pages. Exact labels remain separate, and aggregate progression never reads or infers community transitions.
 - Theme evidence tables remain paginated; `period` and case-sensitive `exact_theme` filters are applied server-side before pagination.
 - Visual regression baselines must be generated and reviewed on each supported

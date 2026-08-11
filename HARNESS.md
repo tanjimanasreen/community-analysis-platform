@@ -94,7 +94,7 @@ The harness is satisfied when:
 - The current code features are documented in `current-code-feature-inventory.md`.
 - The production pipeline can run on a small sample dataset without hard-coded local paths.
 - Existing metrics and thresholds are tested.
-- Existing LDA defaults and outputs are preserved.
+- Thesis-aligned LDA behavior and outputs are preserved, with the approved production `LdaMulticore` prior contract (`alpha="symmetric"`, `eta="auto"`) documented and tested.
 - Theme generation is optional and can be skipped in offline tests.
 - Month-to-month transition, membership-change, and theme similarity outputs are covered.
 - General-theme semantic clustering is an additive upstream artifact stage: raw GPT/LDA evidence is preserved, tests inject embeddings, and dashboard/API requests never run TEI or HDBSCAN.

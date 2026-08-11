@@ -174,6 +174,11 @@ Implemented behavior:
   - `passes=80`
   - `alpha='auto'`
   - `eta='auto'`
+- The current production rebuild intentionally uses Gensim `LdaMulticore` with
+  `alpha='symmetric'` and `eta='auto'`: automatic alpha optimization is not
+  supported by `LdaMulticore`, while automatic eta remains supported. All other
+  thesis-aligned LDA defaults above remain unchanged, and worker selection is
+  left to `LdaMulticore` unless explicitly configured.
 - Computes perplexity and `c_v` coherence.
 - Assigns dominant topic to each community document.
 - Builds unigram topic model outputs.

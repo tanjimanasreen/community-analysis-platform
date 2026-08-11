@@ -41,7 +41,7 @@ test('cross-platform comparison requires and uses two explicit runs', async ({ p
 });
 
 test('report and artifact links use canonical backend URLs and intermediate artifacts are suppressed', async ({ page }) => {
-  await openVerifiedRoute(page, '/reports');
+  await openVerifiedRoute(page, '/data-reports?view=outputs');
   await expect(page.getByRole('link', { name: 'Open report' })).toHaveAttribute(
     'href',
     `/api/v1/runs/${PRIMARY_RUN}/report`,

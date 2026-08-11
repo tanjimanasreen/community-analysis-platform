@@ -10,7 +10,7 @@ vi.mock('../../features/topics/useThematicAnalysisData', () => ({
   useThematicAnalysisData: vi.fn(),
 }));
 vi.mock('../../components/PageNavigationRail', () => ({
-  default: ({ sections }) => <nav aria-label="Section rail">{sections.map((section) => <span key={section.id}>{section.label}</span>)}</nav>,
+  PageNavigationRailSlot: ({ sections }) => <nav aria-label="Section rail">{sections.map((section) => <span key={section.id}>{section.label}</span>)}</nav>,
 }));
 
 function query(data, error = null) {
@@ -221,26 +221,30 @@ describe('Thematic Analysis page', () => {
       'thematic-overview',
       'thematic-monthly-themes',
       'thematic-progression',
-      'thematic-evidence-explorer',
       'thematic-canonical-evidence',
+      'thematic-evidence-explorer',
       'thematic-theme-labels',
       'thematic-lda-evidence',
       'thematic-provenance',
     ].forEach((id) => expect(document.getElementById(id)).toBeInTheDocument());
   });
 
-  it('presents evidence from canonical result through generated labels to deeper LDA evidence', () => {
+  it('separates selected canonical-cluster evidence from the source-record browser', () => {
     renderPage();
     const bodyText = document.body.textContent ?? '';
-    const canonicalIndex = bodyText.indexOf('Evidence · Canonical theme cluster');
+    const progressionIndex = bodyText.indexOf('Aggregate Theme Progression');
+    const canonicalIndex = bodyText.indexOf('Selected Canonical Theme · Cluster Evidence');
+    const explorerIndex = bodyText.indexOf('Source Evidence Explorer');
     const labelsIndex = bodyText.indexOf('Evidence · Generated theme labels');
     const ldaIndex = bodyText.indexOf('Evidence · Matched LDA topic records');
-    const provenanceIndex = bodyText.indexOf('Theme provider and model metadata');
+    const provenanceIndex = bodyText.indexOf('Theme provider and model provenance');
 
-    expect(canonicalIndex).toBeGreaterThan(-1);
-    expect(labelsIndex).toBeGreaterThan(canonicalIndex);
+    expect(canonicalIndex).toBeGreaterThan(progressionIndex);
+    expect(explorerIndex).toBeGreaterThan(canonicalIndex);
+    expect(labelsIndex).toBeGreaterThan(explorerIndex);
     expect(ldaIndex).toBeGreaterThan(labelsIndex);
     expect(provenanceIndex).toBeGreaterThan(ldaIndex);
+    expect(screen.getByText(/controls do not change monthly rankings, aggregate progression, or the complete selected canonical-cluster evidence/i)).toBeInTheDocument();
   });
 
   it('contains long valid canonical labels and keyword evidence without hiding the full text', () => {
@@ -281,6 +285,32 @@ describe('Thematic Analysis page', () => {
     expect(screen.queryByRole('link', { name: /Open Community Transitions/i })).not.toBeInTheDocument();
   });
 
+  it('keeps token representation inside LDA evidence and source filters outside canonical evidence', () => {
+    renderPage();
+
+    const explorer = document.getElementById('thematic-evidence-explorer');
+    const canonical = document.getElementById('thematic-canonical-evidence');
+    const lda = document.getElementById('thematic-lda-evidence');
+
+    expect(within(explorer).getByLabelText('Evidence month')).toBeInTheDocument();
+    expect(within(explorer).getByLabelText('Exact community ID')).toBeInTheDocument();
+    expect(within(explorer).getByLabelText('IF/WIF evidence view')).toBeInTheDocument();
+    expect(within(explorer).queryByLabelText('Token representation')).not.toBeInTheDocument();
+    expect(within(canonical).queryByLabelText('Exact community ID')).not.toBeInTheDocument();
+    expect(within(lda).getByLabelText('Token representation')).toBeInTheDocument();
+  });
+
+  it('clears period-specific canonical selection when the source evidence month changes', () => {
+    renderPage('/thematic?run=run-1&themeMonth=2017-03&canonicalTheme=ct_policy');
+    expect(screen.getByRole('button', { name: /Policy.*clear/i })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Evidence month'), { target: { value: '2017-04' } });
+
+    const location = screen.getByTestId('location');
+    expect(location).toHaveTextContent('themeMonth=2017-04');
+    expect(location).not.toHaveTextContent('canonicalTheme=');
+  });
+
   it('canonicalizes this route to matched evidence and removes obsolete path state', async () => {
     renderPage('/thematic?run=run-1&topicType=partial&themePath=legacy-path&themeMonth=2017-03');
     await waitFor(() => {
@@ -294,7 +324,7 @@ describe('Thematic Analysis page', () => {
   it('stores timeline and evidence controls in the URL without changing aggregate scope', () => {
     renderPage();
     fireEvent.change(screen.getByLabelText('Token representation'), { target: { value: 'combined' } });
-    fireEvent.change(screen.getByLabelText('Semantic metric view'), { target: { value: 'wif' } });
+    fireEvent.change(screen.getByLabelText('IF/WIF evidence view'), { target: { value: 'wif' } });
     fireEvent.change(screen.getByLabelText('Theme timeline start'), { target: { value: '2017-02' } });
     fireEvent.change(screen.getByLabelText('Theme timeline end'), { target: { value: '2017-04' } });
     fireEvent.change(screen.getByLabelText('Exact community ID'), { target: { value: '22' } });

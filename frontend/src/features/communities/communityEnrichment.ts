@@ -20,7 +20,7 @@ export function themeNamesForCommunity(
 }
 
 export function topicKeywordsForCommunity(
-  records: TopicRecord[],
+  records: Array<TopicRecord | ThemeRecord>,
   metric: MetricName,
   communityId: string,
 ): string[] {

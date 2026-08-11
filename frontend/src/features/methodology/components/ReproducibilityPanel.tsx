@@ -27,7 +27,7 @@ export default function ReproducibilityPanel({ selectedRunId, runView, overviewQ
         <div>
           <div className="flex items-center gap-2 text-primary"><ShieldCheck size={18} aria-hidden="true" /><p className="text-xs font-semibold uppercase tracking-[0.14em]">Reproducibility</p></div>
           <h2 className="mt-1 text-lg font-bold text-text-heading">Reproducibility & Analytical Contract</h2>
-          <p className="mt-1 max-w-3xl text-sm leading-6 text-muted">Protected thesis defaults and selected-run metadata remain separate so historical method and executed configuration are both inspectable.</p>
+          <p className="mt-1 max-w-3xl text-sm leading-6 text-muted">Thesis defaults and executed-run configuration remain independently auditable.</p>
         </div>
         <span className="max-w-full truncate rounded-full border border-border px-3 py-1 text-xs font-medium text-muted" title={selectedRunId || 'No run selected'}>{selectedRunId || 'No run selected'}</span>
       </div>
@@ -82,9 +82,9 @@ export default function ReproducibilityPanel({ selectedRunId, runView, overviewQ
                     )) : <span className="text-sm text-muted">No artifact categories are listed.</span>}
                   </div>
                 </div>
-                <Link to={`/reports${search}`} className="inline-flex shrink-0 items-center gap-2 self-start rounded-xl border border-border bg-surface px-3 py-2 text-xs font-semibold text-text-heading hover:border-primary/40 hover:text-primary">
+                <Link to={`/data-reports?${withEvidenceView(search, 'outputs')}`} className="inline-flex shrink-0 items-center gap-2 self-start rounded-xl border border-border bg-surface px-3 py-2 text-xs font-semibold text-text-heading hover:border-primary/40 hover:text-primary">
                   <FileText size={15} aria-hidden="true" />
-                  Artifact library
+                  Data & reports
                 </Link>
               </div>
             </div>
@@ -93,6 +93,12 @@ export default function ReproducibilityPanel({ selectedRunId, runView, overviewQ
       </div>
     </div>
   );
+}
+
+function withEvidenceView(search: string, view: string) {
+  const params = new URLSearchParams(search);
+  params.set('view', view);
+  return params.toString();
 }
 
 function BaselineGroup({ title, entries }: { title: string; entries: Array<[string, unknown]> }) {

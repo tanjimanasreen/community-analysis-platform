@@ -29,7 +29,9 @@ The project analyzes social network interactions from graph-exported relationshi
 6. As an analyst, I can inspect generated themes and theme similarity over time.
 7. As an analyst, I can see all persistent community paths first, then select one path as the shared detail context for structural continuity, member mobility, thematic similarity, and evidence.
 8. As a researcher or reviewer, I can understand the thesis aim, exact research questions, methodological workflow, platform network models, and reproducibility contract from one concise visual Methodology page.
-9. As an analyst, I can understand how Thematic Analysis results are derived, compare up to five canonical themes per month across variable-length timelines, and navigate from aggregate results through generated-label and LDA evidence without changing analytical outputs.
+9. As an analyst, I can understand how Thematic Analysis results are derived, compare up to five canonical themes per month across variable-length timelines, inspect complete evidence for a selected canonical result, and separately browse month/community-scoped generated-label and LDA source records without changing analytical outputs.
+10. As an analyst, I can browse all communities in one monthly IF/WIF partition, select one month-local community, inspect its structural summary and member interaction network, and preview LDA evidence before downstream theme labels from one unified Communities workspace.
+11. As a researcher or analyst, I can inspect persisted Structural (RQ1), Semantic (RQ2), and Temporal (RQ3/RQ4) evidence plus verified run outputs from one unified Research Data & Reports workspace with truthful period/affinity scope.
 
 ## Functional Requirements
 
@@ -74,8 +76,10 @@ The system must support:
 - Membership-change diagrams.
 - SentenceTransformer theme similarity heatmaps.
 - A Community Evolution master-detail dashboard that presents the complete persistent-path landscape before a single URL-backed path selection drives mobility, thematic similarity, and evidence views.
-- A thesis-led Methodology dashboard that presents Aim & Scope, the exact four research questions, the structural/semantic/temporal workflow, current system architecture, Telegram/Twitter network architecture, Method → RQ traceability, and collapsed reproducibility/run provenance without rerunning analysis.
-- A Thematic Analysis dashboard with a concise LDA-to-canonical-theme methodology overview, navigation-only section rail, sparse monthly rankings of up to five canonical themes, horizontally scrollable variable-length aggregate progression, and a canonical-theme → generated-label → LDA evidence drill-down.
+- A thesis-led Methodology dashboard that compresses the aim, scope, and exact four research questions into one Research Framing visual; uses a branched Structural/Semantic/Temporal workflow with embedded Method → RQ traceability; diagrams Telegram/Twitter network models and their common creator→spreader projection; separates current software implementation from research logic; and keeps reproducibility/run provenance collapsed without rerunning analysis.
+- A Thematic Analysis dashboard with a concise LDA-to-canonical-theme methodology overview, navigation-only section rail, sparse monthly rankings of up to five canonical themes, horizontally scrollable variable-length aggregate progression, selection-driven canonical-cluster evidence, an explicitly scoped source-evidence browser for generated labels/LDA records, and compact provider/model provenance with collapsed raw runtime metadata.
+- A unified Communities workspace keyed by `(run, period, metric, community_id)` that replaces separate Community Network and Top Communities analytical pages with a monthly directory plus one selected-community structural/member-network/semantic drill-down; legacy routes redirect while preserving URL state.
+- A unified Research Data & Reports workspace that replaces separate Data Explorer and Reports pages; groups persisted records by thesis dimension; keeps month-local community/topic/theme reads period-correct; uses the period/metric-aware centrality-leaders read model; exposes IF/WIF only where it actually scopes evidence; and preserves manifest verification, already-produced report links, downloads, and intermediate-artifact suppression.
 
 ## Non-Functional Requirements
 

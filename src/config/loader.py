@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any, Union
+from typing import Any, Mapping, Union
 
+from src.config.defaults import DEFAULT_CONFIG
 from src.config.settings import get_database_settings
 
 ENV_VAR_RE = re.compile(r"\$\{([^}]+)\}")
@@ -165,6 +166,26 @@ def load_providers_config(base_dir: Path | None = None) -> dict[str, Any]:
     return load_config(providers_path)
 
 
+def validate_lda_config(lda_config: Mapping[str, Any] | None = None) -> None:
+    """Validate the supported production LDA implementation and priors."""
+    raw = dict(lda_config or {})
+    implementation = str(
+        raw.get("implementation", DEFAULT_CONFIG.lda.implementation)
+    ).strip()
+    if implementation != DEFAULT_CONFIG.lda.implementation:
+        raise ValueError(
+            "lda.implementation must be 'ldamulticore'; "
+            f"got {implementation!r}"
+        )
+
+    alpha = raw.get("alpha", DEFAULT_CONFIG.lda.alpha)
+    if isinstance(alpha, str) and alpha.strip().lower() == "auto":
+        raise ValueError(
+            "LdaMulticore does not support lda.alpha='auto'; "
+            "use the approved production default lda.alpha='symmetric'"
+        )
+
+
 def validate_run_config(config: dict[str, Any]) -> None:
     required = (
         "data_type",
@@ -184,6 +205,8 @@ def validate_run_config(config: dict[str, Any]) -> None:
     missing = [key for key in required if key not in config]
     if missing:
         raise ValueError(f"Missing required config keys: {', '.join(missing)}")
+
+    validate_lda_config(config.get("lda"))
 
     thresholds = config.get("graph_thresholds", {})
     for key in ("min_total_post", "min_shared_post", "min_members"):

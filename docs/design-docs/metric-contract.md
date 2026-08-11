@@ -135,23 +135,25 @@ Current transition comparison across months in `theme-analysis.py`:
 
 ## LDA Parameters
 
-Current implementation:
+The thesis-era `utils/lda_analysis.py` configuration used `alpha='auto'` and
+`eta='auto'`. The production rebuild retains Gensim `LdaMulticore`; because
+`LdaMulticore` cannot optimize `alpha='auto'`, the approved production contract
+uses a fixed symmetric alpha prior while preserving supported `eta='auto'`.
+No default worker count is declared, so `LdaMulticore` retains its existing
+worker-selection behavior unless an experiment explicitly configures `workers`.
 
-```text
-utils/lda_analysis.py
-```
-
-Required defaults:
+Required production defaults:
 
 | Parameter | Value |
 |---|---|
+| `implementation` | `ldamulticore` |
 | `num_topics` | `15` |
 | `topN_keywords` | `50` |
 | `random_state` | `100` |
 | `iterations` | `100` |
 | `chunksize` | `20` |
 | `passes` | `80` |
-| `alpha` | `auto` |
+| `alpha` | `symmetric` |
 | `eta` | `auto` |
 | coherence | `c_v` |
 | spaCy model | `en_core_web_sm` |

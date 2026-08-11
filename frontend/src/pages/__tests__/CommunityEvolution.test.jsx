@@ -9,7 +9,7 @@ vi.mock('../../features/evolution/useCommunityEvolutionData', () => ({
   useCommunityEvolutionData: vi.fn(),
 }));
 vi.mock('../../components/PageNavigationRail', () => ({
-  default: ({ sections }) => <nav aria-label="Section rail">{sections.map((section) => <span key={section.id}>{section.label}</span>)}</nav>,
+  PageNavigationRailSlot: ({ sections }) => <nav aria-label="Section rail">{sections.map((section) => <span key={section.id}>{section.label}</span>)}</nav>,
 }));
 
 const query = (data, error = null) => ({ data, error, isPending: false, refetch: vi.fn() });

@@ -37,6 +37,27 @@ def test_validate_run_configuration_task():
     assert val_config.config_digest is not None
 
 
+def test_validate_run_configuration_rejects_ldamulticore_auto_alpha():
+    config = {
+        "output_base_path": "/mock/out",
+        "input_path": "/mock/in.csv",
+        "data_type": "twitter",
+        "content_type": "reply",
+        "month": "march",
+        "year": "2017",
+        "creator_relation": "REPLIED_TO",
+        "spreader_relation": "REPLIED_BY",
+        "creator_node_column": "target",
+        "spreader_node_column": "target",
+        "text_node_column": "source",
+        "date_column": "created_at",
+        "lda": {"implementation": "ldamulticore", "alpha": "auto"},
+    }
+
+    with pytest.raises(PipelineError, match="does not support lda.alpha='auto'"):
+        validate_run_configuration_task.fn(config)
+
+
 def test_validate_run_configuration_equivalence():
     from src.config.loader import load_config
 

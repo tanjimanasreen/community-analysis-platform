@@ -178,10 +178,10 @@ export default function ProminentCommunityInspector({
         </div>
       )}
 
-      <Link to={networkHref(location.search, communityId)} className="mt-6 flex w-full items-center justify-center gap-2 rounded-lg bg-primary/10 px-4 py-2.5 text-sm font-semibold text-primary hover:bg-primary/15">
-        <Network size={15} /> Open full community network
+      <Link to={communitiesHref(location.search, communityId, period)} className="mt-6 flex w-full items-center justify-center gap-2 rounded-lg bg-primary/10 px-4 py-2.5 text-sm font-semibold text-primary hover:bg-primary/15">
+        <Network size={15} /> Explore in Communities
       </Link>
-      <Link to={thematicHref(location.search, metric, communityId)} className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-surface-soft/40 px-4 py-2.5 text-sm font-semibold text-primary hover:bg-surface-soft">
+      <Link to={thematicHref(location.search, metric, communityId, period)} className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-surface-soft/40 px-4 py-2.5 text-sm font-semibold text-primary hover:bg-surface-soft">
         <BookOpen size={15} /> Open thematic analysis
       </Link>
     </aside>
@@ -259,18 +259,21 @@ function CloseButton({ onClick }: { onClick: () => void }) {
   return <button type="button" aria-label="Clear selected community" onClick={onClick} className="rounded-lg p-1.5 text-muted hover:bg-surface-soft hover:text-text-heading"><X size={16} /></button>;
 }
 
-function networkHref(search: string, communityId: string) {
+function communitiesHref(search: string, communityId: string, period: string) {
   const params = new URLSearchParams(search);
-  params.set('networkView', 'users');
+  params.delete('networkView');
+  params.delete('sampling');
   params.set('community', communityId);
-  return `/network?${params.toString()}`;
+  params.set('period', period);
+  return `/communities?${params.toString()}`;
 }
 
-function thematicHref(search: string, metric: MetricName, communityId: string) {
+function thematicHref(search: string, metric: MetricName, communityId: string, period: string) {
   const params = new URLSearchParams(search);
   params.set('metric', metric);
   params.set('semanticMetric', metric);
   params.set('semanticCommunity', communityId);
+  params.set('period', period);
   return `/thematic?${params.toString()}`;
 }
 

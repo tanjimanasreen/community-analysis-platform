@@ -87,7 +87,7 @@ pytest tests/unit/test_community_similarity.py
 Required:
 
 - Text preprocessing behavior is tested.
-- LDA defaults are preserved.
+- The approved production `LdaMulticore` defaults are enforced without hidden prior rewriting.
 - Unigram and bigram outputs are generated.
 - Matched and partially matched topic comparison outputs are generated.
 - Perplexity and coherence scores are saved.

@@ -19,6 +19,19 @@ describe('Sidebar', () => {
       'href',
       '/evolution?run=run-1&metric=if',
     );
+    expect(screen.getByRole('link', { name: 'Communities' })).toHaveAttribute(
+      'href',
+      '/communities?run=run-1&metric=if',
+    );
+    expect(screen.queryByRole('link', { name: 'Community Network' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Top Communities' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Data & Reports' })).toHaveAttribute(
+      'href',
+      '/data-reports?run=run-1&metric=if',
+    );
+    expect(screen.queryByRole('link', { name: 'Data Explorer' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Reports' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Evidence' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Community Transitions' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Evolution Over Time' })).not.toBeInTheDocument();
     expect(screen.queryByText('Settings')).not.toBeInTheDocument();

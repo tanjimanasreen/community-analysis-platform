@@ -11,20 +11,33 @@ import { useDashboardContext } from './hooks/useDashboardContext';
 
 // Route pages are lazy so chart and graph vendors are not loaded on unrelated routes.
 const Overview = lazy(() => import('./pages/Overview'));
-const CommunityNetworkPage = lazy(() => import('./pages/CommunityNetwork'));
+const CommunitiesPage = lazy(() => import('./pages/Communities'));
 const ThematicAnalysisPage = lazy(() => import('./pages/ThematicAnalysis'));
 const CommunityEvolutionPage = lazy(() => import('./pages/CommunityEvolution'));
 const EvolutionOverTimePage = lazy(() => import('./pages/EvolutionOverTime'));
 const ComparativeAnalysisPage = lazy(() => import('./pages/ComparativeAnalysis'));
-const TopCommunitiesPage = lazy(() => import('./pages/TopCommunities'));
-const DataExplorerPage = lazy(() => import('./pages/DataExplorer'));
-const ReportsPage = lazy(() => import('./pages/Reports'));
+const EvidencePage = lazy(() => import('./pages/Evidence'));
 const MethodologyPage = lazy(() => import('./pages/Methodology'));
 
 
 function LegacyTransitionsRedirect() {
   const location = useLocation();
   return <Navigate replace to={`/evolution${location.search}`} />;
+}
+
+function LegacyCommunitiesRedirect() {
+  const location = useLocation();
+  return <Navigate replace to={`/communities${location.search}`} />;
+}
+
+function LegacyDataReportsRedirect({ defaultView }) {
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  if (!params.get('view')) {
+    params.set('view', defaultView);
+  }
+  const query = params.toString();
+  return <Navigate replace to={`/data-reports${query ? `?${query}` : ''}`} />;
 }
 
 function DashboardContent() {
@@ -204,15 +217,18 @@ export default function App() {
         <Routes>
           <Route path="/" element={<DashboardLayout />}>
             <Route index element={<Overview />} />
-            <Route path="network" element={<CommunityNetworkPage />} />
+            <Route path="communities" element={<CommunitiesPage />} />
+            <Route path="network" element={<LegacyCommunitiesRedirect />} />
             <Route path="thematic" element={<ThematicAnalysisPage />} />
             <Route path="evolution" element={<CommunityEvolutionPage />} />
             <Route path="run-history" element={<EvolutionOverTimePage />} />
             <Route path="comparative" element={<ComparativeAnalysisPage />} />
             <Route path="transitions" element={<LegacyTransitionsRedirect />} />
-            <Route path="top-communities" element={<TopCommunitiesPage />} />
-            <Route path="data" element={<DataExplorerPage />} />
-            <Route path="reports" element={<ReportsPage />} />
+            <Route path="top-communities" element={<LegacyCommunitiesRedirect />} />
+            <Route path="data-reports" element={<EvidencePage />} />
+            <Route path="evidence" element={<LegacyDataReportsRedirect defaultView="communities" />} />
+            <Route path="data" element={<LegacyDataReportsRedirect defaultView="communities" />} />
+            <Route path="reports" element={<LegacyDataReportsRedirect defaultView="outputs" />} />
             <Route path="methodology" element={<MethodologyPage />} />
             <Route path="*" element={<Overview />} />
           </Route>

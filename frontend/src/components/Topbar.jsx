@@ -6,14 +6,17 @@ import { conciseRunId } from '../features/overview/overviewUtils';
 
 const routeCopy = {
   '/': ['Overview Dashboard', 'Monitor validated run metrics and community structure.'],
-  '/network': ['Community Network', 'Explore the structure of online communities and how they are connected.'],
+  '/communities': ['Communities', 'Browse monthly community partitions and inspect one community in structural and semantic detail.'],
+  '/network': ['Communities', 'Browse monthly community partitions and inspect one community in structural and semantic detail.'],
   '/thematic': ['Thematic Analysis', 'Inspect LDA topics and downstream theme labels for the selected run.'],
   '/evolution': ['Community Evolution', 'Follow persistent community paths through structure, membership, and themes.'],
   '/run-history': ['Run History', 'Compare compatible completed runs and longitudinal artifacts.'],
   '/comparative': ['Comparative Analysis', 'Compare compatible platform runs using shared analytical definitions.'],
-  '/top-communities': ['Top Communities', 'Rank communities using canonical structural fields.'],
-  '/data': ['Data Explorer', 'Inspect run-scoped analytical records and artifacts.'],
-  '/reports': ['Reports', 'Browse read-only generated reports and artifacts.'],
+  '/top-communities': ['Communities', 'Browse monthly community partitions and inspect one community in structural and semantic detail.'],
+  '/data-reports': ['Research Data & Reports', 'Inspect persisted analytical data, provenance, and verified outputs from the selected run.'],
+  '/evidence': ['Research Data & Reports', 'Inspect persisted analytical data, provenance, and verified outputs from the selected run.'],
+  '/data': ['Research Data & Reports', 'Inspect persisted analytical data, provenance, and verified outputs from the selected run.'],
+  '/reports': ['Research Data & Reports', 'Inspect persisted analytical data, provenance, and verified outputs from the selected run.'],
   '/methodology': ['Methodology', 'Understand the analytical pipeline, data model, and configured methods.'],
 };
 
@@ -34,7 +37,7 @@ export default function Topbar({
 }) {
   const location = useLocation();
   const [title, subtitle] = routeCopy[location.pathname] || routeCopy['/'];
-  const showMetric = !['/thematic', '/evolution', '/transitions', '/reports', '/methodology'].includes(location.pathname);
+  const showMetric = !['/thematic', '/evolution', '/transitions', '/data-reports', '/evidence', '/data', '/reports', '/methodology'].includes(location.pathname);
   const helpTarget = `/methodology${location.search}`;
 
   return (

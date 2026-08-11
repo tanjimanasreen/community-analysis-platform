@@ -4,11 +4,11 @@ import { TELEGRAM_RUN, openVerifiedRoute } from './helpers';
 
 const representativeRoutes = [
   '/',
-  '/network?community=1',
+  '/communities?community=1',
   '/thematic',
   '/evolution',
   `/comparative?twitterRun=twitter-2017-04&telegramRun=${TELEGRAM_RUN}`,
-  '/reports',
+  '/data-reports?view=communities',
   '/methodology',
 ];
 

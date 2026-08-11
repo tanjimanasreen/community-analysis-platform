@@ -20,7 +20,7 @@
 | Language detection | `lang_detection` | URL removal, English flag, empty text behavior. |
 | Translation | `lang_translate` | Mock translator, non-English update behavior. |
 | Text preprocessing | `message_preprocess` | Emoji removal, HTML cleaning, Unicode normalization, stopword removal. |
-| LDA defaults | `get_lda` | Parameters match contract. |
+| LDA defaults | `get_lda` | `LdaMulticore` receives the approved defaults exactly; `eta="auto"` is preserved, `alpha="auto"` is rejected, and default worker selection remains implicit. |
 | Unigram LDA | `get_unigram_lda` | Output schema on small corpus. |
 | Bigram LDA | `get_bigram_lda` | Bigram token handling and output schema. |
 | Keyword cutoff | `get_cutoff_probability` | Knee and fallback behavior. |
@@ -104,10 +104,11 @@ visualization services.
 | API contract and errors | `frontend/src/api/`, MSW handlers | Exact routes/query names, structured errors, no unhandled request. |
 | URL/global state | `DashboardProvider`, search-param adapters | Default completed run, invalid recovery, reload, back/forward, IF/WIF switching. |
 | Request/integrity states | shared state components | Loading, API error, no runs, empty records, optional artifact unavailable, failed verification. |
-| Structural views | network/community/explorer adapters | Graph transform, sampling labels, metric weights, ID preservation, pagination, page-local filtering, downloads. |
+| Structural views | unified Communities workspace plus Overview adapters | Period-aware `(run, period, metric, community_id)` identity, latest-month default, partition-change selection reset, directory pagination without fake global rank, selected-community graph coverage/min-weight isolation, LDA-before-theme preview, legacy route redirects, structural deep links, graph transform, metric weights, and ID preservation. |
 | Semantic views | topic/theme adapters | Safe normalization, matched/partial, unigram/bigram, IF/WIF links, provider metadata, similarity fallback. |
 | Longitudinal/comparison | Community Evolution page/models plus comparison models | All-path-first master view, run-level-only overview KPIs, one URL-backed path shared by structural/mobility/theme/evidence detail, synchronized path row/dropdown selection, invalid-path recovery, right sticky section rail/mobile jump control, reappearing-member display, General/IF/WIF similarity switch, missing optional artifacts, legacy `/transitions` redirect, compatible run history/comparison behavior. |
-| Reports/methodology | artifact library, methodology content/model, and Methodology page | Intermediate suppression, report URL, exact thesis RQs, workflow order, LDA-before-theme interpretation, Telegram/Retweet-Quote/Reply network tabs, common creator→spreader projection, search-param-preserving RQ links, protected defaults, selected-run overrides, non-OpenAI metadata, right section rail/mobile jump control, and keyboard-accessible tabs. |
+| Data & Reports workspace | `Evidence.jsx`, evidence model/hook/components, artifact library | URL-backed thesis-dimension views with a two-level horizontal dimension/data-view navigator; latest-period resolution; communities/centrality period+metric scope; matched/partial LDA/themes period+exact-community scope; transitions/outputs free of false single-month/metric scope; period-preserving community links; constructive centrality leaders; safe normalized record details; report URL; manifest-key downloads; intermediate suppression; canonical `/data-reports` routing plus `/evidence`, `/data`, and `/reports` compatibility redirects. |
+| Methodology | methodology content/model and Methodology page | Five-section visual hierarchy, exact thesis RQs, shared foundation plus Structural/Semantic/Temporal workflow branches, embedded RQ traceability, LDA-before-theme interpretation, semantic→temporal theme-similarity dependency, Telegram/Retweet-Quote/Reply relationship diagrams, common creator→spreader projection, layered system implementation, search-param-preserving RQ links, protected defaults, selected-run overrides, non-OpenAI metadata, right section rail/mobile jump control, responsive no-overflow behavior, and keyboard-accessible tabs. |
 | Accessibility | Playwright axe and keyboard workflows | Serious/critical axe scan, names/labels, mobile navigation, 200% zoom, 320 CSS pixels. |
 | Performance | Vite route chunks and bundle script | Entry under 300 KiB, non-route application chunks under 500 KiB, separate graph/chart vendors. |
 | Mock/secret guard | `frontend/src/test/mockDataGuard.test.ts` plus source scans | No old mock IDs/dates/platforms, obsolete routes, secrets, direct provider/database calls, or machine paths in production source. |
@@ -125,7 +126,7 @@ availability.
 | Parser reuse | `src/pipelines/ingestion_pipeline.py`, `src/ingestion/network_data_extractor.py` | Repeated serialized nodes are parsed once without changing rows. |
 | Memgraph batching | `MemgraphRepository.import_interactions` | Self-edge exclusion, metric preservation, and configured batch boundaries. |
 | Text preprocessing batching | `message_preprocess` | Output equivalence to the frozen preprocessing sequence. |
-| Topic runtime settings | `src/topics/lda.py` | LdaMulticore retained, configured parameters forwarded, empty corpus rejected. |
+| Topic runtime settings | `src/topics/lda.py` | `LdaMulticore` retained; implementation metadata is not forwarded to Gensim, configured parameters are forwarded unchanged, explicit workers are honored, default workers remain implicit, and empty corpus is rejected. |
 | Prefect semantic keys | `src/orchestration/hashing.py` | Relevant nested theme/network/topic config changes invalidate cache keys. |
 | Theme progress/cache metrics | `src/themes/theme_generation.py` | Completed totals, cache hits/misses, outbound requests, and no external calls in tests. |
 | OpenAI usage and structured output | `src/providers/openai.py` | Mapping/object token usage including reasoning tokens, strict JSON Schema requests, 32K→64K bounded budget escalation, low reasoning effort, one bounded content-filter retry, Azure `model_extra.content_filters` annotation parsing, HTTP 400 prompt-filter handling, safe diagnostic logs, and no live calls. |
@@ -145,7 +146,7 @@ availability.
 | Feature | Implementation | Required tests |
 |---|---|---|
 | Stable graph canvas | `NetworkGraph.jsx`, `networkModel.ts` | Width-only resize observation, fixed height, deterministic positions, malformed endpoint omission, parallel-edge curvature, metric/remount behavior. |
-| Heterogeneous artifact rendering | `ArtifactValue.tsx`, Data Explorer and metadata panels | JSON arrays/maps, scalars, long text, ordinary text, no evaluation, compact and expanded views. |
+| Heterogeneous artifact rendering | `ArtifactValue.tsx`, Evidence and metadata panels | JSON arrays/maps, scalars, long text, ordinary text, no evaluation, compact and expanded views. |
 | API operational boundary | `src/api/app.py`, `ApiSettings` | Request ID propagation, security headers, gzip configuration, trusted-host configuration, liveness, readiness success/failure. |
 | AWS container boundary | `Dockerfile.api`, frontend nginx | Non-root API process, environment-based artifact root, health endpoint, same-origin proxy, immutable assets, SPA fallback. |
 
@@ -157,7 +158,7 @@ availability.
 | Exact-label timeline | `ThemeTrendService.timeline` | Year-boundary ordering, zero-filled series, exact-label separation, deterministic leader tie-breaks, invalid/empty ranges. |
 | Period/exact-label evidence reads | `TopicService`, theme router | Canonical period selection, exact case-sensitive filtering before pagination, totals and unavailable artifacts. |
 | Aggregate matched-theme progression | `themeTrendModel.ts`, `MonthlyThemeMatrix.tsx`, `AggregateThemeProgression.tsx` | Sparse 0–5 canonical-theme selection per month, deterministic rank movement by canonical ID, adjacent-month continuity, gap breaking, re-entry markers, fixed readable month columns, one/long timeline geometry, local horizontal scrolling, full-label accessibility, dynamic rank guides, and accessible companion table. |
-| Thematic Analysis route | `ThematicAnalysis.jsx` and components | Methodology overview before results, navigation rail/mobile section jump, timeline range URL state, sparse canonical top-theme rankings and LDA keywords, aggregate progression, canonical-cluster → generated-label → LDA evidence order, provider provenance, loading/empty/error/unavailable states, and no transition/similarity requests or persisted-path UI. |
+| Thematic Analysis route | `ThematicAnalysis.jsx` and components | Methodology overview before results, shared sticky navigation rail/mobile section jump, timeline range URL state, sparse canonical top-theme rankings and LDA keywords, aggregate progression, selected canonical-cluster evidence separated from month/community-scoped source evidence, Token Representation scoped to LDA presentation, compact provider provenance with collapsed raw run metrics, loading/empty/error/unavailable states, and no transition/similarity requests or persisted-path UI. |
 | Four-month dashboard fixture | `scripts/build_dashboard_fixture.py` | Four period-specific theme/topic/community artifacts plus deterministic cluster artifacts and Community Evolution path/mobility/similarity read models, including a leave-and-reappear member, pinned evolution similarity provenance, a long-but-valid canonical theme/keyword layout case, and valid manifest. |
 
 

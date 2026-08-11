@@ -4,13 +4,12 @@ import { TELEGRAM_RUN, openVerifiedRoute } from './helpers';
 
 const routes = [
   ['overview', '/'],
-  ['network', '/network?community=1'],
+  ['communities', '/communities?community=1'],
   ['thematic', '/thematic'],
   ['evolution', '/evolution'],
   ['comparison', `/comparative?twitterRun=twitter-2017-04&telegramRun=${TELEGRAM_RUN}`],
-  ['top-communities', '/top-communities'],
-  ['data-explorer', '/data'],
-  ['reports', '/reports'],
+  ['data-reports', '/data-reports?view=communities'],
+  ['data-reports-outputs', '/data-reports?view=outputs'],
   ['methodology', '/methodology'],
 ] as const;
 

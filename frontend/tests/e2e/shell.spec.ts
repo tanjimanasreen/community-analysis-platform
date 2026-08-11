@@ -20,16 +20,17 @@ test('application selects a completed run and run switching updates overview pro
 });
 
 test('IF/WIF selection, browser history, and route state remain URL-backed', async ({ page }) => {
-  await openVerifiedRoute(page, '/network');
+  await openVerifiedRoute(page, '/communities');
+  await expect(page).toHaveURL(/period=/);
   await page.getByLabel('Affinity metric').selectOption('wif');
   await expect(page).toHaveURL(/metric=wif/);
-  await expect(page.getByRole('heading', { name: /Community Network · WIF/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Community Directory' })).toBeVisible();
 
   await page.getByLabel('Affinity metric').selectOption('if');
   await expect(page).toHaveURL(/metric=if/);
   await page.goBack();
   await expect(page).toHaveURL(/metric=wif/);
-  await expect(page.getByRole('heading', { name: /Community Network · WIF/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Community Directory' })).toBeVisible();
   await page.goForward();
   await expect(page).toHaveURL(/metric=if/);
 });
@@ -51,6 +52,26 @@ test('mobile navigation opens, navigates, and dismisses at 320 CSS pixels', asyn
   await expect(page.locator('aside[aria-label="Primary navigation"]')).toHaveClass(/-left-80/);
 });
 
+test('legacy evidence, data, and reports routes redirect to Data & Reports with query state preserved', async ({ page }) => {
+  await openVerifiedRoute(page, '/evidence?period=2017-03&view=matched-lda');
+  await expect(page).toHaveURL(/\/data-reports\?/);
+  await expect(page).toHaveURL(/view=matched-lda/);
+  await expect(page).toHaveURL(/period=2017-03/);
+
+  await openVerifiedRoute(page, '/data?period=2017-03');
+  await expect(page).toHaveURL(/\/data-reports\?/);
+  await expect(page).toHaveURL(/view=communities/);
+  await expect(page).toHaveURL(/period=2017-03/);
+
+  await openVerifiedRoute(page, '/reports?period=2017-03');
+  await expect(page).toHaveURL(/\/data-reports\?/);
+  await expect(page).toHaveURL(/view=outputs/);
+  await expect(page).toHaveURL(/period=2017-03/);
+
+  await openVerifiedRoute(page, '/reports?period=2017-03&view=themes');
+  await expect(page).toHaveURL(/\/data-reports\?/);
+  await expect(page).toHaveURL(/view=themes/);
+});
 
 test('methodology presents the thesis workflow and switches platform network models', async ({ page }) => {
   await openVerifiedRoute(page, '/methodology');
@@ -60,6 +81,8 @@ test('methodology presents the thesis workflow and switches platform network mod
   await expect(page.getByText('How do communities evolve over time?')).toBeVisible();
   await expect(page.getByText('How do individuals migrate between communities?')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Methodological Workflow' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Network Models' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'System Implementation' })).toBeVisible();
 
   await page.getByRole('tab', { name: 'Twitter · Retweet/Quote' }).click();
   await expect(page.getByText('RETWEETED_BY')).toBeVisible();

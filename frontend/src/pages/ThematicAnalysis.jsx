@@ -13,7 +13,7 @@ import ArtifactValue from '../components/ArtifactValue';
 import MetricCard from '../components/MetricCard';
 import KeywordList from '../components/KeywordList';
 import ProviderMetadata from '../components/ProviderMetadata';
-import PageNavigationRail from '../components/PageNavigationRail';
+import { PageNavigationRailSlot } from '../components/PageNavigationRail';
 import ThemeLabel from '../components/ThemeLabel';
 import ArtifactUnavailableState from '../components/states/ArtifactUnavailableState';
 import EmptyState from '../components/states/EmptyState';
@@ -50,8 +50,8 @@ const THEMATIC_SECTIONS = [
   { id: 'thematic-overview', label: 'Overview', icon: 'kpis' },
   { id: 'thematic-monthly-themes', label: 'Monthly Themes', icon: 'themes' },
   { id: 'thematic-progression', label: 'Theme Progression', icon: 'trends' },
-  { id: 'thematic-evidence-explorer', label: 'Evidence Explorer', icon: 'communities' },
   { id: 'thematic-canonical-evidence', label: 'Canonical Evidence', icon: 'themes' },
+  { id: 'thematic-evidence-explorer', label: 'Evidence Explorer', icon: 'communities' },
   { id: 'thematic-theme-labels', label: 'Theme Labels', icon: 'themes' },
   { id: 'thematic-lda-evidence', label: 'LDA Evidence', icon: 'provenance' },
   { id: 'thematic-provenance', label: 'Provenance', icon: 'provenance' },
@@ -61,12 +61,12 @@ function isArtifactUnavailable(error) {
   return normalizeApiError(error).code === 'ARTIFACT_NOT_AVAILABLE';
 }
 
-function networkHref(params, metric, communityId, period = null) {
+function communitiesHref(params, metric, communityId, period = null) {
   const next = new URLSearchParams(params);
   next.set('metric', metric);
   next.set('community', communityId);
   if (period) next.set('period', period);
-  return `/network?${next.toString()}`;
+  return `/communities?${next.toString()}`;
 }
 
 export default function ThematicAnalysisPage() {
@@ -349,87 +349,13 @@ export default function ThematicAnalysisPage() {
           </>
       )}
 
-        <section id="thematic-evidence-explorer" className="panel scroll-mt-6 p-5" tabIndex={-1} aria-labelledby="evidence-controls-heading">
-        <div>
-          <h2 id="evidence-controls-heading" className="text-lg font-bold text-text-heading">Evidence Explorer</h2>
-          <p className="mt-1 max-w-4xl text-xs text-muted">
-            Inspect matched LDA records and downstream labels for one evidence month. These controls do not change the timeline rankings or aggregate progression above.
-          </p>
-        </div>
-        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <Control label="Evidence month">
-            <select
-              aria-label="Evidence month"
-              value={semanticState.month ?? ''}
-              onChange={(event) => updateControls({ month: event.target.value || null, canonicalThemeId: null, selectedTheme: null })}
-              className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-text-heading"
-            >
-              {timelinePeriods.length === 0 && <option value="">No theme periods available</option>}
-              {timelinePeriods.map((period) => <option key={period} value={period}>{periodLabel(period)}</option>)}
-            </select>
-          </Control>
-          <Control label="Metric evidence view">
-            <select
-              aria-label="Semantic metric view"
-              value={semanticState.metricView}
-              onChange={(event) => updateControls({ metricView: event.target.value })}
-              className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-text-heading"
-            >
-              <option value="general">General labels only</option>
-              <option value="both">IF and WIF side by side</option>
-              <option value="if">IF only</option>
-              <option value="wif">WIF only</option>
-            </select>
-          </Control>
-          <Control label="Token representation">
-            <select
-              aria-label="Token representation"
-              value={semanticState.tokenView}
-              onChange={(event) => updateControls({ tokenView: event.target.value })}
-              className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-text-heading"
-            >
-              <option value="unigram">Unigram LDA</option>
-              <option value="bigram">Bigram LDA</option>
-              <option value="combined">Combined saved keywords</option>
-            </select>
-          </Control>
-          <Control label="Exact community ID">
-            <div className="flex gap-2">
-              <input
-                aria-label="Exact community ID"
-                value={communityDraft}
-                onChange={(event) => setCommunityDraft(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') updateControls({ communityId: communityDraft.trim() || null });
-                }}
-                className="min-w-0 flex-1 rounded-lg border border-border bg-bg px-3 py-2 text-sm text-text-heading"
-                placeholder="e.g. 12"
-              />
-              <button
-                type="button"
-                onClick={() => updateControls({ communityId: communityDraft.trim() || null })}
-                className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white hover:bg-primary/90"
-              >
-                Apply
-              </button>
-            </div>
-          </Control>
-        </div>
-        <p className="mt-4 text-xs text-muted">
-          Topic evidence is restricted to matched communities on this route. Partially matched topic records remain available on the Topic Modeling page.
-          {semanticState.communityId && (
-            <button type="button" onClick={() => updateControls({ communityId: null })} className="ml-2 font-semibold text-primary hover:text-primary/80">Clear community filter</button>
-          )}
-        </p>
-      </section>
-
         <section id="thematic-canonical-evidence" className="scroll-mt-6" tabIndex={-1}>
           <div className="panel overflow-hidden" aria-labelledby="cluster-evidence-heading">
             <div className="border-b border-border p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <h2 id="cluster-evidence-heading" className="text-lg font-bold text-text-heading">Evidence · Canonical theme cluster</h2>
-                  <p className="mt-1 text-xs text-muted">Shows the generated general-theme labels and matched-community evidence that formed the selected upstream semantic cluster.</p>
+                  <h2 id="cluster-evidence-heading" className="text-lg font-bold text-text-heading">Selected Canonical Theme · Cluster Evidence</h2>
+                  <p className="mt-1 text-xs text-muted">Explains the selected ranked canonical theme using the complete persisted cluster observations. Community, IF/WIF, and token controls in Source Evidence Explorer do not filter this section.</p>
                 </div>
                 {semanticState.canonicalThemeId && (
                   <button type="button" onClick={() => updateControls({ canonicalThemeId: null })} className="rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
@@ -468,12 +394,75 @@ export default function ThematicAnalysisPage() {
           </div>
         </section>
 
+
+        <section id="thematic-evidence-explorer" className="panel scroll-mt-6 p-5" tabIndex={-1} aria-labelledby="evidence-controls-heading">
+        <div>
+          <h2 id="evidence-controls-heading" className="text-lg font-bold text-text-heading">Source Evidence Explorer</h2>
+          <p className="mt-1 max-w-4xl text-xs text-muted">
+            Browse Generated Theme Labels and Matched LDA Topic Records for one evidence month. These controls do not change monthly rankings, aggregate progression, or the complete selected canonical-cluster evidence above.
+          </p>
+        </div>
+        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <Control label="Evidence month">
+            <select
+              aria-label="Evidence month"
+              value={semanticState.month ?? ''}
+              onChange={(event) => updateControls({ month: event.target.value || null, canonicalThemeId: null, selectedTheme: null })}
+              className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-text-heading"
+            >
+              {timelinePeriods.length === 0 && <option value="">No theme periods available</option>}
+              {timelinePeriods.map((period) => <option key={period} value={period}>{periodLabel(period)}</option>)}
+            </select>
+          </Control>
+          <Control label="IF/WIF evidence view">
+            <select
+              aria-label="IF/WIF evidence view"
+              value={semanticState.metricView}
+              onChange={(event) => updateControls({ metricView: event.target.value })}
+              className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-text-heading"
+            >
+              <option value="general">General labels only</option>
+              <option value="both">IF and WIF side by side</option>
+              <option value="if">IF only</option>
+              <option value="wif">WIF only</option>
+            </select>
+          </Control>
+          <Control label="Exact community ID">
+            <div className="flex gap-2">
+              <input
+                aria-label="Exact community ID"
+                value={communityDraft}
+                onChange={(event) => setCommunityDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') updateControls({ communityId: communityDraft.trim() || null });
+                }}
+                className="min-w-0 flex-1 rounded-lg border border-border bg-bg px-3 py-2 text-sm text-text-heading"
+                placeholder="e.g. 12"
+              />
+              <button
+                type="button"
+                onClick={() => updateControls({ communityId: communityDraft.trim() || null })}
+                className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white hover:bg-primary/90"
+              >
+                Apply
+              </button>
+            </div>
+          </Control>
+        </div>
+        <p className="mt-4 text-xs text-muted">
+          Evidence month and exact community ID filter both source-record sections below. IF/WIF evidence view changes only metric-specific presentation. Topic evidence is restricted to matched communities on this route; partially matched records remain available on the Topic Modeling page.
+          {semanticState.communityId && (
+            <button type="button" onClick={() => updateControls({ communityId: null })} className="ml-2 font-semibold text-primary hover:text-primary/80">Clear community filter</button>
+          )}
+        </p>
+      </section>
+
         <section id="thematic-theme-labels" className="panel scroll-mt-6 overflow-hidden" tabIndex={-1}>
           <div className="border-b border-border p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h2 className="text-lg font-bold text-text-heading">Evidence · Generated theme labels</h2>
-                <p className="mt-1 text-xs text-muted">Provider-generated labels are displayed with the LDA keywords that supplied their evidence.</p>
+                <p className="mt-1 text-xs text-muted">Provider-generated labels for the Source Evidence Explorer month/community scope, with the LDA keywords that supplied their evidence. IF/WIF view controls metric-specific rows only.</p>
               </div>
             </div>
           </div>
@@ -523,9 +512,27 @@ export default function ThematicAnalysisPage() {
 
         <section id="thematic-lda-evidence" className="panel scroll-mt-6 overflow-hidden" tabIndex={-1}>
           <div className="border-b border-border p-5">
-            <h2 className="text-lg font-bold text-text-heading">Evidence · Matched LDA topic records</h2>
-            <p className="mt-1 text-xs text-muted">Deep upstream evidence: community IDs, selected topic representation, keywords, and membership overlap from canonical matched-topic artifacts.</p>
-            {semanticState.metricView === 'general' && <p className="mt-2 text-xs text-muted">General labels have no separate LDA metric artifact, so IF and WIF topic evidence remains side by side.</p>}
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="max-w-4xl">
+                <h2 className="text-lg font-bold text-text-heading">Evidence · Matched LDA topic records</h2>
+                <p className="mt-1 text-xs text-muted">Deep upstream evidence for the Source Evidence Explorer month/community scope. Token representation changes the topic summaries; selected-record detail preserves all saved unigram and bigram evidence.</p>
+                {semanticState.metricView === 'general' && <p className="mt-2 text-xs text-muted">General labels have no separate LDA metric artifact, so IF and WIF topic evidence remains side by side.</p>}
+              </div>
+              <div className="w-full shrink-0 lg:w-60">
+                <Control label="Token representation">
+                  <select
+                    aria-label="Token representation"
+                    value={semanticState.tokenView}
+                    onChange={(event) => updateControls({ tokenView: event.target.value })}
+                    className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-text-heading"
+                  >
+                    <option value="unigram">Unigram LDA</option>
+                    <option value="bigram">Bigram LDA</option>
+                    <option value="combined">Combined saved keywords</option>
+                  </select>
+                </Control>
+              </div>
+            </div>
           </div>
           {topicsQuery.isPending ? (
             <LoadingState title="Loading matched LDA topic records" />
@@ -583,9 +590,7 @@ export default function ThematicAnalysisPage() {
         </section>
       </div>
 
-      <div className="pointer-events-none sticky top-0 z-40 ml-4 hidden h-screen w-14 shrink-0 flex-col justify-center md:flex lg:ml-6">
-        <PageNavigationRail sections={THEMATIC_SECTIONS} />
-      </div>
+      <PageNavigationRailSlot sections={THEMATIC_SECTIONS} />
     </div>
   );
 }
@@ -628,8 +633,8 @@ function TopicDetailPanel({ topic, searchParams, period }) {
         <div><p className="mb-2 text-xs font-semibold text-muted">WIF bigram keywords</p><KeywordList keywords={topic.wifBigramKeywords} /></div>
       </div>
       <div className="mt-5 flex flex-col gap-2">
-        {topic.ifCommunityId && <CommunityLink label="Open IF community" href={networkHref(searchParams, 'if', topic.ifCommunityId, period)} />}
-        {topic.wifCommunityId && <CommunityLink label="Open WIF community" href={networkHref(searchParams, 'wif', topic.wifCommunityId, period)} />}
+        {topic.ifCommunityId && <CommunityLink label="Open IF community" href={communitiesHref(searchParams, 'if', topic.ifCommunityId, period)} />}
+        {topic.wifCommunityId && <CommunityLink label="Open WIF community" href={communitiesHref(searchParams, 'wif', topic.wifCommunityId, period)} />}
       </div>
     </aside>
   );
@@ -642,7 +647,7 @@ function ThemeMetricEvidence({ label, names, keywords, communityId, metric, sear
       <ThemeLabel names={names} />
       <p className="mb-2 mt-4 text-xs font-semibold text-muted">{label} keyword evidence</p>
       <KeywordList keywords={keywords} limit={12} />
-      {communityId && <CommunityLink label={`Open ${label} community`} href={networkHref(searchParams, metric, communityId, period)} />}
+      {communityId && <CommunityLink label={`Open ${label} community`} href={communitiesHref(searchParams, metric, communityId, period)} />}
     </div>
   );
 }

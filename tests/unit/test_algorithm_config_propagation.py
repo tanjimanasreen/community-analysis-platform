@@ -20,6 +20,7 @@ def test_lda_runtime_config_reaches_ldamulticore(monkeypatch):
         dictionary={"alpha": 0},
         corpus=[[(0, 1)]],
         lda_config={
+            "implementation": "ldamulticore",
             "num_topics": 7,
             "random_state": 321,
             "iterations": 44,

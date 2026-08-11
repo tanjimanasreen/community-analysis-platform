@@ -7,9 +7,10 @@ const ForceGraph2D = lazy(() => import('react-force-graph-2d'));
 
 interface CommunityMemberGraphProps {
   graph: NetworkResponse;
+  height?: number;
 }
 
-export default function CommunityMemberGraph({ graph }: CommunityMemberGraphProps) {
+export default function CommunityMemberGraph({ graph, height = 280 }: CommunityMemberGraphProps) {
   const stageRef = useRef<HTMLDivElement | null>(null);
   const graphRef = useRef<any>(null);
   const [width, setWidth] = useState(320);
@@ -37,7 +38,7 @@ export default function CommunityMemberGraph({ graph }: CommunityMemberGraphProp
         {formatCount(graph.returned_nodes)} / {formatCount(graph.available_nodes)} users ·{' '}
         {formatCount(graph.returned_edges)} / {formatCount(graph.available_edges)} internal edges
       </p>
-      <div ref={stageRef} className="community-member-graph" data-testid="community-member-graph">
+      <div ref={stageRef} className="community-member-graph" data-testid="community-member-graph" style={{ minHeight: height }}>
         {data.nodes.length === 0 ? (
           <div className="community-member-graph__empty">No member graph nodes are available.</div>
         ) : (
@@ -45,7 +46,7 @@ export default function CommunityMemberGraph({ graph }: CommunityMemberGraphProp
             <ForceGraph2D
               ref={graphRef}
               width={width}
-              height={280}
+              height={height}
               graphData={data}
               nodeColor={(node: any) => node.color}
               nodeVal={(node: any) => node.val}
@@ -70,7 +71,7 @@ export default function CommunityMemberGraph({ graph }: CommunityMemberGraphProp
         )}
       </div>
       {graph.sampled && (
-        <p className="mt-2 text-[11px] text-muted">This is the existing deterministic bounded community preview; the dedicated Network page exposes the same coverage metadata.</p>
+        <p className="mt-2 text-[11px] text-muted">This is the existing deterministic bounded community response; coverage details are shown below.</p>
       )}
     </section>
   );

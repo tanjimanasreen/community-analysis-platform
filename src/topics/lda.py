@@ -7,8 +7,10 @@ import re
 from typing import Any, Mapping
 
 from src.config.defaults import DEFAULT_CONFIG
+from src.config.loader import validate_lda_config
 
 # Default LDA constants
+IMPLEMENTATION = DEFAULT_CONFIG.lda.implementation
 NUM_TOPICS = DEFAULT_CONFIG.lda.num_topics
 TOP_N_KEYWORDS = DEFAULT_CONFIG.lda.top_n_keywords
 RANDOM_STATE = DEFAULT_CONFIG.lda.random_state
@@ -72,14 +74,17 @@ def _resolve_lda_settings(
     *,
     num_topics: int | None = None,
 ) -> dict[str, Any]:
-    """Resolve runtime LDA settings while preserving the thesis defaults.
+    """Resolve validated LdaMulticore settings without analytical rewrites.
 
-    ``LdaMulticore`` is intentionally retained for performance. Gensim does not
-    support ``alpha="auto"`` or ``eta="auto"`` for this model, so those two
-    documented thesis values continue to use the legacy symmetric fallback.
+    The production migration intentionally uses a fixed symmetric ``alpha``
+    because ``LdaMulticore`` cannot optimize ``alpha="auto"``. The model does
+    support ``eta="auto"``, so that adaptive topic-word prior is forwarded
+    unchanged. Worker selection remains implicit unless a config overrides it.
     """
     raw = dict(lda_config or {})
+    validate_lda_config(raw)
     resolved: dict[str, Any] = {
+        "implementation": str(raw.get("implementation", IMPLEMENTATION)),
         "num_topics": int(
             num_topics if num_topics is not None else raw.get("num_topics", NUM_TOPICS)
         ),
@@ -94,12 +99,6 @@ def _resolve_lda_settings(
     if "workers" in raw and raw["workers"] is not None:
         resolved["workers"] = max(1, int(raw["workers"]))
 
-    # LdaMulticore cannot learn automatic priors. Preserve the project's
-    # established fallback instead of silently dropping the configured values.
-    resolved["alpha"] = (
-        "symmetric" if resolved["alpha"] == "auto" else resolved["alpha"]
-    )
-    resolved["eta"] = "symmetric" if resolved["eta"] == "auto" else resolved["eta"]
     return resolved
 
 
@@ -112,7 +111,9 @@ def get_lda(
 ):
     settings = _resolve_lda_settings(lda_config, num_topics=num_topics)
     model_kwargs = {
-        key: value for key, value in settings.items() if key != "top_n_keywords"
+        key: value
+        for key, value in settings.items()
+        if key not in {"implementation", "top_n_keywords"}
     }
     return LdaMulticore(
         corpus=corpus,

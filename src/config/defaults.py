@@ -4,14 +4,18 @@ All values are Pydantic BaseModel instances so they can be validated,
 serialised, and overridden from config dicts consistently with the rest
 of the settings layer (see settings.py).
 
-THESIS CONSTRAINTS — do not change defaults without documenting the experiment:
+PROTECTED ANALYTICAL DEFAULTS — do not change without an approved, documented
+migration or experiment:
   GraphThresholds:     min_total_post=10, min_shared_post=5
   LouvainDefaults:     resolution=1.0, seed=123
-  LDADefaults:         num_topics=15, random_state=100, iterations=100,
-                       chunksize=20, passes=80, alpha='auto', eta='auto'
+  LDADefaults:         implementation='ldamulticore', num_topics=15,
+                       random_state=100, iterations=100, chunksize=20,
+                       passes=80, alpha='symmetric', eta='auto'
 """
 
 from __future__ import annotations
+
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -28,13 +32,14 @@ class LouvainDefaults(BaseModel):
 
 
 class LDADefaults(BaseModel):
+    implementation: Literal["ldamulticore"] = "ldamulticore"
     num_topics: int = 15
     top_n_keywords: int = 50
     random_state: int = 100
     iterations: int = 100
     chunksize: int = 20
     passes: int = 80
-    alpha: str = "auto"
+    alpha: str = "symmetric"
     eta: str = "auto"
 
 

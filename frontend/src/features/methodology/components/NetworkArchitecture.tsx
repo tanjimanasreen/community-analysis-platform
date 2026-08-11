@@ -1,5 +1,5 @@
 import { useId, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { ArrowDown, ArrowRight, MessageSquare, RadioTower, Repeat2, UserRound, UsersRound, type LucideIcon } from 'lucide-react';
+import { ArrowDown, ArrowRight, ArrowUp, MessageSquare, RadioTower, Repeat2, UserRound, UsersRound, type LucideIcon } from 'lucide-react';
 import { NETWORK_MODELS } from '../methodologyContent';
 
 type NetworkModelId = (typeof NETWORK_MODELS)[number]['id'];
@@ -29,8 +29,8 @@ export default function NetworkArchitecture() {
     <div className="panel p-5 sm:p-6">
       <div>
         <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">Platform interaction models</p>
-        <h2 className="mt-1 text-lg font-bold text-text-heading">Network Architecture</h2>
-        <p className="mt-1 max-w-3xl text-sm leading-6 text-muted">Platform-specific relationships are modeled explicitly, then projected into the same monthly user-to-user analytical network.</p>
+        <h2 className="mt-1 text-lg font-bold text-text-heading">Network Models</h2>
+        <p className="mt-1 max-w-3xl text-sm leading-6 text-muted">Platform relationships stay explicit before resolving to one monthly creator → spreader analytical projection.</p>
       </div>
 
       <div className="mt-5 overflow-x-auto pb-1">
@@ -61,13 +61,15 @@ export default function NetworkArchitecture() {
         id={`${tabsId}-network-panel`}
         role="tabpanel"
         aria-labelledby={`${tabsId}-${activeModel}-tab`}
-        className="mt-4 rounded-2xl border border-border/70 bg-surface-soft/30 p-4 sm:p-5"
+        className="mt-4"
       >
         <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-          <h3 className="text-sm font-bold text-text-heading">{model.label}</h3>
-          <span className="text-xs font-semibold text-primary">Platform-specific graph</span>
+          <div>
+            <h3 className="text-sm font-bold text-text-heading">{model.label}</h3>
+            <p className="mt-1 max-w-3xl text-xs leading-5 text-muted">{model.description}</p>
+          </div>
+          <span className="self-start text-xs font-semibold text-primary">Platform-specific graph</span>
         </div>
-        <p className="mt-1 max-w-3xl text-xs leading-5 text-muted">{model.description}</p>
 
         <div className="mt-5">
           {activeModel === 'telegram' && <TelegramModel />}
@@ -77,7 +79,7 @@ export default function NetworkArchitecture() {
 
         <div className="my-5 flex items-center gap-3" aria-hidden="true">
           <span className="h-px flex-1 bg-border" />
-          <ArrowDown className="text-primary" size={18} />
+          <ArrowDown className="text-primary" size={17} />
           <span className="h-px flex-1 bg-border" />
         </div>
 
@@ -89,7 +91,7 @@ export default function NetworkArchitecture() {
 
 function TelegramModel() {
   return (
-    <div className="grid gap-3 lg:grid-cols-2">
+    <div className="grid gap-4 lg:grid-cols-2">
       <RelationshipLane title="Original message">
         <Node icon={UserRound} label="User" />
         <Relation label="CREATED" />
@@ -97,16 +99,21 @@ function TelegramModel() {
         <Relation label="SENT_TO" />
         <Node icon={RadioTower} label="Channel" />
       </RelationshipLane>
-      <RelationshipLane title="Forwarded message">
-        <Node icon={UserRound} label="Source" />
-        <Relation label="PRODUCED / ORIGINATED" />
-        <Node icon={Repeat2} label="Forwarded message" />
-        <Relation label="FORWARDED_TO" />
-        <Node icon={RadioTower} label="Destination" />
-        <div className="col-span-full mt-2 rounded-lg border border-border/60 bg-bg/25 px-3 py-2 text-center text-[11px] text-muted">
-          A forwarding user connects to the forwarded-message node through <strong className="text-text-heading">FORWARDED_BY</strong>.
+
+      <div className="rounded-xl border border-border/60 bg-bg/15 p-3">
+        <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">Forwarded message</p>
+        <div className="grid grid-cols-1 items-center gap-2 sm:grid-cols-[minmax(86px,1fr)_auto_minmax(110px,1fr)_auto_minmax(86px,1fr)]">
+          <Node icon={UsersRound} label="Source user / channel" />
+          <Relation label="PRODUCED / ORIGINATED" />
+          <Node icon={Repeat2} label="Forwarded message" />
+          <Relation label="FORWARDED_TO" />
+          <Node icon={RadioTower} label="Destination channel" />
         </div>
-      </RelationshipLane>
+        <div className="mx-auto mt-3 flex max-w-[11rem] flex-col items-center">
+          <VerticalRelation label="FORWARDED_BY" />
+          <Node icon={UserRound} label="Forwarding user" compact />
+        </div>
+      </div>
     </div>
   );
 }
@@ -126,62 +133,69 @@ function RetweetQuoteModel() {
 function ReplyModel() {
   return (
     <RelationshipLane title="Conversation interaction">
-      <Node icon={UserRound} label="Target user" />
-      <Relation label="REPLIED_TO" reverse />
-      <Node icon={MessageSquare} label="Reply" />
-      <Relation label="REPLIED_BY" />
       <Node icon={UserRound} label="Reply author" />
+      <Relation label="REPLIED_BY" />
+      <Node icon={MessageSquare} label="Reply" />
+      <Relation label="REPLIED_TO" />
+      <Node icon={UserRound} label="Target user" />
     </RelationshipLane>
   );
 }
 
 function RelationshipLane({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="rounded-xl border border-border/60 bg-bg/20 p-3">
+    <div className="rounded-xl border border-border/60 bg-bg/15 p-3">
       <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">{title}</p>
       <div className="grid grid-cols-1 items-center gap-2 sm:grid-cols-[minmax(72px,1fr)_auto_minmax(90px,1fr)_auto_minmax(72px,1fr)]">{children}</div>
     </div>
   );
 }
 
-function Node({ icon: Icon, label }: { icon: LucideIcon; label: string }) {
+function Node({ icon: Icon, label, compact = false }: { icon: LucideIcon; label: string; compact?: boolean }) {
   return (
-    <div className="flex min-h-20 flex-col items-center justify-center rounded-xl border border-primary/20 bg-primary/5 p-2 text-center">
-      <Icon size={18} className="text-primary" aria-hidden="true" />
-      <span className="mt-2 text-[11px] font-semibold leading-4 text-text-heading">{label}</span>
+    <div className={`flex flex-col items-center justify-center rounded-xl border border-primary/20 bg-primary/5 p-2 text-center ${compact ? 'min-h-14 min-w-[7rem] px-4' : 'min-h-20'}`}>
+      <Icon size={17} className="text-primary" aria-hidden="true" />
+      <span className="mt-1.5 text-[11px] font-semibold leading-4 text-text-heading">{label}</span>
     </div>
   );
 }
 
-function Relation({ label, reverse = false }: { label: string; reverse?: boolean }) {
+function Relation({ label }: { label: string }) {
   return (
     <div className="flex min-w-0 flex-col items-center gap-1 py-1 text-center sm:min-w-16 sm:py-0">
       <span className="max-w-28 break-words text-[9px] font-semibold leading-3 text-muted">{label}</span>
       <ArrowDown className="text-border sm:hidden" size={18} aria-hidden="true" />
-      <ArrowRight className={`hidden text-border sm:block ${reverse ? 'rotate-180' : ''}`} size={18} aria-hidden="true" />
+      <ArrowRight className="hidden text-border sm:block" size={18} aria-hidden="true" />
+    </div>
+  );
+}
+
+function VerticalRelation({ label }: { label: string }) {
+  return (
+    <div className="mb-1 flex flex-col items-center text-center">
+      <ArrowUp className="text-border" size={17} aria-hidden="true" />
+      <span className="mt-0.5 text-[9px] font-semibold leading-3 text-muted">{label}</span>
     </div>
   );
 }
 
 function CommonProjection() {
   return (
-    <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-primary">Common analytical projection</p>
-          <p className="mt-1 text-xs text-muted">The platform relationships resolve to a monthly directed user interaction edge.</p>
+    <div>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-primary">Common analytical projection</p>
+      <div className="mt-3 flex flex-col items-center justify-center gap-2 sm:flex-row sm:gap-4">
+        <Node icon={UsersRound} label="Creator" compact />
+        <div className="flex flex-col items-center gap-1 text-center">
+          <span className="text-[10px] font-semibold text-muted">directed interaction</span>
+          <ArrowDown className="text-primary sm:hidden" size={18} aria-hidden="true" />
+          <ArrowRight className="hidden text-primary sm:block" size={22} aria-hidden="true" />
         </div>
-        <div className="flex items-center gap-2 self-start rounded-lg border border-border/70 bg-surface px-3 py-2 text-xs font-semibold text-text-heading">
-          <UsersRound size={16} className="text-primary" aria-hidden="true" />
-          Creator
-          <ArrowRight size={16} className="text-primary" aria-hidden="true" />
-          Spreader
-        </div>
+        <Node icon={UsersRound} label="Spreader" compact />
       </div>
-      <div className="mt-3 grid gap-2 sm:grid-cols-2">
-        <div className="rounded-lg border border-border/60 bg-bg/25 px-3 py-2 text-xs"><strong className="text-text-heading">IF</strong><span className="ml-2 text-muted">interaction volume · shared_post</span></div>
-        <div className="rounded-lg border border-border/60 bg-bg/25 px-3 py-2 text-xs"><strong className="text-text-heading">WIF</strong><span className="ml-2 text-muted">interaction share · shared_post / total_post</span></div>
-      </div>
+      <dl className="mx-auto mt-4 grid max-w-2xl gap-x-8 gap-y-2 border-t border-border/60 pt-3 text-xs sm:grid-cols-2">
+        <div className="flex items-baseline gap-2"><dt className="font-bold text-text-heading">IF</dt><dd className="text-muted">shared_post</dd></div>
+        <div className="flex items-baseline gap-2"><dt className="font-bold text-text-heading">WIF</dt><dd className="text-muted">shared_post / total_post</dd></div>
+      </dl>
     </div>
   );
 }

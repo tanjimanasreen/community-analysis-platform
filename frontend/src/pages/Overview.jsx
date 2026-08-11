@@ -14,7 +14,7 @@ import RunConfigurationPanel from '../features/overview/RunConfigurationPanel';
 import RunProvenancePanel from '../features/overview/RunProvenancePanel';
 import TopThemesPanel from '../features/overview/TopThemesPanel';
 import ProminentCommunityInspector from '../features/communities/ProminentCommunityInspector';
-import PageNavigationRail from '../components/PageNavigationRail';
+import { PageNavigationRailSlot } from '../components/PageNavigationRail';
 import { formatPeriod } from '../features/overview/overviewUtils';
 import { useOverviewData } from '../features/overview/useOverviewData';
 
@@ -229,9 +229,7 @@ export default function Overview() {
       )}
       </div>
 
-      <div className="hidden sm:flex w-14 shrink-0 sticky top-0 h-screen flex-col justify-center pointer-events-none z-40 ml-4 sm:ml-6">
-        <PageNavigationRail sections={overviewSections} />
-      </div>
+      <PageNavigationRailSlot sections={overviewSections} className="sm:block sm:ml-6" />
     </div>
   );
 }

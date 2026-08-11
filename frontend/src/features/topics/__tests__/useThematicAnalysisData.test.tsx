@@ -65,10 +65,26 @@ describe('useThematicAnalysisData', () => {
       await (query?.queryFn as (context: { signal: AbortSignal }) => unknown)({ signal });
     }
 
-    expect(getTopics).toHaveBeenCalledWith('run-1', expect.objectContaining({ type: 'matched', period: '2017-03' }), signal);
-    expect(getThemes).toHaveBeenCalledWith('run-1', expect.not.objectContaining({ exact_theme: expect.anything() }), signal);
+    expect(getTopics).toHaveBeenCalledWith(
+      'run-1',
+      expect.objectContaining({ type: 'matched', period: '2017-03', community_id: '12' }),
+      signal,
+    );
+    expect(vi.mocked(getTopics).mock.calls[0][1]).not.toHaveProperty('canonical_theme_id');
+    expect(getThemes).toHaveBeenCalledWith(
+      'run-1',
+      expect.objectContaining({ period: '2017-03', community_id: '12' }),
+      signal,
+    );
+    expect(vi.mocked(getThemes).mock.calls[0][1]).not.toHaveProperty('canonical_theme_id');
+    expect(vi.mocked(getThemes).mock.calls[0][1]).not.toHaveProperty('exact_theme');
     expect(getClusteredThemeTimeline).toHaveBeenCalledWith('run-1', expect.objectContaining({ period_start: '2017-01', period_end: '2017-04', scope: 'matched' }), signal);
-    expect(getClusteredThemeEvidence).toHaveBeenCalledWith('run-1', expect.objectContaining({ period: '2017-03', canonical_theme_id: 'ct_policy' }), signal);
+    expect(getClusteredThemeEvidence).toHaveBeenCalledWith(
+      'run-1',
+      expect.objectContaining({ period: '2017-03', canonical_theme_id: 'ct_policy' }),
+      signal,
+    );
+    expect(vi.mocked(getClusteredThemeEvidence).mock.calls[0][1]).not.toHaveProperty('community_id');
     expect(getOverview).not.toHaveBeenCalled();
   });
 });

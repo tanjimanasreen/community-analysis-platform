@@ -1,4 +1,5 @@
 import pandas as pd
+import pytest
 
 import src.topics.lda as lda
 from src.config.defaults import DEFAULT_CONFIG
@@ -35,7 +36,7 @@ class FakePerplexityModel:
 
 def test_lda_defaults_are_passed_to_model(monkeypatch):
     FakeLdaModel.calls = []
-    monkeypatch.setattr(lda, "LdaModel", FakeLdaModel)
+    monkeypatch.setattr(lda, "LdaMulticore", FakeLdaModel)
 
     model = lda.get_lda(dictionary={"alpha": 0}, corpus=[[(0, 1)]])
 
@@ -48,6 +49,26 @@ def test_lda_defaults_are_passed_to_model(monkeypatch):
     assert call["passes"] == DEFAULT_CONFIG.lda.passes
     assert call["alpha"] == DEFAULT_CONFIG.lda.alpha
     assert call["eta"] == DEFAULT_CONFIG.lda.eta
+    assert "workers" not in call
+    assert "implementation" not in call
+
+
+def test_lda_rejects_unsupported_auto_alpha():
+    with pytest.raises(ValueError, match="does not support lda.alpha='auto'"):
+        lda.get_lda(
+            dictionary={"alpha": 0},
+            corpus=[[(0, 1)]],
+            lda_config={"alpha": "auto"},
+        )
+
+
+def test_lda_rejects_unknown_implementation():
+    with pytest.raises(ValueError, match="lda.implementation must be 'ldamulticore'"):
+        lda.get_lda(
+            dictionary={"alpha": 0},
+            corpus=[[(0, 1)]],
+            lda_config={"implementation": "ldamodel"},
+        )
 
 
 def test_unigram_and_bigram_tokenizers_do_not_require_nltk():

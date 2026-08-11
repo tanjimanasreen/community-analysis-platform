@@ -8,12 +8,18 @@ export interface ResearchQuestionDefinition {
   dimension: ResearchDimension;
 }
 
-export interface WorkflowStepDefinition {
+export interface WorkflowFoundationStepDefinition {
   id: string;
-  number: string;
   title: string;
-  description: string;
-  dimension: ResearchDimension | 'Foundation';
+  detail: string;
+}
+
+export interface WorkflowBranchDefinition {
+  id: 'structural' | 'semantic' | 'temporal';
+  dimension: ResearchDimension;
+  summary: string;
+  steps: string[];
+  rqs: Array<'RQ1' | 'RQ2' | 'RQ3' | 'RQ4'>;
 }
 
 export interface NetworkModelDefinition {
@@ -21,6 +27,12 @@ export interface NetworkModelDefinition {
   label: string;
   shortLabel: string;
   description: string;
+}
+
+export interface SystemLayerDefinition {
+  id: 'sources' | 'graph' | 'analysis' | 'artifacts' | 'api' | 'interface';
+  title: string;
+  detail: string;
 }
 
 export const AIM =
@@ -47,7 +59,7 @@ export const RESEARCH_QUESTIONS: ResearchQuestionDefinition[] = [
     id: 'RQ1',
     question: 'What is the impact of different user affinities on community detection?',
     focus: 'Structure & affinity',
-    route: '/network',
+    route: '/communities',
     dimension: 'Structural',
   },
   {
@@ -73,90 +85,63 @@ export const RESEARCH_QUESTIONS: ResearchQuestionDefinition[] = [
   },
 ];
 
-export const WORKFLOW_STEPS: WorkflowStepDefinition[] = [
+export const WORKFLOW_FOUNDATION: WorkflowFoundationStepDefinition[] = [
+  { id: 'platform-data', title: 'Platform Data', detail: 'Twitter/X · Telegram' },
+  { id: 'interaction-network', title: 'Interaction Network', detail: 'Monthly creator → spreader snapshots' },
+  { id: 'affinity', title: 'IF / WIF', detail: 'Two preserved affinity definitions' },
+  { id: 'louvain', title: 'Louvain Communities', detail: 'Metric-local monthly partitions' },
+];
+
+export const WORKFLOW_BRANCHES: WorkflowBranchDefinition[] = [
   {
-    id: 'data-ingestion',
-    number: '01',
-    title: 'Data Ingestion',
-    description: 'Platform users, messages, and interactions enter a unified analytical schema.',
-    dimension: 'Foundation',
-  },
-  {
-    id: 'interaction-network',
-    number: '02',
-    title: 'Interaction Network',
-    description: 'Build monthly creator → spreader interaction snapshots.',
+    id: 'structural',
     dimension: 'Structural',
+    summary: 'Compare how affinity definitions reshape community structure.',
+    steps: ['Statistics', 'Centrality', 'IF / WIF overlap'],
+    rqs: ['RQ1'],
   },
   {
-    id: 'community-extraction',
-    number: '03',
-    title: 'Community Extraction',
-    description: 'Construct IF/WIF weighted networks and detect Louvain communities.',
-    dimension: 'Structural',
-  },
-  {
-    id: 'structural-analysis',
-    number: '04',
-    title: 'Structural Analysis',
-    description: 'Compare statistics, central actors, and IF/WIF community overlap.',
-    dimension: 'Structural',
-  },
-  {
-    id: 'topic-modeling',
-    number: '05',
-    title: 'Topic Modeling',
-    description: 'Apply unigram and bigram LDA to community text.',
+    id: 'semantic',
     dimension: 'Semantic',
+    summary: 'Interpret community discourse from topic-model evidence.',
+    steps: ['LDA', 'Topic keywords', 'Generated theme interpretation'],
+    rqs: ['RQ2'],
   },
   {
-    id: 'theme-interpretation',
-    number: '06',
-    title: 'Theme Interpretation',
-    description: 'Turn LDA keyword evidence into readable downstream theme labels.',
-    dimension: 'Semantic',
-  },
-  {
-    id: 'longitudinal-analysis',
-    number: '07',
-    title: 'Longitudinal Analysis',
-    description: 'Track persistence, member mobility, and thematic similarity across months.',
+    id: 'temporal',
     dimension: 'Temporal',
+    summary: 'Follow communities, members, and themes across monthly snapshots.',
+    steps: ['Community paths', 'Persistence', 'Member mobility', 'Theme similarity'],
+    rqs: ['RQ3', 'RQ4'],
   },
 ];
 
-export const SYSTEM_STAGES = [
-  { id: 'ingestion', code: 'A', title: 'Data Ingestion', detail: 'Telegram / Twitter → configurable graph-store boundary' },
-  { id: 'network', code: 'B', title: 'Interaction Network', detail: 'Monthly creator → spreader user snapshots' },
-  { id: 'community', code: 'C', title: 'Community Extraction', detail: 'IF / WIF weighted networks → Louvain communities' },
-  { id: 'analyses', code: 'D', title: 'Community Analyses', detail: 'Structure · LDA/themes · longitudinal evolution' },
-  { id: 'delivery', code: 'OUT', title: 'Artifacts & Delivery', detail: 'Immutable outputs → API → Dashboard / Reports' },
-] as const;
+export const SYSTEM_LAYERS: SystemLayerDefinition[] = [
+  { id: 'sources', title: 'Data Sources', detail: 'Telegram CSV · Twitter CSV' },
+  { id: 'graph', title: 'Graph / Ingestion Boundary', detail: 'Configurable graph repository · Memgraph CE default local target' },
+  { id: 'analysis', title: 'Analytical Pipelines', detail: 'Network · Communities · Topics · Themes · Evolution' },
+  { id: 'artifacts', title: 'Immutable Run Artifacts', detail: 'CSV · Parquet · manifest metadata' },
+  { id: 'api', title: 'Read Layer', detail: 'FastAPI · artifact-backed reads only' },
+  { id: 'interface', title: 'Research Interface', detail: 'Dashboard · Evidence outputs' },
+];
 
 export const NETWORK_MODELS: NetworkModelDefinition[] = [
   {
     id: 'telegram',
     label: 'Telegram',
     shortLabel: 'Telegram',
-    description: 'Original and forwarded messages connect users and channels before projection to user interaction edges.',
+    description: 'Original and forwarded messages retain their platform relationships before projection to user interaction edges.',
   },
   {
     id: 'retweet_quote',
     label: 'Twitter · Retweet/Quote',
     shortLabel: 'Retweet/Quote',
-    description: 'Retweets and quotes model amplification: a creator produces content that another user reshares.',
+    description: 'Retweets and quotes represent amplification from a content creator to a spreader.',
   },
   {
     id: 'reply',
     label: 'Twitter · Reply',
     shortLabel: 'Reply',
-    description: 'Replies model conversation: a reply links its author to the user being replied to.',
+    description: 'Replies represent conversation from the reply author to the user being replied to.',
   },
 ];
-
-export const RQ_METHOD_MAPPING = [
-  { rq: 'RQ1', method: 'IF / WIF + Louvain', outcome: 'Community structure & comparison', route: '/network' },
-  { rq: 'RQ2', method: 'LDA + Theme interpretation', outcome: 'Community topics & themes', route: '/thematic' },
-  { rq: 'RQ3', method: 'Persistence + Theme similarity', outcome: 'Community evolution', route: '/evolution' },
-  { rq: 'RQ4', method: 'Member mobility', outcome: 'Migration across persistent communities', route: '/evolution' },
-] as const;

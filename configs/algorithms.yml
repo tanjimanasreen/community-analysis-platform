@@ -17,13 +17,14 @@ louvain:
   seed: 123
 
 lda:
+  implementation: ldamulticore
   num_topics: 15
   top_n_keywords: 50
   random_state: 100
   iterations: 100
   chunksize: 20
   passes: 80
-  alpha: auto
+  alpha: symmetric
   eta: auto
 
 theme:
