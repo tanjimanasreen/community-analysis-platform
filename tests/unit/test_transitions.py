@@ -39,17 +39,13 @@ def test_get_community_transition():
 
     theme_dict = {"january": df1, "february": df2}
 
-    # Using 'mixed' threshold is 0.5, so 0.5 is NOT > 0.5, it is equal to 0.5.
-    # Wait, the threshold is 0.5 in code: `if threshold < jscore <= 1:`. 0.5 is not > 0.5.
-    # Let's adjust members to [1, 2, 3] and [1, 2, 3, 4] -> J = 3/4 = 0.75
-    df2.at[0, "members"] = [1, 2, 3, 4]
-
+    # The non-reply threshold is inclusive: Jaccard == 0.5 is a transition.
     matched_df = get_community_transition(theme_dict, "mixed")
 
     assert len(matched_df) == 1
     assert matched_df["start_month_community"].iloc[0] == "january_0"
     assert matched_df["end_month_community"].iloc[0] == "february_0"
-    assert matched_df["jaccard_score"].iloc[0] == 0.75
+    assert matched_df["jaccard_score"].iloc[0] == 0.5
 
 
 def test_build_graph():

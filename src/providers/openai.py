@@ -7,7 +7,6 @@ budgets, retries, and reasoning effort are configured through providers.yml.
 
 from __future__ import annotations
 
-from copy import deepcopy
 import hashlib
 import json
 import logging
@@ -16,28 +15,26 @@ from collections.abc import Mapping
 from typing import Any
 
 from src.config.settings import get_provider_settings
-from src.providers.base import BaseLLMProvider
+from src.providers.base import BaseLLMProvider, ProviderSafetyError
 from src.themes.benchmark.contracts import (
     ProviderMetadata,
-    THEME_OUTPUT_JSON_SCHEMA,
     ThemeBenchmarkError,
+    build_theme_output_json_schema,
     ThemeBenchmarkRequest,
+    normalize_indexed_theme_payload,
 )
 
 OPENAI_PROVIDER_PREFIX = "openai"
 logger = logging.getLogger(__name__)
 
 
-def _strict_theme_output_schema() -> dict:
-    """Return the canonical theme schema in OpenAI strict-output form."""
-    schema = deepcopy(THEME_OUTPUT_JSON_SCHEMA)
+def _strict_theme_output_schema(keyword_count: int) -> dict:
+    """Return a request-bounded theme schema in OpenAI strict-output form."""
+    schema = build_theme_output_json_schema(keyword_count)
     schema["additionalProperties"] = False
     items = schema["properties"]["themes"]["items"]
     items["additionalProperties"] = False
     return schema
-
-
-OPENAI_THEME_OUTPUT_SCHEMA = _strict_theme_output_schema()
 
 
 def _read_value(obj: Any, name: str, default: Any = None) -> Any:
@@ -244,47 +241,10 @@ def _decode_json_object(content: str) -> dict:
 
 
 def _normalize_theme_payload(parsed: dict, allowed_keywords: list[str]) -> list[dict]:
-    """Validate the current schema and retain the legacy mapping fallback."""
-    raw_themes = parsed.get("themes")
-    themes: list[dict] = []
-    if raw_themes is not None:
-        if not isinstance(raw_themes, list):
-            raise ThemeBenchmarkError("OpenAI 'themes' must be a JSON array.")
-        for raw_theme in raw_themes:
-            if not isinstance(raw_theme, dict):
-                raise ThemeBenchmarkError("Every OpenAI theme must be a JSON object.")
-            name = str(raw_theme.get("name", "")).strip()
-            keywords = raw_theme.get("keywords", [])
-            if not name or not isinstance(keywords, list):
-                raise ThemeBenchmarkError(
-                    "Every OpenAI theme requires a non-empty name and keyword array."
-                )
-            themes.append(
-                {
-                    "name": name,
-                    "keywords": [
-                        str(keyword).strip()
-                        for keyword in keywords
-                        if str(keyword).strip()
-                    ],
-                }
-            )
-    else:
-        allowed = set(allowed_keywords)
-        for name, keywords in parsed.items():
-            if not str(name).strip() or not isinstance(keywords, list):
-                continue
-            themes.append(
-                {
-                    "name": str(name).strip(),
-                    "keywords": [
-                        str(keyword) for keyword in keywords if str(keyword) in allowed
-                    ],
-                }
-            )
-    if not themes:
-        raise ThemeBenchmarkError("OpenAI returned no valid themes.")
-    return themes
+    """Validate the V2 wire schema and reconstruct exact request keywords."""
+    return normalize_indexed_theme_payload(
+        parsed, allowed_keywords, provider_name="OpenAI"
+    )
 
 
 def _extract_usage_from_response(response) -> dict[str, int]:
@@ -500,7 +460,7 @@ class OpenAIProvider(BaseLLMProvider):
                         "type": "json_schema",
                         "name": "theme_output",
                         "strict": True,
-                        "schema": OPENAI_THEME_OUTPUT_SCHEMA,
+                        "schema": _strict_theme_output_schema(len(request.keywords)),
                     }
                 },
             }
@@ -547,9 +507,14 @@ class OpenAIProvider(BaseLLMProvider):
                         ),
                         extra={"provider_diagnostics": diagnostics},
                     )
-                    raise ThemeBenchmarkError(
-                        "OpenAI guardrails blocked the theme prompt; response was not "
-                        "cached. " + _diagnostic_message("diagnostics", diagnostics)
+                    raise ProviderSafetyError(
+                        category="content_filter",
+                        stage="prompt",
+                        provider_id="openai",
+                        model_id=self.model_id,
+                        input_hash=request.input_hash,
+                        prompt_hash=request.prompt_hash,
+                        diagnostics=dict(diagnostics),
                     ) from exc
                 raise
             elapsed_ms = (time.monotonic() - started) * 1000.0
@@ -590,9 +555,14 @@ class OpenAIProvider(BaseLLMProvider):
                     _diagnostic_message("openai_theme_refusal", diagnostics),
                     extra={"provider_diagnostics": diagnostics},
                 )
-                raise ThemeBenchmarkError(
-                    "OpenAI refused the theme request; response was not cached. "
-                    + _diagnostic_message("diagnostics", diagnostics)
+                raise ProviderSafetyError(
+                    category="policy_refusal",
+                    stage="completion",
+                    provider_id="openai",
+                    model_id=self.model_id,
+                    input_hash=request.input_hash,
+                    prompt_hash=request.prompt_hash,
+                    diagnostics=dict(diagnostics),
                 )
 
             if status == "incomplete":
@@ -639,6 +609,16 @@ class OpenAIProvider(BaseLLMProvider):
                     _diagnostic_message("openai_theme_incomplete_final", diagnostics),
                     extra={"provider_diagnostics": diagnostics},
                 )
+                if incomplete_reason == "content_filter":
+                    raise ProviderSafetyError(
+                        category="content_filter",
+                        stage="completion",
+                        provider_id="openai",
+                        model_id=self.model_id,
+                        input_hash=request.input_hash,
+                        prompt_hash=request.prompt_hash,
+                        diagnostics=dict(diagnostics),
+                    )
                 raise last_error
 
             try:

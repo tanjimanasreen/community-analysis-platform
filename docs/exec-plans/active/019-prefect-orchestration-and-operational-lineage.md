@@ -235,3 +235,11 @@ Use Prefect 3 APIs (`Asset`, `@materialize`, explicit upstream dependencies) for
 - Prefect 3.0 Assets (`Asset`, `@materialize`): https://docs.prefect.io/3.0/manage/assets
 - Prefect 3.0 Result Persistence & Caching: https://docs.prefect.io/3.0/develop/results, https://docs.prefect.io/3.0/develop/caching
 - Prefect 3.0 Testing (`prefect_test_harness`): https://docs.prefect.io/3.0/develop/testing
+
+## FR-004 artifact-format supersession — 2026-08-11
+
+Plan 055 supersedes the generated CSV path examples in this plan. Raw external
+relationship inputs under `data/raw/**` remain CSV, while generated analytical
+and intermediate tabular artifacts, including themed monthly outputs and
+community transitions, are Parquet. The orchestration and lineage design in
+this plan is otherwise unchanged.

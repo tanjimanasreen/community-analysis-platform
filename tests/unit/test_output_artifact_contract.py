@@ -23,11 +23,26 @@ def _config(tmp_path, *, month="03", theme_output=None):
     }
 
 
-def _write_csv(path, columns, rows=None):
+def _telegram_config(tmp_path, *, month="01", theme_output=None):
+    return {
+        "output_base_path": str(tmp_path / "outputs"),
+        "data_type": "telegram",
+        "content_type": "forward",
+        "month": month,
+        "year": "2019",
+        "date_column": "forwarded_date",
+        "theme": {
+            "output_dir": str(theme_output or tmp_path / "theme"),
+            "render_visuals": False,
+        },
+    }
+
+
+def _write_parquet(path, columns, rows=None):
     path.parent.mkdir(parents=True, exist_ok=True)
     pd.DataFrame(
         rows or [{column: _sample_value(column) for column in columns}], columns=columns
-    ).to_csv(
+    ).to_parquet(
         path,
         index=False,
     )
@@ -82,51 +97,53 @@ def _write_public_outputs(config, months):
     theme_dir = __import__("pathlib").Path(config["theme"]["output_dir"])
 
     for month in months:
-        _write_csv(
-            base / "network_data" / content_type / f"{month}{year}.csv",
-            contract.NETWORK_DATA_COLUMNS,
+        _write_parquet(
+            base / "network_data" / content_type / f"{month}{year}.parquet",
+            contract.get_network_data_required_columns(config),
         )
-        _write_csv(
+        _write_parquet(
             base
             / "communities"
             / "graphs"
             / "absolute"
             / content_type
-            / f"{month}.csv",
+            / f"{month}.parquet",
             contract.COMMUNITY_GRAPH_COLUMNS,
         )
-        _write_csv(
+        _write_parquet(
             base
             / "communities"
             / "graphs"
             / "weighted"
             / content_type
-            / f"{month}.csv",
+            / f"{month}.parquet",
             contract.COMMUNITY_GRAPH_COLUMNS,
         )
-        _write_csv(
-            base / "communities" / "matched" / content_type / f"{month}.csv",
+        _write_parquet(
+            base / "communities" / "matched" / content_type / f"{month}.parquet",
             contract.MATCHED_COMMUNITY_SUMMARY_COLUMNS,
         )
-        _write_csv(
-            base / "user_centrality" / content_type / f"{month}.csv",
+        _write_parquet(
+            base / "user_centrality" / content_type / f"{month}.parquet",
             contract.USER_CENTRALITY_COLUMNS,
         )
-        _write_csv(
-            base / "count_user_messages" / content_type / f"{month}.csv",
+        _write_parquet(
+            base / "count_user_messages" / content_type / f"{month}.parquet",
             contract.COUNT_USER_MESSAGES_COLUMNS,
         )
-        _write_csv(
-            base / "daily_messages_stat" / content_type / f"{month}.csv",
+        _write_parquet(
+            base / "daily_messages_stat" / content_type / f"{month}.parquet",
             contract.DAILY_MESSAGES_STAT_COLUMNS,
         )
-        _write_csv(
-            base / "LDA" / "scores" / content_type / f"{month}.csv",
+        _write_parquet(
+            base / "LDA" / "scores" / content_type / f"{month}.parquet",
             contract.LDA_SCORES_COLUMNS,
         )
 
-        matched_lda = base / "LDA" / "matched" / content_type / f"{month}_{year}.csv"
-        _write_csv(matched_lda, contract.MATCHED_LDA_COLUMNS)
+        matched_lda = (
+            base / "LDA" / "matched" / content_type / f"{month}_{year}.parquet"
+        )
+        _write_parquet(matched_lda, contract.MATCHED_LDA_COLUMNS)
         theme_inputs.save_theme_inputs(
             matched_lda_csv=matched_lda,
             output_base_path=output_base_path,
@@ -135,8 +152,8 @@ def _write_public_outputs(config, months):
             month=month,
             year=year,
         )
-        _write_csv(
-            theme_dir / f"{month}_{year}_with_themes.csv",
+        _write_parquet(
+            theme_dir / f"{month}_{year}_with_themes.parquet",
             contract.THEMED_OUTPUT_COLUMNS,
         )
         topic_inputs.save_topic_inputs(
@@ -180,17 +197,17 @@ def _write_public_outputs(config, months):
             for column in contract.COMMUNITY_TRANSITION_COLUMNS
         }
     ]
-    _write_csv(
-        theme_dir / "community_transition.csv",
+    _write_parquet(
+        theme_dir / "community_transition.parquet",
         contract.COMMUNITY_TRANSITION_COLUMNS,
         transition_rows,
     )
-    _write_csv(
-        theme_dir / "community_paths.csv",
+    _write_parquet(
+        theme_dir / "community_paths.parquet",
         contract.COMMUNITY_PATH_COLUMNS,
     )
-    _write_csv(
-        theme_dir / "community_path_membership.csv",
+    _write_parquet(
+        theme_dir / "community_path_membership.parquet",
         contract.COMMUNITY_PATH_MEMBERSHIP_COLUMNS,
     )
 
@@ -210,6 +227,64 @@ def test_evolution_output_checks_include_path_contract(tmp_path):
         check.name: check for check in contract.get_public_artifact_checks(config)
     }
     assert enabled["community_path_theme_similarity"].required is True
+
+
+def test_generated_artifact_checks_are_parquet_only(tmp_path):
+    config = _config(tmp_path)
+    checks = contract.get_public_artifact_checks(config)
+
+    assert checks
+    assert all(check.path.suffix == ".parquet" for check in checks)
+
+
+def test_network_data_contract_uses_canonical_platform_date_column(tmp_path):
+    twitter_columns = contract.get_network_data_required_columns(_config(tmp_path))
+    telegram_columns = contract.get_network_data_required_columns(
+        _telegram_config(tmp_path)
+    )
+
+    assert twitter_columns == [*contract.NETWORK_DATA_BASE_COLUMNS, "created_at"]
+    assert telegram_columns == [*contract.NETWORK_DATA_BASE_COLUMNS, "forwarded_date"]
+
+
+def test_public_telegram_network_check_requires_forwarded_date(tmp_path):
+    config = _telegram_config(tmp_path)
+    network_check = next(
+        check
+        for check in contract.get_public_artifact_checks(config)
+        if check.name == "network_data"
+    )
+
+    assert network_check.required_columns == [
+        *contract.NETWORK_DATA_BASE_COLUMNS,
+        "forwarded_date",
+    ]
+
+
+def test_public_twitter_network_check_still_requires_created_at(tmp_path):
+    config = _config(tmp_path)
+    network_check = next(
+        check
+        for check in contract.get_public_artifact_checks(config)
+        if check.name == "network_data"
+    )
+
+    assert network_check.required_columns == contract.NETWORK_DATA_COLUMNS
+
+
+def test_output_contract_does_not_accept_csv_as_generated_artifact_fallback(tmp_path):
+    config = _config(tmp_path)
+    network_csv = (
+        tmp_path / "outputs" / "twitter" / "network_data" / "reply" / "032017.csv"
+    )
+    network_csv.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(columns=contract.NETWORK_DATA_COLUMNS).to_csv(network_csv, index=False)
+
+    with pytest.raises(
+        OutputContractError,
+        match=r"Missing required artifact network_data: .*032017\.parquet",
+    ):
+        verify_output_contract(config)
 
 
 def test_output_contract_column_constants_match_internal_contract_modules():
@@ -245,6 +320,36 @@ def test_verify_output_contract_passes_for_one_month_outputs(tmp_path):
     assert any("partially_matched" in str(path) for path in result.skipped_optional)
 
 
+def test_verify_output_contract_accepts_telegram_forwarded_date(tmp_path):
+    config = _telegram_config(tmp_path)
+    _write_public_outputs(config, ["01"])
+
+    result = verify_output_contract(config)
+
+    assert result.checked_count > 10
+
+
+def test_verify_output_contract_rejects_telegram_created_at_without_forwarded_date(
+    tmp_path,
+):
+    config = _telegram_config(tmp_path)
+    _write_public_outputs(config, ["01"])
+    network_path = (
+        tmp_path
+        / "outputs"
+        / "telegram"
+        / "network_data"
+        / "forward"
+        / "012019.parquet"
+    )
+    _write_parquet(network_path, contract.NETWORK_DATA_COLUMNS)
+
+    with pytest.raises(
+        OutputContractError, match=r"missing columns: \['forwarded_date'\]"
+    ):
+        verify_output_contract(config)
+
+
 def test_missing_required_artifact_fails_clearly(tmp_path):
     config = _config(tmp_path)
 
@@ -264,9 +369,9 @@ def test_missing_required_column_fails_clearly(tmp_path):
         / "communities"
         / "matched"
         / "reply"
-        / "03.csv"
+        / "03.parquet"
     )
-    pd.DataFrame({"month": ["03"]}).to_csv(bad_path, index=False)
+    pd.DataFrame({"month": ["03"]}).to_parquet(bad_path, index=False)
 
     with pytest.raises(OutputContractError, match="missing columns"):
         verify_output_contract(config)
@@ -283,7 +388,7 @@ def test_theme_manifest_hash_mismatch_is_enforced(tmp_path):
         / "theme_inputs"
         / "reply"
         / "2017"
-        / "03_2017.csv"
+        / "03_2017.parquet"
     )
     copied.write_text("corrupted\n", encoding="utf-8")
 
@@ -295,10 +400,16 @@ def test_public_matched_lda_schema_matches_internal_theme_copy(tmp_path):
     config = _config(tmp_path)
     _write_public_outputs(config, ["03"])
 
-    public_csv = (
-        tmp_path / "outputs" / "twitter" / "LDA" / "matched" / "reply" / "03_2017.csv"
+    public_parquet = (
+        tmp_path
+        / "outputs"
+        / "twitter"
+        / "LDA"
+        / "matched"
+        / "reply"
+        / "03_2017.parquet"
     )
-    internal_csv = (
+    internal_parquet = (
         tmp_path
         / "outputs"
         / "twitter"
@@ -306,11 +417,11 @@ def test_public_matched_lda_schema_matches_internal_theme_copy(tmp_path):
         / "theme_inputs"
         / "reply"
         / "2017"
-        / "03_2017.csv"
+        / "03_2017.parquet"
     )
 
-    assert list(pd.read_csv(public_csv, nrows=0).columns) == list(
-        pd.read_csv(internal_csv, nrows=0).columns
+    assert list(pd.read_parquet(public_parquet).columns) == list(
+        pd.read_parquet(internal_parquet).columns
     )
 
 
@@ -324,9 +435,9 @@ def test_optional_partial_outputs_are_checked_when_present(tmp_path):
         / "communities"
         / "partially_matched"
         / "reply"
-        / "03.csv"
+        / "03.parquet"
     )
-    _write_csv(partial, ["month"])
+    _write_parquet(partial, ["month"])
 
     with pytest.raises(OutputContractError, match="partial_matched_communities"):
         verify_output_contract(config)
@@ -359,8 +470,8 @@ def test_longitudinal_contract_requires_two_month_manifest_and_non_empty_transit
 def test_longitudinal_contract_rejects_empty_transition(tmp_path):
     config = _config(tmp_path, month="04")
     _write_public_outputs(config, ["03", "04"])
-    pd.DataFrame(columns=contract.COMMUNITY_TRANSITION_COLUMNS).to_csv(
-        tmp_path / "theme" / "community_transition.csv",
+    pd.DataFrame(columns=contract.COMMUNITY_TRANSITION_COLUMNS).to_parquet(
+        tmp_path / "theme" / "community_transition.parquet",
         index=False,
     )
 

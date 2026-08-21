@@ -12,8 +12,11 @@ from src.themes.benchmark.contracts import (
     DATASET_SCHEMA_VERSION,
     MANIFEST_SCHEMA_VERSION,
     ORIGINAL_KEYWORD_FIELDS,
+    OUTPUT_SCHEMA_VERSION,
     REQUEST_SCHEMA_VERSION,
     THEME_OUTPUT_JSON_SCHEMA,
+    THEME_PROMPT_CONTRACT_VERSION,
+    build_theme_output_json_schema,
     ThemeBenchmarkError,
     ThemeBenchmarkRequest,
     read_jsonl,
@@ -64,6 +67,14 @@ def get_jinja_env() -> jinja2.Environment:
 
 RAW_SYSTEM_TEMPLATE = load_raw_template("system")
 RAW_USER_TEMPLATE = load_raw_template("user")
+
+
+def format_indexed_keywords_for_prompt(keywords: list[Any]) -> str:
+    """Render explicit zero-based evidence IDs without changing keyword order."""
+    return "\n".join(
+        f"[{index}] {json.dumps(str(keyword), ensure_ascii=False)}"
+        for index, keyword in enumerate(keywords)
+    )
 
 
 def load_prompt_templates() -> dict[str, str]:
@@ -178,6 +189,8 @@ def build_dataset(
         "dataset_hash": dataset_hash,
         "requests_hash": requests_hash,
         "prompt_hash": prompt_reference["prompt_hash"],
+        "prompt_contract_version": THEME_PROMPT_CONTRACT_VERSION,
+        "output_schema_version": OUTPUT_SCHEMA_VERSION,
         "providers": [],
         "output_root": str(output_dir),
         "artifacts": {
@@ -282,10 +295,13 @@ def build_requests(examples: list[Mapping[str, Any]]) -> list[ThemeBenchmarkRequ
             keyword_text = str(example[f"{keyword_mode}_keyword_text"])
             keywords = list(example[f"{keyword_mode}_keywords"])
 
+            output_schema = build_theme_output_json_schema(len(keywords))
             system_prompt = sys_tmpl.render(
-                json_schema=json.dumps(THEME_OUTPUT_JSON_SCHEMA, indent=2)
+                json_schema=json.dumps(output_schema, indent=2)
             )
-            user_prompt = user_tmpl.render(keywords=keyword_text)
+            user_prompt = user_tmpl.render(
+                keywords=format_indexed_keywords_for_prompt(keywords)
+            )
 
             prompt_hash = stable_hash(
                 {
@@ -293,14 +309,15 @@ def build_requests(examples: list[Mapping[str, Any]]) -> list[ThemeBenchmarkRequ
                     "user_template": RAW_USER_TEMPLATE,
                     "user": user_prompt,
                     "keyword_order": keywords,
-                    "output_schema": THEME_OUTPUT_JSON_SCHEMA,
+                    "output_schema": output_schema,
+                    "prompt_contract_version": THEME_PROMPT_CONTRACT_VERSION,
                     "generation_settings": {
                         "temperature": 0.0,
                         "response_format": {
                             "type": "json_schema",
                             "json_schema": {
                                 "name": "theme_output",
-                                "schema": THEME_OUTPUT_JSON_SCHEMA,
+                                "schema": output_schema,
                                 "strict": True,
                             },
                         },
@@ -317,6 +334,7 @@ def build_requests(examples: list[Mapping[str, Any]]) -> list[ThemeBenchmarkRequ
                     user_prompt=user_prompt,
                     prompt_hash=prompt_hash,
                     input_hash=str(example["input_hash"]),
+                    prompt_contract_version=THEME_PROMPT_CONTRACT_VERSION,
                 )
             )
     return requests
@@ -328,6 +346,7 @@ def build_gpt4o_reference_metadata() -> dict[str, Any]:
             "system": RAW_SYSTEM_TEMPLATE,
             "user_template": RAW_USER_TEMPLATE,
             "output_schema": THEME_OUTPUT_JSON_SCHEMA,
+            "prompt_contract_version": THEME_PROMPT_CONTRACT_VERSION,
             "generation_settings": {
                 "temperature": 0.0,
                 "seed": 42,
@@ -359,7 +378,8 @@ def build_gpt4o_reference_metadata() -> dict[str, Any]:
         "system_prompt": RAW_SYSTEM_TEMPLATE,
         "user_prompt_template": RAW_USER_TEMPLATE,
         "prompt_hash": template_hash,
-        "output_schema_version": 1,
+        "prompt_contract_version": THEME_PROMPT_CONTRACT_VERSION,
+        "output_schema_version": OUTPUT_SCHEMA_VERSION,
         "notes": "Reference metadata only; Plan 016A never calls OpenAI.",
     }
 

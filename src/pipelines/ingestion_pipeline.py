@@ -18,6 +18,7 @@ from src.ingestion.schema import (
     LEGACY_EXPORT_COLUMNS,
     RAW_TO_DERIVED_MAPPINGS,
     RawToDerivedMapping,
+    validate_canonical_raw_mapping,
 )
 from src.network.follower_followee import get_follower_followee_network
 
@@ -48,6 +49,7 @@ def resolve_raw_to_derived_mapping(config: Mapping[str, Any]) -> RawToDerivedMap
     content_type = str(config["content_type"])
     key = f"{data_type}_{content_type}"
     if key in RAW_TO_DERIVED_MAPPINGS:
+        validate_canonical_raw_mapping(config)
         return RAW_TO_DERIVED_MAPPINGS[key]
 
     required = (
@@ -126,6 +128,26 @@ def derive_network_dataframe(
     return pd.DataFrame(columns=["from_id", "forwarder_id"])
 
 
+def normalize_network_input(
+    df: pd.DataFrame, config: Mapping[str, Any]
+) -> pd.DataFrame:
+    """Normalize Telegram legacy relationship exports for network analysis."""
+    if str(config.get("data_type", "")).strip() != "telegram":
+        return df
+
+    if {"from_id", "forwarder_id"}.issubset(df.columns):
+        return df
+
+    if {"source", "target", "relation"}.issubset(df.columns):
+        mapping = resolve_raw_to_derived_mapping(config)
+        return derive_network_dataframe(df, mapping)
+
+    raise ValueError(
+        "Telegram network input must contain either normalized "
+        "from_id/forwarder_id columns or legacy source/target/relation columns"
+    )
+
+
 def build_interaction_dataframe(
     df_raw: pd.DataFrame, config: Mapping[str, Any]
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
@@ -146,29 +168,26 @@ def build_interaction_dataframe(
 
 
 def write_interactions(df_interactions: pd.DataFrame, output_path: PathLike) -> Path:
-    """Write derived edges in the format declared by the file extension."""
+    """Write generated derived edges as Parquet."""
     path = Path(output_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     columns = [
         column for column in INTERACTION_EDGE_COLUMNS if column in df_interactions
     ]
     frame = df_interactions[columns]
-    if path.suffix.lower() == ".parquet":
-        frame.to_parquet(path, index=False)
-    elif path.suffix.lower() == ".csv":
-        frame.to_csv(path, index=False)
-    else:
+    if path.suffix.lower() != ".parquet":
         raise ValueError(
-            f"Unsupported interaction output format {path.suffix!r}; "
-            "expected .csv or .parquet"
+            f"Unsupported generated interaction output format {path.suffix!r}; "
+            "expected .parquet"
         )
+    frame.to_parquet(path, index=False)
     return path
 
 
 def write_interactions_csv(
     df_interactions: pd.DataFrame, output_path: PathLike
 ) -> Path:
-    """Backward-compatible alias for format-aware interaction output."""
+    """Legacy API alias; generated interaction artifacts are still Parquet-only."""
     return write_interactions(df_interactions, output_path)
 
 
@@ -179,7 +198,7 @@ def run_ingestion_pipeline(
     output_csv_path: Optional[PathLike] = None,
     import_to_repository: bool = True,
 ) -> IngestionPipelineResult:
-    """Run the raw legacy CSV -> derived monthly interaction ingestion flow."""
+    """Run the raw legacy CSV -> derived monthly Parquet interaction flow."""
     input_path = Path(raw_csv_path or config["input_path"])
     df_raw = load_legacy_relationship_csv(input_path)
     df_users, df_network, df_interactions = build_interaction_dataframe(df_raw, config)
@@ -198,7 +217,9 @@ def run_ingestion_pipeline(
         if repository is None:
             raise ValueError("repository is required when import_to_repository=True")
         if written_path is None:
-            raise ValueError("output_csv_path is required for repository import")
+            raise ValueError(
+                "an interaction output path is required for repository import"
+            )
         repository.import_interactions(written_path, build_snapshot_meta(config))
 
     return IngestionPipelineResult(

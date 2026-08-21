@@ -7,74 +7,68 @@ intent is to make database usage explicit and configurable, ensuring
 that the codebase can support multiple backends while remaining easy
 for developers to run locally.
 
-## 1. Default Database
+## 1. Backend History and Current Default
 
-### 1.1 Memgraph Community Edition
+### 1.1 Thesis-era Neo4j
 
-The production version of this project uses **Memgraph Community
-Edition** as the default local graph database.  Memgraph was chosen
-because it is free, open source, and compatible with the Cypher query
-language familiar from Neo4j.  According to the Memgraph pricing page,
-the Community Edition is free, forever and open source, and it
-provides a full in‑memory graph database with ACID transactions,
-on‑disk persistence and high‑availability replication【848454457501326†L80-L94】.
+The MSc thesis implementation queried Neo4j directly. That historical backend
+choice is preserved as provenance, and the project retains the legacy
+`source,target,relation` CSV export/import boundary needed to reuse thesis data.
+Direct Neo4j repository support is not part of the current runtime graph-store
+implementation. A future Neo4j adapter may be added behind `GraphRepository`.
 
-Memgraph can be run:
+### 1.2 Current Memgraph Default
 
-- **Locally** via a Docker image or native packages.  For example,
-  `docker run -p 7687:7687 -p 3000:3000 memgraph/memgraph-platform` starts
-  Memgraph and the Memgraph Lab web UI.
-- **In the cloud** via Memgraph Cloud, which offers a free tier for
-  experimentation and eliminates the need to manage infrastructure.
+The productionized project currently uses **Memgraph Community Edition** as the
+default local graph database. Database-specific analytical access remains isolated
+behind the repository boundary so a future production deployment can select a
+different graph database by adding an implementation and resolver entry rather
+than changing analytical pipelines.
 
-### 1.2 Neo4j Compatibility
+Memgraph can be started locally through the repository Docker Compose service.
+The current repository implementation is `MemgraphRepository`.
 
-The thesis implementation originally queried Neo4j.  The new codebase
-must support importing data exported from Neo4j (CSV files), but it
-should avoid hard‑coding Neo4j connection details.  A future adapter
-could reconnect directly to Neo4j, provided it implements the same
-repository interface described below.
+## 2. Runtime Connection Configuration
 
-## 2. Connection Configuration
+Current `GraphRepository` backend connection settings are **environment-only**.
+Analytical run YAML controls datasets, algorithms, paths, and pipeline behavior; it
+must not contain a
+`database:` connection section. This prevents credentials from being copied into
+resolved analytical configs or run artifacts and avoids silently ignored operator
+settings.
 
-All database connection parameters must be loaded from environment
-variables or configuration files.  Do **not** hard‑code credentials or
-URIs in code.
-
-### 2.1 Environment Variables
-
-The recommended environment variables for Memgraph are:
+The current runtime variables are:
 
 ```env
-MG_HOST=localhost
-MG_PORT=7687
-MG_USER=  # optional, default anonymous
-MG_PASSWORD=  # optional, default anonymous
+GRAPH_DB_ENGINE=memgraph
+GRAPH_DB_URI=bolt://localhost:7687
+GRAPH_DB_USER=
+GRAPH_DB_PASSWORD=
 ```
 
-Use a `.env` file (not committed to version control) to provide these
-values during development.  The Python code can use `python‑dotenv` to
-load these values into the process environment.
+For local development these values may be provided through an uncommitted `.env`
+file. In deployed environments the same variables may be injected by the runtime
+or secret/configuration service. Do not commit credentials.
 
-### 2.2 Configuration File
+`GRAPH_DB_ENGINE` is a backend identifier, not a promise that every identifier is
+already implemented. The repository resolver currently supports `memgraph`. If an
+unimplemented engine is selected, repository construction must fail clearly rather
+than silently creating a Memgraph repository. Future backends (including a direct
+Neo4j repository if required) should be added behind the same resolver and
+`GraphRepository` interface.
 
-Database settings may also be specified in a YAML or JSON configuration
-file (see `configs/`).  A typical config block looks like:
+A YAML block such as the following is invalid for analytical run configuration:
 
 ```yaml
 database:
   engine: memgraph
-  host: ${MG_HOST}
-  port: ${MG_PORT}
-  user: ${MG_USER}
-  password: ${MG_PASSWORD}
+  uri: bolt://localhost:7687
 ```
 
-When the `engine` value is `memgraph`, the application should create a
-`MemgraphRepository` using the provided host, port, user and password.
-If another engine name appears, the application should attempt to
-initialize the corresponding repository implementation (e.g. a
-`Neo4jRepository`), or fail gracefully if unsupported.
+Configuration validation must reject this shape and direct the operator to the
+`GRAPH_DB_*` environment variables. The separate legacy Neo4j export path is a
+migration concern and is not the current `GraphRepository` backend selection
+mechanism.
 
 ## 3. Repository Pattern
 
@@ -84,6 +78,7 @@ as:
 
 ```python
 class GraphRepository(Protocol):
+    def check_connectivity(self) -> None: ...
     def clear(self) -> None: ...
     def create_indexes(self) -> None: ...
     def import_raw_data(self, data_path: str, platform: str) -> None: ...
@@ -105,11 +100,13 @@ and provides a Memgraph-backed implementation in
 separate import paths:
 
 - raw graph import from legacy `source,target,relation` CSV exports;
-- derived monthly interaction import from CSVs containing `source`,
-  `target`, `total_post`, `shared_post`, and `weighted_post` plus snapshot
-  metadata.
+- derived monthly interaction import from generated Parquet artifacts containing
+  `source`, `target`, `total_post`, `shared_post`, and `weighted_post` plus
+  snapshot metadata. The repository may continue reading older derived CSVs for
+  backward compatibility, but new generated interaction exports are Parquet-only.
 
-Do not flatten these two import paths into a single table or CSV shape.
+Do not flatten the raw relationship and derived interaction paths into a single
+table or file shape.
 
 ## 4. Import and Export Guidelines
 
@@ -130,7 +127,7 @@ Do not flatten these two import paths into a single table or CSV shape.
   duplicate nodes and to aggregate counts.  Example:
 
   ```cypher
-  LOAD CSV WITH HEADERS FROM 'file:///interactions.csv' AS row
+  UNWIND $rows AS row
   MERGE (src:User {user_id: row.source})
   MERGE (dst:User {user_id: row.target})
   WITH src, dst, row

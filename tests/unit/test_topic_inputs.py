@@ -135,8 +135,8 @@ def test_build_topic_input_dir_uses_internal_additive_path(tmp_path):
 
 def test_required_columns_are_validated(tmp_path):
     topic_dir = _save_sample_inputs(tmp_path)
-    pd.DataFrame({"abs_community": [0]}).to_csv(
-        topic_dir / "matched_communities.csv", index=False
+    pd.DataFrame({"abs_community": [0]}).to_parquet(
+        topic_dir / "matched_communities.parquet", index=False
     )
 
     with pytest.raises(TopicInputError, match="missing required columns"):

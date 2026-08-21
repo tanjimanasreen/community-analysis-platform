@@ -12,6 +12,10 @@ from src.orchestration.artifact_validation import (
     validate_artifact,
     validate_artifact_output,
 )
+from src.themes.benchmark.contracts import (
+    OUTPUT_SCHEMA_VERSION,
+    THEME_PROMPT_CONTRACT_VERSION,
+)
 from src.orchestration.hashing import (
     hash_file,
     hash_mapping,
@@ -170,9 +174,11 @@ def validate_run_configuration_task(
 ) -> ValidatedRunConfiguration:
     """Validates configuration and returns a normalized wrapper with a digest."""
     from src.config.loader import normalize_month, validate_run_config
+    from src.ingestion.schema import validate_canonical_raw_mapping
 
     try:
         validate_run_config(dict(config))
+        validate_canonical_raw_mapping(config)
     except ValueError as e:
         raise PipelineError(str(e), ErrorCategory.INVALID_CONFIGURATION) from e
 
@@ -492,7 +498,7 @@ def run_monthly_topic_phase_task(
 
     LDA determinism:
         random_state=100 is applied by src/topics/lda.py (RANDOM_STATE constant).
-        Input row ordering is preserved by the CSV save/load cycle.
+        Input row ordering is preserved by the Parquet save/load cycle.
         Vocabulary ordering is determined by Gensim's Dictionary which processes
         documents in iteration order — stable when input rows are stable.
         The domain implementation uses Gensim LdaMulticore. Longitudinal month
@@ -500,8 +506,9 @@ def run_monthly_topic_phase_task(
         Reproducibility is limited to the same Gensim/NumPy/BLAS version.
 
     Caching:
-        Task caching is disabled (cache_key_fn=None). The deterministic helper
-        topic_cache_key_fn is available in hashing.py for future activation.
+        Task caching is enabled with the stage-specific topic_cache_key_fn.
+        Topic input hashes plus preprocessing, LDA, and matching configuration
+        participate in invalidation; theme-provider and prompt settings do not.
     """
     from src.pipelines.social_network_pipeline import run_topic_phase
 
@@ -748,7 +755,8 @@ def _build_provider_summary(
     provider_cfg_safe = {
         "primary": primary,
         "fallback_chain": fallback_chain,
-        "prompt_version": raw.get("prompt_version", "v1"),
+        "prompt_contract_version": THEME_PROMPT_CONTRACT_VERSION,
+        "output_schema_version": OUTPUT_SCHEMA_VERSION,
     }
     from src.orchestration.hashing import hash_mapping as _hash
 
@@ -757,12 +765,13 @@ def _build_provider_summary(
         configured_model = primary.split(":", 1)[1]
 
     summary = {
-        "schema_version": "1.0",
+        "schema_version": "1.1",
         "configured_primary_provider": primary,
         "configured_primary_model": configured_model,
         "configured_fallback_chain": fallback_chain,
         "provider_config_digest": _hash(provider_cfg_safe),
-        "prompt_version": raw.get("prompt_version", "v1"),
+        "prompt_version": THEME_PROMPT_CONTRACT_VERSION,
+        "output_schema_version": OUTPUT_SCHEMA_VERSION,
         "generation_settings_digest": _hash(
             {
                 "render_visuals": theme_settings.get(
@@ -788,11 +797,14 @@ def _build_provider_summary(
                 ),
             }
         ),
-        "semantic_task_version": "1.2.0",
+        "semantic_task_version": "1.3.0",
     }
     if run_metrics:
         safe_metrics = dict(run_metrics)
         safe_metrics.pop("prompts_and_responses", None)
+        coverage = safe_metrics.pop("theme_generation_coverage", None)
+        if isinstance(coverage, Mapping):
+            summary["theme_generation_coverage"] = dict(coverage)
         summary["run_metrics"] = safe_metrics
     return summary
 
@@ -930,7 +942,7 @@ def run_monthly_themes_task(
         ),
     )
 
-    # --- 4. Collect theme CSV outputs (explicit expected paths) ---
+    # --- 4. Collect theme Parquet outputs (explicit expected paths) ---
     themes_artifacts = []
     for month in monthly_data_dict:
         theme_path = os.path.join(vis_dir, f"{month}_{year}_with_themes.parquet")
@@ -1119,6 +1131,19 @@ def run_monthly_themes_task(
                 )
             )
 
+    provenance_path = os.path.join(vis_dir, "theme_generation_provenance.parquet")
+    validate_artifact_output(
+        provenance_path, vis_dir, label="theme_generation_provenance"
+    )
+    theme_generation_provenance = ArtifactReference(
+        path=provenance_path,
+        sha256=hash_file(provenance_path),
+        media_type="application/octet-stream",
+        byte_size=os.path.getsize(provenance_path),
+        row_count=_artifact_row_count(provenance_path),
+        asset_key="theme_generation_provenance",
+    )
+
     # --- 7. Provider lineage and aggregate metrics (safe metadata only) ---
     provider_metrics_path = os.path.join(vis_dir, "run_metrics.json")
     provider_metrics = None
@@ -1158,4 +1183,5 @@ def run_monthly_themes_task(
         community_path_theme_similarity=community_path_theme_similarity_ref,
         visualizations=tuple(visualizations),
         provider_run_summary=provider_run_summary,
+        theme_generation_provenance=theme_generation_provenance,
     )

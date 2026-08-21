@@ -81,7 +81,7 @@ def find_matching_communities(
     *,
     threshold: float | None = None,
 ) -> pd.DataFrame:
-    """Compare consecutive-month communities with pre-parsed member sets."""
+    """Compare consecutive-month communities that share at least one member."""
     if df1.empty or df2.empty:
         return pd.DataFrame(columns=TRANSITION_COLUMNS)
 
@@ -120,7 +120,7 @@ def find_matching_communities(
             union = set1 | set2
             common = set1 & set2
             score = float(len(common)) / len(union)
-            if not (threshold <= score <= 1.0):
+            if not (0.0 < score <= 1.0 and score >= threshold):
                 continue
 
             start_comm = row1.get("absolute_community", "0")

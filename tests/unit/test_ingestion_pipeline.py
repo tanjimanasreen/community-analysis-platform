@@ -1,18 +1,23 @@
 import csv
 
 import pandas as pd
+import pytest
 
 from src.graph_store.base import GraphRepository
 from src.pipelines.ingestion_pipeline import (
     build_interaction_dataframe,
     build_snapshot_meta,
     run_ingestion_pipeline,
+    write_interactions,
 )
 
 
 class FakeRepository:
     def __init__(self):
         self.import_calls = []
+
+    def check_connectivity(self):
+        pass
 
     def clear(self):
         pass
@@ -91,9 +96,30 @@ def test_build_interaction_dataframe_from_legacy_reply_csv_contract():
     assert edge["year"] == 2017
 
 
-def test_run_ingestion_pipeline_writes_and_imports_interaction_csv(tmp_path):
+def test_generated_interaction_output_rejects_csv(tmp_path):
+    frame = pd.DataFrame(
+        [
+            {
+                "source": "u1",
+                "target": "u2",
+                "total_post": 2,
+                "shared_post": 1,
+                "weighted_post": 0.5,
+                "data_type": "twitter",
+                "content_type": "reply",
+                "month": 3,
+                "year": 2017,
+            }
+        ]
+    )
+
+    with pytest.raises(ValueError, match=r"expected \.parquet"):
+        write_interactions(frame, tmp_path / "derived.csv")
+
+
+def test_run_ingestion_pipeline_writes_and_imports_interaction_parquet(tmp_path):
     raw_path = tmp_path / "raw.csv"
-    out_path = tmp_path / "derived.csv"
+    out_path = tmp_path / "derived.parquet"
     with raw_path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=["source", "target", "relation"])
         writer.writeheader()
@@ -132,7 +158,7 @@ def test_run_ingestion_pipeline_writes_and_imports_interaction_csv(tmp_path):
     assert result.output_path == out_path
     assert out_path.exists()
     assert repo.import_calls == [(out_path, build_snapshot_meta(config))]
-    derived = pd.read_csv(out_path)
+    derived = pd.read_parquet(out_path)
     assert list(derived.columns) == [
         "source",
         "target",

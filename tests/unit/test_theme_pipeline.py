@@ -1,6 +1,7 @@
 import pandas as pd
 
 from src.pipelines.theme_pipeline import process_single_file_themes, run_theme_pipeline
+from src.providers.cache_backends import InMemoryThemeResponseCache
 from src.providers.cached import CachedProvider
 from src.providers.mock import MockProvider
 
@@ -32,11 +33,11 @@ def test_run_theme_pipeline_offline_without_rendering(tmp_path):
     input_dir = tmp_path / "lda"
     output_dir = tmp_path / "theme"
     input_dir.mkdir()
-    pd.DataFrame([_matched_row([1, 2, 3])]).to_csv(
-        input_dir / "january_2017.csv", index=False
+    pd.DataFrame([_matched_row([1, 2, 3])]).to_parquet(
+        input_dir / "january_2017.parquet", index=False
     )
-    pd.DataFrame([_matched_row([1, 2, 3, 4])]).to_csv(
-        input_dir / "february_2017.csv", index=False
+    pd.DataFrame([_matched_row([1, 2, 3, 4])]).to_parquet(
+        input_dir / "february_2017.parquet", index=False
     )
 
     transitions = run_theme_pipeline(
@@ -49,9 +50,9 @@ def test_run_theme_pipeline_offline_without_rendering(tmp_path):
     )
 
     assert len(transitions) == 1
-    assert (output_dir / "january_2017_with_themes.csv").exists()
-    assert (output_dir / "february_2017_with_themes.csv").exists()
-    assert (output_dir / "community_transition.csv").exists()
+    assert (output_dir / "january_2017_with_themes.parquet").exists()
+    assert (output_dir / "february_2017_with_themes.parquet").exists()
+    assert (output_dir / "community_transition.parquet").exists()
 
 
 def test_cached_provider_reuses_keyword_response():
@@ -59,13 +60,13 @@ def test_cached_provider_reuses_keyword_response():
         def __init__(self):
             self.calls = 0
 
-        def generate_theme(self, text):
+        def generate_theme(self, keywords):
             self.calls += 1
-            return {"Theme": [text]}
+            return {"Theme": list(keywords)}
 
     provider = CountingProvider()
-    cached = CachedProvider(provider)
+    cached = CachedProvider(provider, InMemoryThemeResponseCache())
 
-    assert cached.generate_theme("apple") == {"Theme": ["apple"]}
-    assert cached.generate_theme("apple") == {"Theme": ["apple"]}
+    assert cached.generate_theme(["apple"]) == {"Theme": ["apple"]}
+    assert cached.generate_theme(["apple"]) == {"Theme": ["apple"]}
     assert provider.calls == 1

@@ -30,14 +30,13 @@ class GraphLimits:
 
 _GRAPH_COLUMNS = ["source", "target", "community_number", "direction", "weight"]
 _MEMBERSHIP_COLUMNS = ["source", "target", "community_number"]
-_SUMMARY_COLUMNS = [
+_SUMMARY_REQUIRED_COLUMNS = [
     "community_id",
     "node_count",
     "edge_count",
     "total_weight",
-    "x",
-    "y",
 ]
+_SUMMARY_LAYOUT_COLUMNS = ["x", "y"]
 _NODE_INDEX_COLUMNS = ["node_id", "x", "y"]
 _INTERACTION_COLUMNS = [
     "source_community_id",
@@ -199,7 +198,7 @@ class NetworkService:
             for record in sample_records
         ]
         summary_frames = [
-            self.reader.read_parquet_record(run_id, record, columns=_SUMMARY_COLUMNS)
+            self.reader.read_parquet_record(run_id, record)
             for record in summary_records
         ]
         frame = (
@@ -273,10 +272,7 @@ class NetworkService:
             records = self._records_for_key(run_id, key, period=period)
         except ArtifactUnavailableError:
             return None
-        frames = [
-            self.reader.read_parquet_record(run_id, record, columns=_SUMMARY_COLUMNS)
-            for record in records
-        ]
+        frames = [self.reader.read_parquet_record(run_id, record) for record in records]
         return pd.concat(frames, ignore_index=True) if len(frames) > 1 else frames[0]
 
     def _read_community_interaction_frame(
@@ -1037,16 +1033,19 @@ def _summary_from_graph_frame(frame: pd.DataFrame) -> pd.DataFrame:
                 "total_weight": float(group["weight"].sum()),
             }
         )
-    return pd.DataFrame(rows, columns=_SUMMARY_COLUMNS)
+    return pd.DataFrame(rows, columns=_SUMMARY_REQUIRED_COLUMNS)
 
 
 def _normalize_summary_frame(frame: pd.DataFrame) -> pd.DataFrame:
-    missing = sorted(set(_SUMMARY_COLUMNS) - set(frame.columns))
+    missing = sorted(set(_SUMMARY_REQUIRED_COLUMNS) - set(frame.columns))
     if missing:
         raise ValueError(
             f"community summary artifact schema mismatch; missing columns: {missing}"
         )
-    result = frame[_SUMMARY_COLUMNS].copy()
+    selected_columns = _SUMMARY_REQUIRED_COLUMNS + [
+        column for column in _SUMMARY_LAYOUT_COLUMNS if column in frame.columns
+    ]
+    result = frame[selected_columns].copy()
     result["community_id"] = result["community_id"].map(_identifier_string)
     result["node_count"] = (
         pd.to_numeric(result["node_count"], errors="coerce").fillna(0).astype(int)

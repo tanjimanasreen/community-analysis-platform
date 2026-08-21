@@ -5,13 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from src.themes.benchmark.dataset import (
-    SYSTEM_PROMPT,
-    USER_PROMPT_TEMPLATE,
-    build_dataset,
-)
+from src.themes.benchmark.dataset import build_dataset
 from src.providers.llm7 import (
-    LLM7_BASE_URL,
     LLM7BenchmarkProvider,
     build_llm7_model_catalog,
     discover_llm7_models,
@@ -31,7 +26,7 @@ FIXTURE = (
     Path(__file__).resolve().parents[1]
     / "fixtures"
     / "theme_benchmark"
-    / "matched_lda.csv"
+    / "matched_lda.parquet"
 )
 
 
@@ -69,7 +64,7 @@ class FakeCompletions:
             or [
                 FakeCompletion(
                     json.dumps(
-                        {"themes": [{"name": "Fruit", "keywords": ["apple", "banana"]}]}
+                        {"themes": [{"name": "Fruit", "keyword_indices": [0, 1]}]}
                     )
                 )
             ]
@@ -184,13 +179,8 @@ def test_llm7_request_construction_preserves_roles_and_settings(tmp_path):
     call = client.chat.completions.calls[0]
     assert call["model"] == "llm7-turbo-json"
     assert call["messages"] == [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {
-            "role": "user",
-            "content": USER_PROMPT_TEMPLATE.format(
-                keywords=request_row["keyword_text"]
-            ),
-        },
+        {"role": "system", "content": request_row["system_prompt"]},
+        {"role": "user", "content": request_row["user_prompt"]},
     ]
     assert call["temperature"] == 0.0
     assert call["stream"] is False
@@ -198,7 +188,10 @@ def test_llm7_request_construction_preserves_roles_and_settings(tmp_path):
     assert "api" not in json.dumps(call).lower()
 
 
-def test_llm7_model_discovery_normalizes_filters_and_hides_secrets(tmp_path):
+def test_llm7_model_discovery_normalizes_filters_and_hides_secrets(
+    tmp_path, monkeypatch
+):
+    monkeypatch.delenv("LLM7_BASE_URL", raising=False)
     models = [
         {
             "id": "llm7-turbo-json",
@@ -251,7 +244,7 @@ def test_llm7_model_discovery_normalizes_filters_and_hides_secrets(tmp_path):
     )
     catalog = json.loads(path.read_text(encoding="utf-8"))
 
-    assert catalog["base_url"] == LLM7_BASE_URL
+    assert catalog["base_url"] is None
     assert catalog["contains_secrets"] is False
     assert {item["model_id"] for item in catalog["selected_candidates"]} == {
         "llm7-turbo-json",

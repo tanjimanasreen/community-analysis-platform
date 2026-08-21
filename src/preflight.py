@@ -362,7 +362,7 @@ def _embedding_profile_checks(
             )
 
     # Similarity TEI is required only when the evolution run renders similarity
-    # heatmaps. The default longitudinal configs keep render_visuals=false.
+    # heatmaps. The canonical evolution configs keep render_visuals=false.
     if bool(theme.get("render_visuals", False)):
         settings = get_tei_client_settings()
         expected_model = str(

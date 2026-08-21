@@ -55,6 +55,9 @@ class MemgraphRepository(GraphRepository):
         self.interaction_batch_size = int(interaction_batch_size)
         self.raw_batch_size = int(raw_batch_size)
 
+    def check_connectivity(self) -> None:
+        self.client.execute_query("RETURN 1 AS ok")
+
     def clear(self) -> None:
         self.client.execute_query("MATCH (n) DETACH DELETE n")
 
@@ -195,15 +198,13 @@ class MemgraphRepository(GraphRepository):
 
         df = pd.DataFrame(rows, columns=fieldnames)
         output_path = Path(out_path)
-        if output_path.suffix.lower() == ".parquet":
-            df.to_parquet(output_path, index=False)
-        elif output_path.suffix.lower() == ".csv":
-            df.to_csv(output_path, index=False)
-        else:
+        if output_path.suffix.lower() != ".parquet":
             raise ValueError(
-                f"Unsupported interaction export format {output_path.suffix!r}; "
-                "expected .csv or .parquet"
+                "Unsupported generated interaction export format "
+                f"{output_path.suffix!r}; "
+                "expected .parquet"
             )
+        df.to_parquet(output_path, index=False)
 
     def get_user_interactions(
         self, snapshot_meta: SnapshotMeta

@@ -30,7 +30,7 @@ def test_theme_provider_defaults():
     assert DEFAULT_CONFIG.theme_provider.fallback is True
     assert DEFAULT_CONFIG.theme_provider.fallback_chain == [
         "llm7:fast",
-        "nvidia:meta/llama3-70b-instruct",
+        "nvidia:meta/llama-3.3-70b-instruct",
     ]
 
 

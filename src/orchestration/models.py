@@ -135,3 +135,4 @@ class ThemeOutputBundle:
     community_path_theme_similarity: ArtifactReference | None = None
     visualizations: tuple[ArtifactReference, ...] = ()
     provider_run_summary: ArtifactReference | None = None
+    theme_generation_provenance: ArtifactReference | None = None

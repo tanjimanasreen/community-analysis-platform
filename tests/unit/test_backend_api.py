@@ -24,9 +24,9 @@ def _hash(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _write_csv(path: Path, rows: list[dict], columns: list[str]) -> None:
+def _write_parquet(path: Path, rows: list[dict], columns: list[str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame(rows, columns=columns).to_csv(path, index=False)
+    pd.DataFrame(rows, columns=columns).to_parquet(path, index=False)
 
 
 def _record(
@@ -40,7 +40,9 @@ def _record(
 ) -> ArtifactRecord:
     path = root / relative
     rows = None
-    if path.suffix == ".csv":
+    if path.suffix == ".parquet":
+        rows = len(pd.read_parquet(path))
+    elif path.suffix == ".csv":
         rows = len(pd.read_csv(path))
     return ArtifactRecord(
         key=key,
@@ -103,8 +105,8 @@ def _build_run(
         }
         for index in range(1, 5)
     ]
-    _write_csv(
-        root / "data/network/network.csv",
+    _write_parquet(
+        root / "data/network/network.parquet",
         network_rows,
         contract.NETWORK_DATA_COLUMNS,
     )
@@ -132,18 +134,18 @@ def _build_run(
             "weight": 7.0,
         },
     ]
-    _write_csv(
-        root / "data/communities/absolute/communities.csv",
+    _write_parquet(
+        root / "data/communities/absolute/communities.parquet",
         graph_rows,
         contract.COMMUNITY_GRAPH_COLUMNS,
     )
-    _write_csv(
-        root / "data/communities/weighted/communities.csv",
+    _write_parquet(
+        root / "data/communities/weighted/communities.parquet",
         graph_rows,
         contract.COMMUNITY_GRAPH_COLUMNS,
     )
-    _write_csv(
-        root / "data/communities/matched/matched.csv",
+    _write_parquet(
+        root / "data/communities/matched/matched.parquet",
         [
             {
                 "month": month,
@@ -154,8 +156,8 @@ def _build_run(
         ],
         contract.MATCHED_COMMUNITY_SUMMARY_COLUMNS,
     )
-    _write_csv(
-        root / "data/metrics/count_user_messages/counts.csv",
+    _write_parquet(
+        root / "data/metrics/count_user_messages/counts.parquet",
         [
             {
                 "month": month,
@@ -165,8 +167,8 @@ def _build_run(
         ],
         contract.COUNT_USER_MESSAGES_COLUMNS,
     )
-    _write_csv(
-        root / "data/metrics/user_centrality/centrality.csv",
+    _write_parquet(
+        root / "data/metrics/user_centrality/centrality.parquet",
         [{"month": month, "absolute": "{'u1': 0.5}", "weighted": "{'u1': 0.4}"}],
         contract.USER_CENTRALITY_COLUMNS,
     )
@@ -184,8 +186,8 @@ def _build_run(
         "weighted_bigram_keywords": "['alpha beta']",
         "members": "['u1', 'u2']",
     }
-    _write_csv(
-        root / "data/topics/matched/topics.csv",
+    _write_parquet(
+        root / "data/topics/matched/topics.parquet",
         [topic_row, {**topic_row, "absolute_community": 2, "weighted_community": 2}],
         contract.MATCHED_LDA_COLUMNS,
     )
@@ -202,8 +204,8 @@ def _build_run(
         "weighted_theme_gpt": "{'Policy': ['beta']}",
         "weighted_theme_names": "['Policy']",
     }
-    _write_csv(
-        root / f"data/themes/monthly/{month}.csv",
+    _write_parquet(
+        root / f"data/themes/monthly/{month}.parquet",
         [themed_row, themed_row],
         contract.THEMED_OUTPUT_COLUMNS,
     )
@@ -227,8 +229,8 @@ def _build_run(
         "start_month_general_theme": "Policy",
         "end_month_general_theme": "Policy",
     }
-    _write_csv(
-        root / "data/themes/community_transition.csv",
+    _write_parquet(
+        root / "data/themes/community_transition.parquet",
         [transition_row],
         contract.COMMUNITY_TRANSITION_COLUMNS,
     )
@@ -252,73 +254,73 @@ def _build_run(
         _record(
             root,
             "network_data",
-            "data/network/network.csv",
+            "data/network/network.parquet",
             ArtifactCategory.DATA,
-            "text/csv",
+            "application/vnd.apache.parquet",
             stage="network_community",
         ),
         _record(
             root,
             "communities_absolute",
-            "data/communities/absolute/communities.csv",
+            "data/communities/absolute/communities.parquet",
             ArtifactCategory.DATA,
-            "text/csv",
+            "application/vnd.apache.parquet",
             stage="network_community",
         ),
         _record(
             root,
             "communities_weighted",
-            "data/communities/weighted/communities.csv",
+            "data/communities/weighted/communities.parquet",
             ArtifactCategory.DATA,
-            "text/csv",
+            "application/vnd.apache.parquet",
             stage="network_community",
         ),
         _record(
             root,
             "communities_matched",
-            "data/communities/matched/matched.csv",
+            "data/communities/matched/matched.parquet",
             ArtifactCategory.DATA,
-            "text/csv",
+            "application/vnd.apache.parquet",
             stage="network_community",
         ),
         _record(
             root,
             "count_user_messages",
-            "data/metrics/count_user_messages/counts.csv",
+            "data/metrics/count_user_messages/counts.parquet",
             ArtifactCategory.DATA,
-            "text/csv",
+            "application/vnd.apache.parquet",
             stage="network_community",
         ),
         _record(
             root,
             "user_centrality",
-            "data/metrics/user_centrality/centrality.csv",
+            "data/metrics/user_centrality/centrality.parquet",
             ArtifactCategory.DATA,
-            "text/csv",
+            "application/vnd.apache.parquet",
             stage="network_community",
         ),
         _record(
             root,
             "matched_communities_topics",
-            "data/topics/matched/topics.csv",
+            "data/topics/matched/topics.parquet",
             ArtifactCategory.DATA,
-            "text/csv",
+            "application/vnd.apache.parquet",
             stage="topic",
         ),
         _record(
             root,
             f"themes_{month}",
-            f"data/themes/monthly/{month}.csv",
+            f"data/themes/monthly/{month}.parquet",
             ArtifactCategory.DATA,
-            "text/csv",
+            "application/vnd.apache.parquet",
             stage="theme",
         ),
         _record(
             root,
             "community_transitions",
-            "data/themes/community_transition.csv",
+            "data/themes/community_transition.parquet",
             ArtifactCategory.DATA,
-            "text/csv",
+            "application/vnd.apache.parquet",
             stage="theme",
         ),
         _record(
@@ -404,9 +406,7 @@ def test_verification_and_checksum_failure_are_explicit(tmp_path):
     client = _client(tmp_path)
 
     assert client.get("/api/v1/runs/run-03/verification").json()["ok"] is True
-    (root / "data/communities/absolute/communities.csv").write_text(
-        "tampered\n", encoding="utf-8"
-    )
+    (root / "data/communities/absolute/communities.parquet").write_bytes(b"tampered")
 
     verification = client.get("/api/v1/runs/run-03/verification")
     assert verification.status_code == 200
@@ -521,7 +521,7 @@ def test_evolution_and_report_endpoints(tmp_path):
     assert b"report" in report.content
     download = client.get("/api/v1/runs/run-03/downloads/network_data")
     assert download.status_code == 200
-    assert download.headers["content-type"].startswith("text/csv")
+    assert download.headers["content-type"].startswith("application/vnd.apache.parquet")
 
 
 def test_missing_optional_artifact_has_stable_error(tmp_path):

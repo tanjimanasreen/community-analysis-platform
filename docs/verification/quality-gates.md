@@ -22,9 +22,14 @@ pytest tests/unit/test_current_defaults.py
 Required:
 
 - No database credentials are hard-coded.
+- Current graph-repository connection settings are supplied through `GRAPH_DB_*`;
+  analytical YAML `database:` sections are rejected instead of ignored.
 - No OpenAI API key is hard-coded.
 - `.env.example` exists.
 - Dataset run config supports Twitter and Telegram parameters.
+- Canonical evolution configs are limited to Twitter reply, Twitter retweet/quote,
+  and Telegram forwarded-message workflows, with relation/column mappings
+  validated before execution.
 - External drive paths are replaced by configurable paths.
 
 Validation:
@@ -39,8 +44,10 @@ Required:
 
 - Existing `source,target,relation` CSV format is supported.
 - Neo4j export can be configured without editing source.
-- Memgraph local runtime exists.
-- Graph store access is isolated.
+- Memgraph local runtime exists as the current default backend.
+- Graph store access is isolated behind `GraphRepository` and backend resolution;
+  unsupported configured engines fail explicitly rather than falling through to
+  Memgraph.
 
 Validation:
 
@@ -58,12 +65,16 @@ Required:
 - `weighted_post = shared_post / total_post` is tested.
 - Self-spread exclusion is tested.
 - Graph filtering thresholds are tested.
+- The shared Telegram network boundary accepts both legacy
+  `source,target,relation` rows and already-normalized
+  `from_id,forwarder_id` rows before the same IF/WIF implementation runs.
 
 Validation:
 
 ```bash
 pytest tests/unit/test_follower_followee_metrics.py
 pytest tests/unit/test_graph_thresholds.py
+pytest tests/unit/test_pipelines.py -k telegram
 ```
 
 ## Gate 5: Community Analysis
@@ -106,7 +117,14 @@ Required:
 
 - GPT theme generation is behind a provider interface.
 - Theme generation supports mock/cached mode.
-- Month-to-month transition uses correct thresholds.
+- Prompt V3 is centrally authoritative and requests faithful, descriptive, non-endorsing,
+  severity-preserving labels plus explicit request-bounded zero-based keyword IDs; exact keyword
+  evidence is reconstructed locally and is never sanitized to satisfy a provider.
+- Multiple typed provider safety failures are payload-scoped and recoverable, while unexpected
+  errors remain fail-fast; provenance/coverage is persisted and missing labels are never embedded
+  as empty strings.
+- Provider routing is configured only under `theme_provider`; stale `theme.fallback` and `theme.fallback_chain` settings fail validation instead of being silently ignored.
+- Month-to-month transitions require positive member overlap and use the correct thresholds.
 - Sankey path detection is tested.
 - Membership-change calculation is tested.
 - Theme similarity matrix generation is tested.
@@ -115,6 +133,8 @@ Validation:
 
 ```bash
 pytest tests/unit/test_theme_generation_contract.py
+pytest tests/unit/test_theme_content_filter_recovery.py
+pytest tests/unit/test_config.py tests/unit/test_provider_factory.py
 pytest tests/unit/test_community_transition.py
 pytest tests/unit/test_membership_changes.py
 pytest tests/unit/test_theme_similarity.py
@@ -129,11 +149,13 @@ Required:
 - Sample topic pipeline runs.
 - Sample theme pipeline runs in offline/mock mode.
 - Final report or output index lists all generated artifacts.
+- Current operational documentation references only Make targets that exist.
 
 Validation:
 
 ```bash
 make run-pipeline-sample
+pytest tests/unit/test_release_hygiene.py
 make test
 ```
 
@@ -144,8 +166,8 @@ Required:
 - Orchestrated outputs are isolated below `<output_base_path>/runs/<run_id>`.
 - Running, completed, and failed statuses are persisted atomically.
 - Canonical artifact records use relative paths and validate containment.
-- Checksums, byte sizes, CSV row counts, and known schemas are verified.
-- Legacy public CSV outputs remain byte-for-byte unchanged during publication.
+- Checksums, byte sizes, Parquet row counts, and known schemas are verified.
+- Generated analytical and intermediate tabular outputs are Parquet; no generated CSV compatibility copy is required.
 - Failed runs cannot retain completed status.
 
 Validation:

@@ -2,6 +2,11 @@
 
 This file records the implemented features found in the existing thesis codebase. The production rebuild must cover these features unless the human explicitly removes one.
 
+Current `GraphRepository` configuration is environment-driven through `GRAPH_DB_*`.
+Analytical YAML `database:` sections are rejected, and backend selection is routed
+through the repository resolver; Memgraph is currently implemented/default while
+the abstraction remains open to future graph databases.
+
 ## Top-Level Scripts
 
 ### `neo4j_data_fetcher.py`
@@ -19,7 +24,10 @@ Implemented behavior:
   - `source`
   - `target`
   - `relation`
-- Current credentials and URI are hard-coded and must be moved to environment/config.
+- Thesis-era credentials and URI were hard-coded; the productionized runtime now
+  uses environment-driven `GraphRepository` settings. Memgraph is the current
+  default repository backend, while Neo4j remains historical/export-migration
+  context.
 
 ### `social-network-analysis.py`
 
@@ -53,12 +61,18 @@ Implemented behavior:
 - Saves LDA perplexity and coherence scores.
 - Extracts matched-community LDA topics and keywords.
 - Extracts partially matched-community LDA topics and keywords.
+- In the productionized pipeline, the shared Telegram network-analysis boundary
+  accepts either legacy `source,target,relation` relationship rows or already
+  normalized `from_id,forwarder_id` rows. Legacy rows reuse the canonical
+  ingestion mapping before the unchanged follower-followee IF/WIF calculation,
+  so direct CLI, debug, Prefect, and programmatic pipeline entry points share the
+  same normalization behavior.
 
 ### `theme-analysis.py`
 
 Implemented behavior:
 
-- Loads monthly matched LDA CSV files.
+- Loads monthly matched LDA Parquet files.
 - Sorts months using a predefined month order.
 - Parses stringified list columns.
 - Combines absolute/weighted unigram/bigram keywords.
@@ -66,17 +80,27 @@ Implemented behavior:
   - `all_keywords`
   - `absolute_keywords`
   - `weighted_keywords`
-- Calls OpenAI Chat Completions to generate JSON theme labels from keyword lists.
-- Uses model `gpt-4o`, `seed=42`, `temperature=0`, and JSON response format.
+- Generates theme labels through the provider abstraction from ordered LDA keyword lists.
+- The provider-facing theme contract uses centrally versioned Prompt V3 and returns theme names
+  plus request-bounded, explicitly displayed zero-based keyword indices; exact supporting LDA
+  keywords are reconstructed locally without sanitizing or rewriting them. Typed provider safety
+  outcomes are recoverable per payload and are recorded in
+  `theme_generation_provenance.parquet`; unexpected errors remain fail-fast.
+- Current production routing selects `openai:gpt-5-nano` from `configs/providers.yml`;
+  the OpenAI adapter uses the Responses API with strict JSON Schema structured output.
+- Provider routing belongs to `theme_provider`; run-config validation rejects legacy
+  `theme.fallback` and `theme.fallback_chain` keys instead of silently ignoring them.
 - Generates:
   - general themes
   - absolute themes
   - weighted themes
-- Saves monthly theme CSV files.
-- Loads generated theme CSV files.
+- Saves monthly theme Parquet files.
+- Loads generated theme Parquet files.
 - Matches communities across consecutive months using Jaccard similarity over member lists.
-- Uses threshold `0.0` for `reply` content and `0.5` otherwise.
-- Saves `community_transition.csv`.
+- Requires positive member overlap (`Jaccard > 0`) for every transition.
+- Uses threshold `0.0` for `reply` content, so any positive Jaccard score qualifies;
+  uses an inclusive `0.5` threshold otherwise.
+- Saves `community_transition.parquet`.
 - Builds Sankey node/link information.
 - Draws and saves community transition Sankey diagrams as PNG and HTML.
 - Builds a directed graph from Sankey links.
@@ -206,19 +230,21 @@ Implemented behavior:
 
 ## Existing Output Categories
 
-The production rebuild must preserve or explicitly replace these outputs:
+The production rebuild preserves these output categories while replacing the
+legacy generated CSV serialization with Parquet. Raw `data/raw/**` relationship
+inputs remain CSV. Generated tabular categories are:
 
-- `network_data/<content_type>/<month><year>.csv`
-- `user_centrality/<content_type>/<month>.csv`
-- `count_user_messages/<content_type>/<month>.csv`
-- `daily_messages_stat/<content_type>/<month>.csv`
-- `communities/matched/<content_type>/<month>.csv`
-- `communities/partially_matched/<content_type>/<month>.csv`
-- `LDA/scores/<content_type>/<month>.csv`
-- `LDA/matched/<content_type>/<month>_<year>.csv`
-- `LDA/partial_matched/<content_type>/<month>_<year>.csv`
-- `LDA/matched_theme/<content_type>/<month>_theme.csv`
-- `LDA/community_transition/<content_type>/community_transition.csv`
+- `network_data/<content_type>/<month><year>.parquet`
+- `user_centrality/<content_type>/<month>.parquet`
+- `count_user_messages/<content_type>/<month>.parquet`
+- `daily_messages_stat/<content_type>/<month>.parquet`
+- `communities/matched/<content_type>/<month>.parquet`
+- `communities/partially_matched/<content_type>/<month>.parquet`
+- `LDA/scores/<content_type>/<month>.parquet`
+- `LDA/matched/<content_type>/<month>_<year>.parquet`
+- `LDA/partial_matched/<content_type>/<month>_<year>.parquet`
+- `LDA/matched_theme/<content_type>/<month>_theme.parquet`
+- `LDA/community_transition/<content_type>/community_transition.parquet`
 - `LDA/community_transition/<content_type>/community_transition.png`
 - `LDA/community_transition/<content_type>/community_transition.html`
 - `LDA/membership_change_graphs/<content_type>/community_changes_<n>.png`

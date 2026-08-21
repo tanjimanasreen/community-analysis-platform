@@ -18,6 +18,7 @@ import os
 import hashlib
 import json
 import pytest
+import pandas as pd
 
 pytestmark = pytest.mark.requires_loopback
 from pathlib import Path
@@ -45,23 +46,42 @@ def _sha256(content: bytes) -> str:
     return hashlib.sha256(content).hexdigest()
 
 
-COMMUNITY_MESSAGE_CSV = b"""community_number,messages,messages_ids,total_messages
-1,"['hello']","['m1']",1
-"""
-MATCHED_COMMUNITY_CSV = b"""abs_community,per_community,jaccard_score,members
-1,2,1.0,"['u1']"
-"""
-PARTIAL_MATCHED_COMMUNITY_CSV = b"""abs_community,absolute_members,per_community,weighted_members,jaccard_score,common_members,uncommon_members
-1,"['u1']",2,"['u1']",1.0,"['u1']","[]"
-"""
+COMMUNITY_MESSAGE_FRAME = pd.DataFrame(
+    {
+        "community_number": [1],
+        "messages": [["hello"]],
+        "messages_ids": [["m1"]],
+        "total_messages": [1],
+    }
+)
+MATCHED_COMMUNITY_FRAME = pd.DataFrame(
+    {
+        "abs_community": [1],
+        "per_community": [2],
+        "jaccard_score": [1.0],
+        "members": [["u1"]],
+    }
+)
+PARTIAL_MATCHED_COMMUNITY_FRAME = pd.DataFrame(
+    {
+        "abs_community": [1],
+        "absolute_members": [["u1"]],
+        "per_community": [2],
+        "weighted_members": [["u1"]],
+        "jaccard_score": [1.0],
+        "common_members": [["u1"]],
+        "uncommon_members": [[]],
+    }
+)
 
 
-def _write(path: Path, content: bytes) -> ArtifactReference:
-    path.write_bytes(content)
+def _write(path: Path, frame: pd.DataFrame) -> ArtifactReference:
+    frame.to_parquet(path, index=False)
+    content = path.read_bytes()
     return ArtifactReference(
         path=str(path),
         sha256=_sha256(content),
-        media_type="text/csv",
+        media_type="application/octet-stream",
         byte_size=len(content),
         asset_key=path.stem,
     )
@@ -91,9 +111,9 @@ def _config(tmp_path) -> ValidatedRunConfiguration:
 
 
 def _bundle(tmp_path, *, partial=None) -> TopicInputBundle:
-    abs_ref = _write(tmp_path / "abs.csv", COMMUNITY_MESSAGE_CSV)
-    wgt_ref = _write(tmp_path / "wgt.csv", COMMUNITY_MESSAGE_CSV)
-    mch_ref = _write(tmp_path / "mch.csv", MATCHED_COMMUNITY_CSV)
+    abs_ref = _write(tmp_path / "abs.parquet", COMMUNITY_MESSAGE_FRAME)
+    wgt_ref = _write(tmp_path / "wgt.parquet", COMMUNITY_MESSAGE_FRAME)
+    mch_ref = _write(tmp_path / "mch.parquet", MATCHED_COMMUNITY_FRAME)
     return TopicInputBundle(
         absolute_community_messages=abs_ref,
         weighted_community_messages=wgt_ref,
@@ -107,14 +127,18 @@ def _make_topic_outputs(out_dir: str, data_type="twitter", content_type="reply")
     """Create the exact output files that run_topic_phase would produce."""
     scores_dir = os.path.join(out_dir, data_type, "LDA", "scores", content_type)
     os.makedirs(scores_dir, exist_ok=True)
-    (Path(scores_dir) / "march.csv").write_text("month,score\nmarch,0.5")
+    pd.DataFrame({"month": ["march"], "score": [0.5]}).to_parquet(
+        Path(scores_dir) / "march.parquet", index=False
+    )
 
     matched_dir = os.path.join(out_dir, data_type, "LDA", "matched", content_type)
     os.makedirs(matched_dir, exist_ok=True)
-    (Path(matched_dir) / "march_2017.csv").write_text("community,topic\n1,a")
+    pd.DataFrame({"community": [1], "topic": ["a"]}).to_parquet(
+        Path(matched_dir) / "march_2017.parquet", index=False
+    )
 
     manifest_dir = os.path.join(
-        out_dir, data_type, "_intermediate", "theme_inputs", content_type, "march_2017"
+        out_dir, data_type, "_intermediate", "theme_inputs", content_type, "2017"
     )
     os.makedirs(manifest_dir, exist_ok=True)
     (Path(manifest_dir) / "manifest.json").write_text("{}")
@@ -167,13 +191,19 @@ def test_topic_task_retries_zero():
 def test_missing_abs_input_raises(tmp_path):
     bundle = TopicInputBundle(
         absolute_community_messages=ArtifactReference(
-            path="/nonexistent/abs.csv", sha256="0" * 64, media_type="text/csv"
+            path="/nonexistent/abs.parquet",
+            sha256="0" * 64,
+            media_type="application/octet-stream",
         ),
         weighted_community_messages=ArtifactReference(
-            path="/nonexistent/wgt.csv", sha256="0" * 64, media_type="text/csv"
+            path="/nonexistent/wgt.parquet",
+            sha256="0" * 64,
+            media_type="application/octet-stream",
         ),
         matched_communities=ArtifactReference(
-            path="/nonexistent/mch.csv", sha256="0" * 64, media_type="text/csv"
+            path="/nonexistent/mch.parquet",
+            sha256="0" * 64,
+            media_type="application/octet-stream",
         ),
         partial_matched_communities=None,
     )
@@ -192,13 +222,13 @@ def test_directory_instead_of_file_raises(tmp_path):
     a_dir.mkdir()
     bundle = TopicInputBundle(
         absolute_community_messages=ArtifactReference(
-            path=str(a_dir), sha256="0" * 64, media_type="text/csv"
+            path=str(a_dir), sha256="0" * 64, media_type="application/octet-stream"
         ),
         weighted_community_messages=ArtifactReference(
-            path=str(a_dir), sha256="0" * 64, media_type="text/csv"
+            path=str(a_dir), sha256="0" * 64, media_type="application/octet-stream"
         ),
         matched_communities=ArtifactReference(
-            path=str(a_dir), sha256="0" * 64, media_type="text/csv"
+            path=str(a_dir), sha256="0" * 64, media_type="application/octet-stream"
         ),
         partial_matched_communities=None,
     )
@@ -217,25 +247,25 @@ def test_path_outside_allowed_root_raises(tmp_path):
 
     other_dir = Path(tempfile.mkdtemp())
     try:
-        abs_path = other_dir / "abs.csv"
+        abs_path = other_dir / "abs.parquet"
         abs_path.write_bytes(b"col\nval")
         bundle = TopicInputBundle(
             absolute_community_messages=ArtifactReference(
                 path=str(abs_path),
                 sha256=_sha256(b"col\nval"),
-                media_type="text/csv",
+                media_type="application/octet-stream",
                 byte_size=7,
             ),
             weighted_community_messages=ArtifactReference(
                 path=str(abs_path),
                 sha256=_sha256(b"col\nval"),
-                media_type="text/csv",
+                media_type="application/octet-stream",
                 byte_size=7,
             ),
             matched_communities=ArtifactReference(
                 path=str(abs_path),
                 sha256=_sha256(b"col\nval"),
-                media_type="text/csv",
+                media_type="application/octet-stream",
                 byte_size=7,
             ),
             partial_matched_communities=None,
@@ -262,12 +292,12 @@ def test_explicit_standalone_input_root_accepted(mock_run, tmp_path):
 
     other_dir = Path(tempfile.mkdtemp())
     try:
-        abs_path = other_dir / "abs.csv"
-        weighted_path = other_dir / "weighted.csv"
-        matched_path = other_dir / "matched.csv"
-        abs_ref = _write(abs_path, COMMUNITY_MESSAGE_CSV)
-        weighted_ref = _write(weighted_path, COMMUNITY_MESSAGE_CSV)
-        matched_ref = _write(matched_path, MATCHED_COMMUNITY_CSV)
+        abs_path = other_dir / "abs.parquet"
+        weighted_path = other_dir / "weighted.parquet"
+        matched_path = other_dir / "matched.parquet"
+        abs_ref = _write(abs_path, COMMUNITY_MESSAGE_FRAME)
+        weighted_ref = _write(weighted_path, COMMUNITY_MESSAGE_FRAME)
+        matched_ref = _write(matched_path, MATCHED_COMMUNITY_FRAME)
         bundle = TopicInputBundle(
             absolute_community_messages=abs_ref,
             weighted_community_messages=weighted_ref,
@@ -300,13 +330,13 @@ def test_explicit_standalone_input_root_accepted(mock_run, tmp_path):
 
 def test_size_mismatch_raises(tmp_path):
     content = b"col\nval"
-    p = tmp_path / "abs.csv"
+    p = tmp_path / "abs.parquet"
     p.write_bytes(content)
 
     wrong_size_ref = ArtifactReference(
         path=str(p),
         sha256=_sha256(content),
-        media_type="text/csv",
+        media_type="application/octet-stream",
         byte_size=9999,  # wrong
     )
     bundle = TopicInputBundle(
@@ -327,13 +357,13 @@ def test_size_mismatch_raises(tmp_path):
 
 def test_hash_mismatch_raises(tmp_path):
     content = b"col\nval"
-    p = tmp_path / "abs.csv"
+    p = tmp_path / "abs.parquet"
     p.write_bytes(content)
 
     wrong_hash_ref = ArtifactReference(
         path=str(p),
         sha256="a" * 64,  # wrong hash
-        media_type="text/csv",
+        media_type="application/octet-stream",
         byte_size=len(content),
     )
     bundle = TopicInputBundle(
@@ -413,7 +443,11 @@ def test_output_bundle_contains_only_artifact_references(mock_run, tmp_path):
     import gensim
 
     def _check_no_large_obj(obj, path="result"):
-        forbidden_types = (pd.DataFrame, gensim.models.LdaModel)
+        forbidden_types = (
+            pd.DataFrame,
+            gensim.models.LdaModel,
+            gensim.models.LdaMulticore,
+        )
         if isinstance(obj, forbidden_types):
             pytest.fail(f"Large object {type(obj)} found at {path}")
         if isinstance(obj, (list, tuple)):
@@ -425,8 +459,8 @@ def test_output_bundle_contains_only_artifact_references(mock_run, tmp_path):
 
     _check_no_large_obj(result)
     assert isinstance(result.lda_scores, ArtifactReference)
-    assert result.lda_scores.asset_key == "lda_scores"
-    assert result.lda_scores.path.endswith("march.csv")
+    assert result.lda_scores.asset_key == "lda_scores_march"
+    assert result.lda_scores.path.endswith("march.parquet")
     assert len(result.theme_inputs) == 1
 
 
@@ -445,7 +479,7 @@ def test_stale_files_excluded_from_output(mock_run, tmp_path):
         out = kw["output_dir"]
         _make_topic_outputs(out, "twitter", "reply")
         # Create stale/debug file in output directory
-        (Path(out) / "debug_leftover.csv").write_text("stale")
+        (Path(out) / "debug_leftover.parquet").write_text("stale")
 
     mock_run.side_effect = side_effect
 
@@ -486,8 +520,8 @@ def test_missing_required_topic_config_fails_before_domain(tmp_path):
     mock_run.assert_not_called()
 
 
-def test_invalid_topic_csv_schema_fails_before_domain(tmp_path):
-    invalid = _write(tmp_path / "invalid.csv", b"wrong\nvalue\n")
+def test_invalid_topic_parquet_schema_fails_before_domain(tmp_path):
+    invalid = _write(tmp_path / "invalid.parquet", pd.DataFrame({"wrong": ["value"]}))
     bundle = TopicInputBundle(
         absolute_community_messages=invalid,
         weighted_community_messages=invalid,
@@ -511,12 +545,12 @@ def test_invalid_topic_csv_schema_fails_before_domain(tmp_path):
 
 def _make_cache_params(tmp_path, lda_config=None, provider_config=None):
     content = b"col\nval"
-    p = tmp_path / "f.csv"
+    p = tmp_path / "f.parquet"
     p.write_bytes(content)
     ref = ArtifactReference(
         path=str(p),
         sha256=_sha256(content),
-        media_type="text/csv",
+        media_type="application/octet-stream",
         byte_size=len(content),
     )
     bundle = TopicInputBundle(
@@ -549,12 +583,12 @@ def test_cache_key_same_inputs_same_key(tmp_path):
 
 def test_cache_key_stable_across_dict_order(tmp_path):
     content = b"col\nval"
-    p = tmp_path / "f.csv"
+    p = tmp_path / "f.parquet"
     p.write_bytes(content)
     ref = ArtifactReference(
         path=str(p),
         sha256=_sha256(content),
-        media_type="text/csv",
+        media_type="application/octet-stream",
         byte_size=len(content),
     )
     bundle = TopicInputBundle(
@@ -587,12 +621,12 @@ def test_cache_key_changes_on_lda_seed_change(tmp_path):
 def test_cache_key_changes_on_input_hash_change(tmp_path):
     params_a = _make_cache_params(tmp_path)
     content_b = b"col\nother"
-    p_b = tmp_path / "b.csv"
+    p_b = tmp_path / "b.parquet"
     p_b.write_bytes(content_b)
     ref_b = ArtifactReference(
         path=str(p_b),
         sha256=_sha256(content_b),
-        media_type="text/csv",
+        media_type="application/octet-stream",
         byte_size=len(content_b),
     )
     params_b_bundle = TopicInputBundle(
@@ -625,6 +659,6 @@ def test_cache_key_changes_on_topic_count_change(tmp_path):
     assert topic_cache_key_fn(None, params_a) != topic_cache_key_fn(None, params_b)
 
 
-def test_cache_key_fn_is_not_enabled_on_task():
-    """Caching must remain disabled (cache_key_fn=None) on the actual Prefect task."""
-    assert run_monthly_topic_phase_task.cache_key_fn is None
+def test_topic_cache_key_fn_is_enabled_on_task():
+    """The topic Prefect task must use the stage-specific topic cache key."""
+    assert run_monthly_topic_phase_task.cache_key_fn is topic_cache_key_fn

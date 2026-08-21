@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from copy import deepcopy
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Mapping
@@ -10,7 +11,8 @@ BENCHMARK_SCHEMA_VERSION = 1
 DATASET_SCHEMA_VERSION = 1
 REQUEST_SCHEMA_VERSION = 1
 RESULT_SCHEMA_VERSION = 1
-OUTPUT_SCHEMA_VERSION = 1
+OUTPUT_SCHEMA_VERSION = 2
+THEME_PROMPT_CONTRACT_VERSION = "v3"
 CACHE_SCHEMA_VERSION = 1
 REVIEW_SCHEMA_VERSION = 1
 MANIFEST_SCHEMA_VERSION = 1
@@ -32,12 +34,13 @@ THEME_OUTPUT_JSON_SCHEMA = {
                 "type": "object",
                 "properties": {
                     "name": {"type": "string"},
-                    "keywords": {
+                    "keyword_indices": {
                         "type": "array",
-                        "items": {"type": "string"},
+                        "items": {"type": "integer", "minimum": 0},
+                        "minItems": 1,
                     },
                 },
-                "required": ["name", "keywords"],
+                "required": ["name", "keyword_indices"],
             },
         }
     },
@@ -47,6 +50,81 @@ THEME_OUTPUT_JSON_SCHEMA = {
 
 class ThemeBenchmarkError(ValueError):
     """Raised when a benchmark artifact or command is invalid."""
+
+
+def build_theme_output_json_schema(keyword_count: int) -> dict[str, Any]:
+    """Return a request-local V2 schema bounded to the ordered keyword payload.
+
+    The canonical schema remains immutable because theme requests run concurrently.
+    Each provider call receives an independent copy whose valid evidence references
+    are restricted to the exact zero-based range ``0..keyword_count - 1``.
+    """
+    if keyword_count < 1:
+        raise ThemeBenchmarkError(
+            "Theme output schema requires at least one input keyword."
+        )
+    schema = deepcopy(THEME_OUTPUT_JSON_SCHEMA)
+    schema["properties"]["themes"]["items"]["properties"]["keyword_indices"][
+        "items"
+    ]["maximum"] = keyword_count - 1
+    return schema
+
+
+def normalize_indexed_theme_payload(
+    parsed: Mapping[str, Any],
+    keywords: list[str],
+    *,
+    provider_name: str = "Theme provider",
+) -> list[dict[str, Any]]:
+    """Validate V2 provider output and reconstruct exact source keyword evidence.
+
+    The provider is allowed to select only zero-based positions from the ordered
+    request. Supporting keyword strings are reconstructed locally so a model
+    cannot introduce, rewrite, or sanitize the underlying LDA evidence.
+    """
+    raw_themes = parsed.get("themes")
+    if not isinstance(raw_themes, list):
+        raise ThemeBenchmarkError(
+            f"{provider_name} schema_invalid: 'themes' must be a JSON array."
+        )
+
+    normalized: list[dict[str, Any]] = []
+    for raw_theme in raw_themes:
+        if not isinstance(raw_theme, Mapping):
+            raise ThemeBenchmarkError(
+                f"{provider_name} schema_invalid: every theme must be a JSON object."
+            )
+        name = str(raw_theme.get("name", "")).strip()
+        indices = raw_theme.get("keyword_indices")
+        if not name or not isinstance(indices, list) or not indices:
+            raise ThemeBenchmarkError(
+                f"{provider_name} schema_invalid: every theme requires a non-empty "
+                "name and non-empty keyword_indices array."
+            )
+
+        selected: list[str] = []
+        seen_indices: set[int] = set()
+        for index in indices:
+            # bool is a subclass of int, but is not a valid analytical index.
+            if type(index) is not int:
+                raise ThemeBenchmarkError(
+                    f"{provider_name} schema_invalid: keyword indices must be integers."
+                )
+            if index < 0 or index >= len(keywords):
+                raise ThemeBenchmarkError(
+                    f"{provider_name} schema_invalid: keyword index {index} "
+                    "is out of range."
+                )
+            if index in seen_indices:
+                continue
+            seen_indices.add(index)
+            selected.append(keywords[index])
+
+        normalized.append({"name": name, "keywords": selected})
+
+    if not normalized:
+        raise ThemeBenchmarkError(f"{provider_name} returned no valid themes.")
+    return normalized
 
 
 @dataclass(frozen=True)
@@ -59,6 +137,7 @@ class ThemeBenchmarkRequest:
     user_prompt: str
     prompt_hash: str
     input_hash: str
+    prompt_contract_version: str = "v1"
     schema_version: int = REQUEST_SCHEMA_VERSION
     output_schema_version: int = OUTPUT_SCHEMA_VERSION
 

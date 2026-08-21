@@ -83,25 +83,31 @@ Prefect-orchestrated executions persist one immutable, self-contained bundle at:
 
 The bundle contains a versioned lifecycle manifest, secret-free resolved
 configuration, portable dataset identity metadata, intermediate stage handoffs,
-published analytical data, and report artifacts. Domain pipelines continue to
-write the frozen thesis CSV layout inside the run directory; the artifact layer
-publishes additive canonical copies for future API, dashboard, report, and
-notebook consumers.
+published analytical data, and report artifacts. Domain pipelines write generated analytical and intermediate tables as Parquet
+inside the run directory; the artifact layer publishes additive canonical copies
+for future API, dashboard, report, notebook, and object-storage consumers. Raw
+`data/raw/**` relationship exports remain CSV at the ingestion boundary.
 
 Consumers must discover files through `manifest.json` and validate relative
 path containment, checksum, byte size, row count, media type, schema version,
-and known CSV columns before reading. The artifact layer does not calculate
+and known tabular schemas before reading. The artifact layer does not calculate
 metrics or rerun analysis.
 
 ## Graph Store Boundary
 
 Database-specific code is isolated behind `GraphRepository` in
-`src/graph_store/base.py`.  Memgraph support lives in
-`src/graph_store/memgraph_repository.py` and must preserve both import
+`src/graph_store/base.py`. Runtime connection settings come from the
+`GRAPH_DB_*` environment contract; analytical YAML must not contain a `database:`
+connection section. `src/graph_store/factory.py` resolves the configured backend
+and fails explicitly for engines without an implementation. Memgraph Community
+Edition is the current default implementation in
+`src/graph_store/memgraph_repository.py`; the thesis-era Neo4j backend remains
+historical/migration context and can be reintroduced later through another
+repository implementation. The Memgraph repository must preserve both import
 paths:
 
 - raw legacy graph CSVs with `source,target,relation`;
-- derived monthly user-user interaction CSVs with IF/WIF metrics.
+- derived monthly user-user interaction Parquet artifacts with IF/WIF metrics.
 
 Analysis modules should consume dataframes or repository outputs rather than
 calling Memgraph or Neo4j clients directly.
@@ -136,7 +142,7 @@ Input:
 
 Output:
 
-- Derived monthly user-user interaction CSVs with `source`, `target`,
+- Derived monthly user-user interaction Parquet artifacts with `source`, `target`,
   `total_post`, `shared_post`, and `weighted_post`.
 
 Current implementation:
@@ -153,7 +159,10 @@ python -m src.cli ingest-interactions --config configs/twitter_reply_march_2017.
 
 Input:
 
-- Exported relationship CSV.
+- Exported relationship CSV. For Telegram forwarded-message analysis, the shared
+  network boundary accepts either the legacy `source,target,relation` export or an
+  already-normalized `from_id,forwarder_id` dataframe and reuses the ingestion
+  normalizer before IF/WIF computation.
 
 Output categories:
 
@@ -181,13 +190,13 @@ python -m src.cli run-social-network --config configs/twitter_reply_march_2017.y
 
 Input:
 
-- Monthly `LDA/matched/<content_type>/<month>_<year>.csv` files.
+- Monthly `LDA/matched/<content_type>/<month>_<year>.parquet` files.
 
 Output categories:
 
 - `LDA/matched_theme`
 - canonical general-theme cluster summaries/evidence (additive production artifacts)
-- `LDA/community_transition/community_transition.csv`
+- `LDA/community_transition/community_transition.parquet`
 - `LDA/community_transition/community_transition.png`
 - `LDA/community_transition/community_transition.html`
 - persisted Community Evolution path-step and member-mobility artifacts

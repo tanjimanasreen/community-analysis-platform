@@ -1,5 +1,8 @@
-Based on the list of the keywords given below, provide only the exact theme and the corresponding keywords in a coherent short sentence.
-You MUST return a JSON object containing a single key 'themes', which is a list of objects. Each object must have a 'name' string field and a 'keywords' array of strings.
-There could be one theme or multiple themes for each set of keywords.
+Based on the supplied ordered LDA keywords, identify one or more coherent themes represented by the evidence.
 
-Here is the list of keywords: {{ keywords }}
+For each theme, return a concise, faithful, and descriptive theme name together with the explicit zero-based keyword IDs supporting that theme. Use only the bracketed IDs shown beside the supplied keywords; do not infer, renumber, or convert them to one-based positions.
+
+Return only the requested structured JSON. Do not reproduce the supplied keyword strings in the response.
+
+Here are the ordered keywords with their canonical zero-based IDs:
+{{ keywords }}

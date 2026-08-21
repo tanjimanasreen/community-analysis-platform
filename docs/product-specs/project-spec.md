@@ -39,7 +39,7 @@ The system must support:
 
 - Configurable graph export from Neo4j-compatible data.
 - Local graph database migration path using Memgraph.
-- CSV-based compatibility with the current `source`, `target`, `relation` export format.
+- CSV-based raw-input compatibility with the current `source`, `target`, `relation` export format.
 - Telegram relationship patterns:
   - `CREATED`
   - `SENT_TO`
@@ -90,7 +90,7 @@ The system should be:
 - Configurable without editing source code.
 - Safe with credentials and API keys.
 - Testable with small fixtures.
-- Backward-compatible with existing CSV exports.
+- Backward-compatible with existing raw relationship CSV exports; generated tabular artifacts are Parquet.
 - Able to run offline for all non-GPT stages.
 
 ## Out Of Scope For First Production Version

@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.providers.base import BaseLLMProvider, build_theme_request
+from src.providers.base import BaseLLMProvider, ProviderSafetyError, build_theme_request
 from src.providers.openai import (
     OpenAIProvider,
     _decode_json_object,
@@ -110,13 +110,12 @@ def test_extracts_output_text_shortcut():
 
 
 def test_decodes_fenced_and_prefixed_json_objects():
-    fenced = (
-        '```json\n{"themes": [{"name": "Travel", ' '"keywords": ["travel ban"]}]}\n```'
-    )
+    fenced = '```json\n{"themes": [{"name": "Travel", ' '"keyword_indices": [0]}]}\n```'
     assert _decode_json_object(fenced)["themes"][0]["name"] == "Travel"
 
     prefixed = (
-        'Here is the result: {"themes": [{"name": "Policy", ' '"keywords": []}]} done'
+        'Here is the result: {"themes": [{"name": "Policy", '
+        '"keyword_indices": []}]} done'
     )
     assert _decode_json_object(prefixed)["themes"][0]["name"] == "Policy"
 
@@ -146,7 +145,7 @@ def test_empty_response_is_retried_and_success_is_returned():
         [
             _response(""),
             _response(
-                '{"themes": [{"name": "Travel Policy", "keywords": ["travel ban"]}]}'
+                '{"themes": [{"name": "Travel Policy", "keyword_indices": [0]}]}'
             ),
         ]
     )
@@ -173,7 +172,7 @@ def test_generate_theme_counts_provider_level_retries_and_usage():
         [
             _response(""),
             _response(
-                '{"themes": [{"name": "Travel Policy", "keywords": ["travel ban"]}]}',
+                '{"themes": [{"name": "Travel Policy", "keyword_indices": [0]}]}',
                 input_tokens=11,
                 output_tokens=7,
                 reasoning_tokens=4,
@@ -193,7 +192,7 @@ def test_generate_theme_counts_provider_level_retries_and_usage():
 
 def test_requests_strict_structured_output_with_reasoning_and_safe_budget():
     provider = _provider(
-        [_response('{"themes": [{"name": "Policy", "keywords": ["policy"]}]}')]
+        [_response('{"themes": [{"name": "Policy", "keyword_indices": [0]}]}')]
     )
 
     provider.generate(build_theme_request(["policy"]))
@@ -209,6 +208,28 @@ def test_requests_strict_structured_output_with_reasoning_and_safe_budget():
         output_format["schema"]["properties"]["themes"]["items"]["additionalProperties"]
         is False
     )
+    item_properties = output_format["schema"]["properties"]["themes"]["items"][
+        "properties"
+    ]
+    assert "keyword_indices" in item_properties
+    assert "keywords" not in item_properties
+    assert item_properties["keyword_indices"]["items"]["maximum"] == 0
+
+
+def test_requests_schema_maximum_tracks_request_keyword_count():
+    provider = _provider(
+        [_response('{"themes": [{"name": "Policy", "keyword_indices": [11]}]}')]
+    )
+    keywords = [f"keyword-{index}" for index in range(12)]
+
+    provider.generate(build_theme_request(keywords))
+
+    request = provider._client.responses.kwargs[0]
+    index_items = request["text"]["format"]["schema"]["properties"]["themes"][
+        "items"
+    ]["properties"]["keyword_indices"]["items"]
+    assert index_items["minimum"] == 0
+    assert index_items["maximum"] == 11
 
 
 def test_max_output_token_incomplete_response_retries_once_at_bounded_cap():
@@ -222,7 +243,7 @@ def test_max_output_token_incomplete_response_retries_once_at_bounded_cap():
                 reasoning_tokens=32760,
             ),
             _response(
-                '{"themes": [{"name": "Policy", "keywords": ["policy"]}]}',
+                '{"themes": [{"name": "Policy", "keyword_indices": [0]}]}',
                 output_tokens=60,
                 reasoning_tokens=30,
             ),
@@ -271,7 +292,7 @@ def test_content_filter_incomplete_response_retries_once_and_recovers():
                 model_extra=_azure_filter_annotations(blocked=True),
             ),
             _response(
-                '{"themes": [{"name": "Policy", "keywords": ["policy"]}]}',
+                '{"themes": [{"name": "Policy", "keyword_indices": [0]}]}',
                 model_extra=_azure_filter_annotations(severity="medium"),
             ),
         ]
@@ -304,9 +325,11 @@ def test_persistent_content_filter_fails_after_one_dedicated_retry():
         ]
     )
 
-    with pytest.raises(ThemeBenchmarkError, match="content_filter"):
+    with pytest.raises(ProviderSafetyError) as exc_info:
         provider.generate(build_theme_request(["policy"]))
 
+    assert exc_info.value.category == "content_filter"
+    assert exc_info.value.stage == "completion"
     assert provider._client.responses.calls == 2
 
 
@@ -314,7 +337,7 @@ def test_http_400_prompt_filter_retries_once_and_recovers():
     provider = _provider(
         [
             _ContentFilterError("blocked"),
-            _response('{"themes": [{"name": "Policy", "keywords": ["policy"]}]}'),
+            _response('{"themes": [{"name": "Policy", "keyword_indices": [0]}]}'),
         ]
     )
 
@@ -322,6 +345,19 @@ def test_http_400_prompt_filter_retries_once_and_recovers():
 
     assert provider._client.responses.calls == 2
     assert result["themes"][0]["name"] == "Policy"
+
+
+def test_persistent_http_prompt_filter_is_typed_after_one_retry():
+    provider = _provider(
+        [_ContentFilterError("blocked"), _ContentFilterError("blocked")]
+    )
+
+    with pytest.raises(ProviderSafetyError) as exc_info:
+        provider.generate(build_theme_request(["policy"]))
+
+    assert exc_info.value.category == "content_filter"
+    assert exc_info.value.stage == "prompt"
+    assert provider._client.responses.calls == 2
 
 
 def test_failure_log_contains_safe_provider_diagnostics(caplog):
@@ -368,7 +404,7 @@ def test_allowed_medium_hate_annotation_is_logged_without_raw_payload(caplog):
     provider = _provider(
         [
             _response(
-                '{"themes": [{"name": "Hate crime analysis", "keywords": ["policy"]}]}',
+                '{"themes": [{"name": "Hate crime analysis", "keyword_indices": [0]}]}',
                 model_extra=_azure_filter_annotations(severity="medium"),
             )
         ]
@@ -380,3 +416,20 @@ def test_allowed_medium_hate_annotation_is_logged_without_raw_payload(caplog):
     assert "openai_theme_content_filter_annotations" in caplog.text
     assert "content_filter_summary=prompt:hate:medium:allowed" in caplog.text
     assert "Hate crime analysis" not in caplog.text
+
+
+def test_explicit_refusal_is_typed_policy_safety_outcome():
+    refusal_output = [
+        SimpleNamespace(
+            type="message",
+            content=[SimpleNamespace(type="refusal", refusal="cannot comply")],
+        )
+    ]
+    provider = _provider([_response("", output=refusal_output)])
+
+    with pytest.raises(ProviderSafetyError) as exc_info:
+        provider.generate(build_theme_request(["policy"]))
+
+    assert exc_info.value.category == "policy_refusal"
+    assert exc_info.value.stage == "completion"
+    assert provider._client.responses.calls == 1

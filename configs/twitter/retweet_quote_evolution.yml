@@ -27,9 +27,6 @@ theme_provider:
   cache_path: .cache/theme_cache.sqlite3
   cache_failure_policy: bypass
 
-#theme:
-#  fallback: false
-#  fallback_chain: []
 
 longitudinal_datasets:
   - month: "01"

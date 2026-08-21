@@ -7,10 +7,15 @@ from typing import Iterable, Mapping
 
 import pandas as pd
 
+from src.ingestion.schema import (
+    canonical_raw_to_derived_mapping,
+    validate_canonical_raw_mapping,
+)
 from src.themes.theme_inputs import ThemeInputError, load_theme_inputs
 from src.topics.topic_inputs import TopicInputError, load_topic_inputs
 
-NETWORK_DATA_COLUMNS = ["unique_id", "from_id", "forwarder_id", "text", "created_at"]
+NETWORK_DATA_BASE_COLUMNS = ["unique_id", "from_id", "forwarder_id", "text"]
+NETWORK_DATA_COLUMNS = [*NETWORK_DATA_BASE_COLUMNS, "created_at"]
 COMMUNITY_GRAPH_COLUMNS = [
     "source",
     "target",
@@ -120,6 +125,26 @@ COMMUNITY_PATH_MEMBERSHIP_COLUMNS = [
     "new_members",
     "lost_members",
     "reappearing_members",
+]
+THEME_GENERATION_PROVENANCE_COLUMNS = [
+    "year",
+    "month",
+    "source_row_index",
+    "keyword_kind",
+    "absolute_community",
+    "weighted_community",
+    "provider_keywords",
+    "keyword_count",
+    "input_hash",
+    "prompt_hash",
+    "prompt_contract_version",
+    "output_schema_version",
+    "status",
+    "failure_category",
+    "failure_stage",
+    "configured_provider",
+    "configured_model",
+    "content_filter_summary",
 ]
 COMMUNITY_PATH_THEME_SIMILARITY_COLUMNS = [
     "path_id",
@@ -265,7 +290,7 @@ COMMUNITY_TRANSITION_COLUMNS = [
 
 
 class OutputContractError(ValueError):
-    """Raised when generated artifacts do not match the frozen contract."""
+    """Raised when generated artifacts do not match the Parquet output contract."""
 
 
 @dataclass(frozen=True)
@@ -298,14 +323,7 @@ def verify_output_contract(
     skipped_optional: list[Path] = []
 
     for check in checks:
-        path_to_check = check.path
-        if not path_to_check.exists():
-            alt = path_to_check.with_suffix(
-                ".parquet" if path_to_check.suffix == ".csv" else ".csv"
-            )
-            if alt.exists():
-                path_to_check = alt
-        if not path_to_check.exists() and not check.required:
+        if not check.path.exists() and not check.required:
             skipped_optional.append(check.path)
             continue
         _validate_artifact(check)
@@ -344,7 +362,7 @@ def verify_output_contract(
             / "LDA"
             / "matched"
             / params["content_type"]
-            / f"{month}_{params['year']}.csv"
+            / f"{month}_{params['year']}.parquet"
         )
         internal_lda = (
             _base(params)
@@ -352,7 +370,7 @@ def verify_output_contract(
             / "theme_inputs"
             / params["content_type"]
             / params["year"]
-            / f"{month}_{params['year']}.csv"
+            / f"{month}_{params['year']}.parquet"
         )
         _assert_same_columns(public_lda, internal_lda)
         checked.append(internal_lda)
@@ -406,14 +424,37 @@ def get_public_artifact_checks(
         theme.get("evolution_similarity_enabled", theme.get("render_visuals", False))
     )
     return _public_artifact_checks(
-        params, months, evolution_similarity_enabled=evolution_similarity_enabled
+        params,
+        months,
+        network_data_columns=get_network_data_required_columns(config),
+        evolution_similarity_enabled=evolution_similarity_enabled,
     )
 
 
-def get_required_columns_by_artifact() -> dict[str, list[str]]:
-    """Expose frozen public CSV schemas for readers and API metadata."""
+def get_network_data_required_columns(
+    config: Mapping | None = None,
+) -> list[str]:
+    """Return the normalized network schema for the configured dataset mapping."""
+    if config is None:
+        return list(NETWORK_DATA_COLUMNS)
+
+    validate_canonical_raw_mapping(config)
+    mapping = canonical_raw_to_derived_mapping(config)
+    if mapping is not None:
+        date_column = mapping.date_field
+    else:
+        date_column = (
+            str(config.get("date_column", "created_at")).strip() or "created_at"
+        )
+    return [*NETWORK_DATA_BASE_COLUMNS, date_column]
+
+
+def get_required_columns_by_artifact(
+    config: Mapping | None = None,
+) -> dict[str, list[str]]:
+    """Expose generated Parquet schemas for readers and API metadata."""
     return {
-        "network_data": NETWORK_DATA_COLUMNS,
+        "network_data": get_network_data_required_columns(config),
         "absolute_community_graph": COMMUNITY_GRAPH_COLUMNS,
         "weighted_community_graph": COMMUNITY_GRAPH_COLUMNS,
         "community_summary": COMMUNITY_SUMMARY_COLUMNS,
@@ -428,6 +469,7 @@ def get_required_columns_by_artifact() -> dict[str, list[str]]:
         "matched_lda": MATCHED_LDA_COLUMNS,
         "partial_matched_lda": PARTIAL_MATCHED_LDA_COLUMNS,
         "themed_output": THEMED_OUTPUT_COLUMNS,
+        "theme_generation_provenance": THEME_GENERATION_PROVENANCE_COLUMNS,
         "theme_cluster_summary": THEME_CLUSTER_SUMMARY_COLUMNS,
         "theme_cluster_observation": THEME_CLUSTER_OBSERVATION_COLUMNS,
         "theme_canonical_family": THEME_CANONICAL_FAMILY_COLUMNS,
@@ -493,10 +535,12 @@ def _public_artifact_checks(
     params: Mapping[str, str],
     months: Iterable[str],
     *,
+    network_data_columns: list[str] | None = None,
     evolution_similarity_enabled: bool = False,
 ) -> list[ArtifactCheck]:
     base = _base(params)
     theme_output = Path(params["theme_output_dir"])
+    resolved_network_columns = network_data_columns or NETWORK_DATA_COLUMNS
     checks: list[ArtifactCheck] = []
 
     for month in months:
@@ -507,8 +551,8 @@ def _public_artifact_checks(
                     base
                     / "network_data"
                     / params["content_type"]
-                    / f"{month}{params['year']}.csv",
-                    NETWORK_DATA_COLUMNS,
+                    / f"{month}{params['year']}.parquet",
+                    resolved_network_columns,
                 ),
                 ArtifactCheck(
                     "absolute_community_graph",
@@ -517,7 +561,7 @@ def _public_artifact_checks(
                     / "graphs"
                     / "absolute"
                     / params["content_type"]
-                    / f"{month}.csv",
+                    / f"{month}.parquet",
                     COMMUNITY_GRAPH_COLUMNS,
                 ),
                 ArtifactCheck(
@@ -527,7 +571,7 @@ def _public_artifact_checks(
                     / "graphs"
                     / "weighted"
                     / params["content_type"]
-                    / f"{month}.csv",
+                    / f"{month}.parquet",
                     COMMUNITY_GRAPH_COLUMNS,
                 ),
                 ArtifactCheck(
@@ -537,7 +581,7 @@ def _public_artifact_checks(
                     / "interactions"
                     / "absolute"
                     / params["content_type"]
-                    / f"{month}.csv",
+                    / f"{month}.parquet",
                     COMMUNITY_INTERACTION_COLUMNS,
                     required=False,
                 ),
@@ -548,7 +592,7 @@ def _public_artifact_checks(
                     / "interactions"
                     / "weighted"
                     / params["content_type"]
-                    / f"{month}.csv",
+                    / f"{month}.parquet",
                     COMMUNITY_INTERACTION_COLUMNS,
                     required=False,
                 ),
@@ -558,7 +602,7 @@ def _public_artifact_checks(
                     / "communities"
                     / "matched"
                     / params["content_type"]
-                    / f"{month}.csv",
+                    / f"{month}.parquet",
                     MATCHED_COMMUNITY_SUMMARY_COLUMNS,
                 ),
                 ArtifactCheck(
@@ -567,13 +611,16 @@ def _public_artifact_checks(
                     / "communities"
                     / "partially_matched"
                     / params["content_type"]
-                    / f"{month}.csv",
+                    / f"{month}.parquet",
                     PARTIAL_MATCHED_COMMUNITY_COLUMNS,
                     required=False,
                 ),
                 ArtifactCheck(
                     "user_centrality",
-                    base / "user_centrality" / params["content_type"] / f"{month}.csv",
+                    base
+                    / "user_centrality"
+                    / params["content_type"]
+                    / f"{month}.parquet",
                     USER_CENTRALITY_COLUMNS,
                 ),
                 ArtifactCheck(
@@ -581,7 +628,7 @@ def _public_artifact_checks(
                     base
                     / "count_user_messages"
                     / params["content_type"]
-                    / f"{month}.csv",
+                    / f"{month}.parquet",
                     COUNT_USER_MESSAGES_COLUMNS,
                 ),
                 ArtifactCheck(
@@ -589,12 +636,16 @@ def _public_artifact_checks(
                     base
                     / "daily_messages_stat"
                     / params["content_type"]
-                    / f"{month}.csv",
+                    / f"{month}.parquet",
                     DAILY_MESSAGES_STAT_COLUMNS,
                 ),
                 ArtifactCheck(
                     "lda_scores",
-                    base / "LDA" / "scores" / params["content_type"] / f"{month}.csv",
+                    base
+                    / "LDA"
+                    / "scores"
+                    / params["content_type"]
+                    / f"{month}.parquet",
                     LDA_SCORES_COLUMNS,
                 ),
                 ArtifactCheck(
@@ -603,7 +654,7 @@ def _public_artifact_checks(
                     / "LDA"
                     / "matched"
                     / params["content_type"]
-                    / f"{month}_{params['year']}.csv",
+                    / f"{month}_{params['year']}.parquet",
                     MATCHED_LDA_COLUMNS,
                 ),
                 ArtifactCheck(
@@ -612,13 +663,13 @@ def _public_artifact_checks(
                     / "LDA"
                     / "partial_matched"
                     / params["content_type"]
-                    / f"{month}_{params['year']}.csv",
+                    / f"{month}_{params['year']}.parquet",
                     PARTIAL_MATCHED_LDA_COLUMNS,
                     required=False,
                 ),
                 ArtifactCheck(
                     "themed_output",
-                    theme_output / f"{month}_{params['year']}_with_themes.csv",
+                    theme_output / f"{month}_{params['year']}_with_themes.parquet",
                     THEMED_OUTPUT_COLUMNS,
                 ),
             ]
@@ -627,8 +678,14 @@ def _public_artifact_checks(
     checks.extend(
         [
             ArtifactCheck(
+                "theme_generation_provenance",
+                theme_output / "theme_generation_provenance.parquet",
+                THEME_GENERATION_PROVENANCE_COLUMNS,
+                required=False,
+            ),
+            ArtifactCheck(
                 "community_transition",
-                theme_output / "community_transition.csv",
+                theme_output / "community_transition.parquet",
                 COMMUNITY_TRANSITION_COLUMNS,
                 non_empty=len(list(months)) > 1,
             ),
@@ -656,21 +713,15 @@ def _public_artifact_checks(
 def _validate_artifact(check: ArtifactCheck) -> None:
     path_to_read = check.path
     if not path_to_read.exists():
-        # Fallback to .parquet if .csv was requested and missing, or vice versa
-        alt_path = path_to_read.with_suffix(
-            ".parquet" if path_to_read.suffix == ".csv" else ".csv"
+        raise OutputContractError(
+            f"Missing required artifact {check.name}: {check.path}"
         )
-        if alt_path.exists():
-            path_to_read = alt_path
-        else:
-            raise OutputContractError(
-                f"Missing required artifact {check.name}: {check.path}"
-            )
 
-    if path_to_read.suffix == ".parquet":
-        frame = pd.read_parquet(path_to_read)
-    else:
-        frame = pd.read_csv(path_to_read, low_memory=False)
+    if path_to_read.suffix != ".parquet":
+        raise OutputContractError(
+            f"Generated artifact {check.name} must be Parquet: {check.path}"
+        )
+    frame = pd.read_parquet(path_to_read)
 
     missing = [
         column for column in check.required_columns or [] if column not in frame.columns
@@ -686,36 +737,21 @@ def _validate_artifact(check: ArtifactCheck) -> None:
 
 
 def _assert_same_columns(left: Path, right: Path) -> None:
-    left_path = left
-    if not left_path.exists():
-        alt_left = left_path.with_suffix(
-            ".parquet" if left_path.suffix == ".csv" else ".csv"
-        )
-        if alt_left.exists():
-            left_path = alt_left
-
-    right_path = right
-    if not right_path.exists():
-        alt_right = right_path.with_suffix(
-            ".parquet" if right_path.suffix == ".csv" else ".csv"
-        )
-        if alt_right.exists():
-            right_path = alt_right
-
-    if not right_path.exists():
+    if not left.exists():
+        raise OutputContractError(f"Missing generated matched LDA artifact: {left}")
+    if not right.exists():
         raise OutputContractError(f"Missing copied theme input artifact: {right}")
+    if left.suffix != ".parquet" or right.suffix != ".parquet":
+        raise OutputContractError(
+            "Generated matched LDA and copied theme inputs must both be Parquet: "
+            f"{left} vs {right}"
+        )
 
-    if left_path.suffix == ".parquet":
-        left_columns = list(pd.read_parquet(left_path).columns)
-    else:
-        left_columns = list(pd.read_csv(left_path, nrows=0).columns)
-
-    if right_path.suffix == ".parquet":
-        right_columns = list(pd.read_parquet(right_path).columns)
-    else:
-        right_columns = list(pd.read_csv(right_path, nrows=0).columns)
+    left_columns = list(pd.read_parquet(left).columns)
+    right_columns = list(pd.read_parquet(right).columns)
 
     if left_columns != right_columns:
         raise OutputContractError(
-            f"Copied theme input schema differs from public LDA output: {left_path} vs {right_path}"
+            "Copied theme input schema differs from generated LDA output: "
+            f"{left} vs {right}"
         )

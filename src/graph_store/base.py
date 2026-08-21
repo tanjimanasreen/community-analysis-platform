@@ -11,6 +11,9 @@ PathLike = Union[str, Path]
 class GraphRepository(Protocol):
     """Database boundary for raw graph data and derived interaction edges."""
 
+    def check_connectivity(self) -> None:
+        """Raise if the configured backend cannot be reached."""
+
     def clear(self) -> None:
         """Remove graph data for an isolated local or test run."""
 
@@ -20,15 +23,13 @@ class GraphRepository(Protocol):
     def import_raw_data(self, data_path: PathLike, platform: str) -> None:
         """Import legacy `source,target,relation` raw graph CSV rows."""
 
-    def import_interactions(
-        self, csv_path: PathLike, snapshot_meta: SnapshotMeta
-    ) -> None:
+    def import_interactions(self, path: PathLike, snapshot_meta: SnapshotMeta) -> None:
         """Import monthly user-user interaction edges with IF/WIF metrics."""
 
     def export_interactions(
         self, snapshot_meta: SnapshotMeta, out_path: PathLike
     ) -> None:
-        """Export interaction rows for a snapshot to CSV."""
+        """Export generated interaction rows for a snapshot as Parquet."""
 
     def get_user_interactions(
         self, snapshot_meta: SnapshotMeta

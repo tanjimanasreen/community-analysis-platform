@@ -30,7 +30,7 @@ MONTH_ORDER = {
 
 
 def load_prepare_data(input_dir: str, year: str) -> dict[str, pd.DataFrame]:
-    """Load monthly matched LDA CSVs and parse keyword list columns."""
+    """Load monthly matched LDA Parquet files and parse keyword list columns."""
     base = Path(input_dir)
     if not base.exists():
         return {}

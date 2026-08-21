@@ -130,8 +130,11 @@ Current exact/partial comparison between absolute and weighted communities:
 
 Current transition comparison across months in `theme-analysis.py`:
 
-- For `reply`: threshold is `0.0`.
-- For other content types: threshold is `0.5`.
+- Every accepted transition requires positive member overlap (`Jaccard > 0`).
+- For `reply`: threshold is `0.0`, meaning every positive Jaccard score qualifies.
+- For other content types: threshold is `0.5`, inclusive (`Jaccard >= 0.5`).
+- Explicit threshold overrides remain an additional lower bound; zero-overlap
+  community pairs are never transitions.
 
 ## LDA Parameters
 
@@ -170,21 +173,13 @@ Current matched-topic keyword extraction uses KneeLocator:
 
 Preserve this behavior in the production rebuild.
 
-## GPT Theme Parameters
+## Generated Theme Provider Contract
 
-Current implementation:
+The productionized provider layer is allowed to evolve independently of the thesis-era
+OpenAI model name as long as generated themes remain downstream of LDA keyword evidence.
+The current production primary is configured in `configs/providers.yml` as
+`openai:gpt-5-nano`; the OpenAI adapter uses strict JSON Schema structured output.
+Offline tests use deterministic injected/mock providers and must not call OpenAI.
 
-```text
-theme-analysis.py
-```
-
-Required defaults:
-
-| Parameter | Value |
-|---|---|
-| model | `gpt-4o` |
-| seed | `42` |
-| temperature | `0` |
-| response format | JSON object |
-
-OpenAI calls must be optional in tests and local offline runs.
+Provider/model changes are configuration/runtime upgrades, not changes to the protected
+IF/WIF, Louvain, LDA, or community-evolution analytical contracts.

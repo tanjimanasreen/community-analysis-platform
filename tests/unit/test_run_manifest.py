@@ -59,8 +59,26 @@ def _config(tmp_path: Path) -> ValidatedRunConfiguration:
     )
 
 
-def _reference(path: Path, key: str, media_type: str = "text/csv") -> ArtifactReference:
-    rows = len(pd.read_csv(path)) if path.suffix == ".csv" else None
+def _telegram_config(tmp_path: Path) -> ValidatedRunConfiguration:
+    return ValidatedRunConfiguration(
+        config_digest="digest-1",
+        output_root=str(tmp_path / "artifacts"),
+        raw_config={
+            "output_base_path": str(tmp_path / "artifacts"),
+            "input_path": str(tmp_path / "input.csv"),
+            "data_type": "telegram",
+            "content_type": "forward",
+            "date_column": "forwarded_date",
+            "month": "01",
+            "year": "2019",
+        },
+    )
+
+
+def _reference(
+    path: Path, key: str, media_type: str = "application/octet-stream"
+) -> ArtifactReference:
+    rows = len(pd.read_parquet(path)) if path.suffix == ".parquet" else None
     return ArtifactReference(
         path=str(path),
         sha256=hash_file(str(path)),
@@ -75,19 +93,19 @@ def test_artifact_record_rejects_absolute_and_parent_paths():
     kwargs = {
         "key": "network_data",
         "category": ArtifactCategory.DATA,
-        "media_type": "text/csv",
+        "media_type": "application/octet-stream",
         "schema_version": "1",
         "sha256": "a" * 64,
     }
     with pytest.raises(ValueError, match="relative path"):
-        ArtifactRecord(path="/tmp/output.csv", **kwargs)
+        ArtifactRecord(path="/tmp/output.parquet", **kwargs)
     with pytest.raises(ValueError, match="relative path"):
-        ArtifactRecord(path="../output.csv", **kwargs)
+        ArtifactRecord(path="../output.parquet", **kwargs)
     with pytest.raises(ValueError, match="relative path"):
-        ArtifactRecord(path=r"C:\temp\output.csv", **kwargs)
+        ArtifactRecord(path=r"C:\temp\output.parquet", **kwargs)
 
 
-def test_complete_run_bundle_publishes_classified_artifacts_and_preserves_legacy(
+def test_complete_run_bundle_publishes_parquet_artifacts_and_preserves_source_bytes(
     tmp_path,
 ):
     context = _context(tmp_path)
@@ -103,7 +121,7 @@ def test_complete_run_bundle_publishes_classified_artifacts_and_preserves_legacy
     assert running.status is RunStatus.RUNNING
     assert running.pipeline["completed_at"] is None
 
-    network_path = root / "twitter/network_data/reply/march2017.csv"
+    network_path = root / "twitter/network_data/reply/march2017.parquet"
     network_path.parent.mkdir(parents=True, exist_ok=True)
     pd.DataFrame(
         {
@@ -113,12 +131,12 @@ def test_complete_run_bundle_publishes_classified_artifacts_and_preserves_legacy
             "text": ["hello"],
             "created_at": ["2017-03-01"],
         }
-    ).to_csv(network_path, index=False)
+    ).to_parquet(network_path, index=False)
 
     topic_path = (
         root
         / "twitter/_intermediate/topic_inputs/reply/march_2017"
-        / "absolute_community_messages.csv"
+        / "absolute_community_messages.parquet"
     )
     topic_path.parent.mkdir(parents=True, exist_ok=True)
     pd.DataFrame(
@@ -128,7 +146,7 @@ def test_complete_run_bundle_publishes_classified_artifacts_and_preserves_legacy
             "messages_ids": [["m1"]],
             "total_messages": [1],
         }
-    ).to_csv(topic_path, index=False)
+    ).to_parquet(topic_path, index=False)
 
     original_network = network_path.read_bytes()
     original_topic = topic_path.read_bytes()
@@ -155,10 +173,11 @@ def test_complete_run_bundle_publishes_classified_artifacts_and_preserves_legacy
     network_record = records["network_data"]
     topic_record = records["topic_absolute_messages"]
     assert network_record.category is ArtifactCategory.DATA
-    assert network_record.path == "data/network/march2017.csv"
+    assert network_record.path == "data/network/march2017.parquet"
     assert topic_record.category is ArtifactCategory.INTERMEDIATE
     assert topic_record.path.endswith(
-        "intermediate/topic_inputs/reply/march_2017/absolute_community_messages.csv"
+        "_intermediate/topic_inputs/reply/march_2017/"
+        "absolute_community_messages.parquet"
     )
     assert (root / network_record.path).read_bytes() == original_network
     assert (root / topic_record.path).read_bytes() == original_topic
@@ -175,7 +194,7 @@ def test_validate_run_manifest_detects_artifact_tampering(tmp_path):
     config = _config(tmp_path)
     initialize_run_bundle(context=context, config=config, started_at="start")
     root = run_root_path(context.output_root, context.pipeline_run_id)
-    network_path = root / "twitter/network_data/reply/march2017.csv"
+    network_path = root / "twitter/network_data/reply/march2017.parquet"
     network_path.parent.mkdir(parents=True, exist_ok=True)
     pd.DataFrame(
         {
@@ -185,7 +204,7 @@ def test_validate_run_manifest_detects_artifact_tampering(tmp_path):
             "text": ["hello"],
             "created_at": ["2017-03-01"],
         }
-    ).to_csv(network_path, index=False)
+    ).to_parquet(network_path, index=False)
     manifest = complete_run_bundle(
         context=context,
         config=config,
@@ -198,6 +217,98 @@ def test_validate_run_manifest_detects_artifact_tampering(tmp_path):
 
     with pytest.raises(ValueError, match="byte size mismatch|checksum mismatch"):
         validate_run_manifest(root)
+
+
+def test_complete_run_bundle_accepts_telegram_forwarded_date_network_artifact(
+    tmp_path,
+):
+    context = _context(tmp_path)
+    config = _telegram_config(tmp_path)
+    initialize_run_bundle(context=context, config=config, started_at="start")
+    root = run_root_path(context.output_root, context.pipeline_run_id)
+    network_path = root / "telegram/network_data/forward/012019.parquet"
+    network_path.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(
+        {
+            "unique_id": ["m1"],
+            "from_id": ["u1"],
+            "forwarder_id": ["u2"],
+            "text": ["hello"],
+            "forwarded_date": ["2019-01-01"],
+        }
+    ).to_parquet(network_path, index=False)
+
+    manifest = complete_run_bundle(
+        context=context,
+        config=config,
+        artifacts=[_reference(network_path, "network_data_01")],
+        started_at="start",
+        completed_at="end",
+    )
+
+    records = {record.key: record for record in manifest.artifacts}
+    assert records["network_data_01"].path == "data/network/012019.parquet"
+    assert validate_run_manifest(root) == manifest
+
+
+def test_complete_run_bundle_rejects_telegram_network_artifact_without_forwarded_date(
+    tmp_path,
+):
+    context = _context(tmp_path)
+    config = _telegram_config(tmp_path)
+    initialize_run_bundle(context=context, config=config, started_at="start")
+    root = run_root_path(context.output_root, context.pipeline_run_id)
+    network_path = root / "telegram/network_data/forward/012019.parquet"
+    network_path.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(
+        {
+            "unique_id": ["m1"],
+            "from_id": ["u1"],
+            "forwarder_id": ["u2"],
+            "text": ["hello"],
+            "created_at": ["2019-01-01"],
+        }
+    ).to_parquet(network_path, index=False)
+
+    with pytest.raises(ValueError, match=r"missing columns: \['forwarded_date'\]"):
+        complete_run_bundle(
+            context=context,
+            config=config,
+            artifacts=[_reference(network_path, "network_data_01")],
+            started_at="start",
+            completed_at="end",
+        )
+
+    assert load_run_manifest(root).status is RunStatus.RUNNING
+
+
+def test_complete_run_bundle_still_requires_created_at_for_twitter_network_artifact(
+    tmp_path,
+):
+    context = _context(tmp_path)
+    config = _config(tmp_path)
+    initialize_run_bundle(context=context, config=config, started_at="start")
+    root = run_root_path(context.output_root, context.pipeline_run_id)
+    network_path = root / "twitter/network_data/reply/march2017.parquet"
+    network_path.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(
+        {
+            "unique_id": ["m1"],
+            "from_id": ["u1"],
+            "forwarder_id": ["u2"],
+            "text": ["hello"],
+            "forwarded_date": ["2017-03-01"],
+        }
+    ).to_parquet(network_path, index=False)
+
+    with pytest.raises(ValueError, match=r"missing columns: \['created_at'\]"):
+        complete_run_bundle(
+            context=context,
+            config=config,
+            artifacts=[_reference(network_path, "network_data_march")],
+            started_at="start",
+            completed_at="end",
+        )
 
 
 def test_fail_run_bundle_never_marks_failed_run_completed(tmp_path):
@@ -233,12 +344,12 @@ def test_fail_run_bundle_survives_invalid_partial_artifact(tmp_path):
     config = _config(tmp_path)
     initialize_run_bundle(context=context, config=config, started_at="start")
     root = run_root_path(context.output_root, context.pipeline_run_id)
-    partial = root / "partial.csv"
-    partial.write_text("wrong\nvalue\n", encoding="utf-8")
+    partial = root / "partial.parquet"
+    partial.write_bytes(b"not-a-parquet-file")
     invalid = ArtifactReference(
         path=str(partial),
         sha256="a" * 64,
-        media_type="text/csv",
+        media_type="application/octet-stream",
         asset_key="network_data",
         byte_size=partial.stat().st_size,
         row_count=1,
@@ -296,7 +407,7 @@ def test_complete_run_bundle_rejects_inconsistent_source_metadata(tmp_path):
     config = _config(tmp_path)
     initialize_run_bundle(context=context, config=config, started_at="start")
     root = run_root_path(context.output_root, context.pipeline_run_id)
-    network_path = root / "twitter/network_data/reply/march2017.csv"
+    network_path = root / "twitter/network_data/reply/march2017.parquet"
     network_path.parent.mkdir(parents=True, exist_ok=True)
     pd.DataFrame(
         {
@@ -306,11 +417,11 @@ def test_complete_run_bundle_rejects_inconsistent_source_metadata(tmp_path):
             "text": ["hello"],
             "created_at": ["2017-03-01"],
         }
-    ).to_csv(network_path, index=False)
+    ).to_parquet(network_path, index=False)
     inconsistent = ArtifactReference(
         path=str(network_path),
         sha256=hash_file(str(network_path)),
-        media_type="text/csv",
+        media_type="application/octet-stream",
         asset_key="network_data",
         byte_size=network_path.stat().st_size,
         row_count=2,
@@ -328,14 +439,14 @@ def test_complete_run_bundle_rejects_inconsistent_source_metadata(tmp_path):
     assert load_run_manifest(root).status is RunStatus.RUNNING
 
 
-def test_complete_run_bundle_rejects_known_csv_schema_violation(tmp_path):
+def test_complete_run_bundle_rejects_known_parquet_schema_violation(tmp_path):
     context = _context(tmp_path)
     config = _config(tmp_path)
     initialize_run_bundle(context=context, config=config, started_at="start")
     root = run_root_path(context.output_root, context.pipeline_run_id)
-    invalid = root / "twitter/network_data/reply/march2017.csv"
+    invalid = root / "twitter/network_data/reply/march2017.parquet"
     invalid.parent.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame({"unexpected": [1]}).to_csv(invalid, index=False)
+    pd.DataFrame({"unexpected": [1]}).to_parquet(invalid, index=False)
 
     with pytest.raises(ValueError, match="schema mismatch"):
         complete_run_bundle(
@@ -358,14 +469,14 @@ def test_complete_run_bundle_classifies_theme_data_and_report_figures(tmp_path):
     root = run_root_path(context.output_root, context.pipeline_run_id)
 
     schemas = get_required_columns_by_artifact()
-    themes = root / "theme-output/march_2017_with_themes.csv"
-    transitions = root / "theme-output/community_transition.csv"
+    themes = root / "theme-output/march_2017_with_themes.parquet"
+    transitions = root / "theme-output/community_transition.parquet"
     figure = root / "theme-output/sankey/community_transition.html"
     provider_summary = root / "theme-output/provider_run_summary.json"
     themes.parent.mkdir(parents=True, exist_ok=True)
     figure.parent.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame(columns=schemas["themed_output"]).to_csv(themes, index=False)
-    pd.DataFrame(columns=schemas["community_transition"]).to_csv(
+    pd.DataFrame(columns=schemas["themed_output"]).to_parquet(themes, index=False)
+    pd.DataFrame(columns=schemas["community_transition"]).to_parquet(
         transitions, index=False
     )
     figure.write_text("<html></html>\n", encoding="utf-8")

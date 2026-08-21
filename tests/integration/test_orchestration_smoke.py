@@ -38,7 +38,7 @@ from src.orchestration.tasks import (
 from src.providers.base import BaseLLMProvider
 from src.reporting.output_contract import get_required_columns_by_artifact
 
-COMMUNITY_MESSAGE_CSV = pd.DataFrame(
+COMMUNITY_MESSAGE_FRAME = pd.DataFrame(
     {
         "community_number": [1],
         "messages": [["hello"]],
@@ -46,7 +46,7 @@ COMMUNITY_MESSAGE_CSV = pd.DataFrame(
         "total_messages": [1],
     }
 )
-MATCHED_COMMUNITY_CSV = pd.DataFrame(
+MATCHED_COMMUNITY_FRAME = pd.DataFrame(
     {
         "abs_community": [1],
         "per_community": [2],
@@ -82,7 +82,7 @@ def _schema_frame(schema_name: str) -> pd.DataFrame:
     return pd.DataFrame(values)
 
 
-THEME_INPUT_CSV = _schema_frame("matched_lda")
+THEME_INPUT_FRAME = _schema_frame("matched_lda")
 
 
 @pytest.fixture(autouse=True)
@@ -106,7 +106,9 @@ def _run_with_result_storage(results_root: Path, callable_, *args, **kwargs):
         return callable_(*args, **kwargs)
 
 
-def _ref(path: Path, *, media_type: str = "text/csv") -> ArtifactReference:
+def _ref(
+    path: Path, *, media_type: str = "application/octet-stream"
+) -> ArtifactReference:
     return ArtifactReference(
         path=str(path),
         sha256=_sha256(path),
@@ -153,12 +155,12 @@ def _context(output_root: Path, run_id: str) -> PipelineRunContext:
 
 def _write_topic_inputs(root: Path) -> TopicInputBundle:
     root.mkdir(parents=True, exist_ok=True)
-    absolute = root / "absolute.csv"
-    weighted = root / "weighted.csv"
-    matched = root / "matched.csv"
-    COMMUNITY_MESSAGE_CSV.to_csv(absolute, index=False)
-    COMMUNITY_MESSAGE_CSV.to_csv(weighted, index=False)
-    MATCHED_COMMUNITY_CSV.to_csv(matched, index=False)
+    absolute = root / "absolute.parquet"
+    weighted = root / "weighted.parquet"
+    matched = root / "matched.parquet"
+    COMMUNITY_MESSAGE_FRAME.to_parquet(absolute, index=False)
+    COMMUNITY_MESSAGE_FRAME.to_parquet(weighted, index=False)
+    MATCHED_COMMUNITY_FRAME.to_parquet(matched, index=False)
     return TopicInputBundle(
         absolute_community_messages=_ref(absolute),
         weighted_community_messages=_ref(weighted),
@@ -170,8 +172,8 @@ def _write_topic_inputs(root: Path) -> TopicInputBundle:
 
 def _write_theme_input(root: Path, month: str = "march") -> ThemeInputBundle:
     root.mkdir(parents=True, exist_ok=True)
-    path = root / f"{month}_2017.csv"
-    THEME_INPUT_CSV.to_csv(path, index=False)
+    path = root / f"{month}_2017.parquet"
+    THEME_INPUT_FRAME.to_parquet(path, index=False)
     return ThemeInputBundle(
         monthly_topic_outputs={month: _ref(path)},
         allowed_input_roots=(str(root),),
@@ -185,22 +187,24 @@ def _fake_topic_domain(**kwargs) -> None:
     month = kwargs["month"]
     year = kwargs["year"]
 
-    scores = out / data_type / "LDA" / "scores" / content_type / f"{month}.csv"
-    matched = out / data_type / "LDA" / "matched" / content_type / f"{month}_{year}.csv"
+    scores = out / data_type / "LDA" / "scores" / content_type / f"{month}.parquet"
+    matched = (
+        out / data_type / "LDA" / "matched" / content_type / f"{month}_{year}.parquet"
+    )
     manifest = (
         out
         / data_type
         / "_intermediate"
         / "theme_inputs"
         / content_type
-        / f"{month}_{year}"
+        / str(year)
         / "manifest.json"
     )
     scores.parent.mkdir(parents=True, exist_ok=True)
     matched.parent.mkdir(parents=True, exist_ok=True)
     manifest.parent.mkdir(parents=True, exist_ok=True)
-    _schema_frame("lda_scores").to_csv(scores, index=False)
-    THEME_INPUT_CSV.to_csv(matched, index=False)
+    _schema_frame("lda_scores").to_parquet(scores, index=False)
+    THEME_INPUT_FRAME.to_parquet(matched, index=False)
     manifest.write_text('{"schema_version": 1}\n', encoding="utf-8")
 
 
@@ -209,11 +213,11 @@ def _fake_theme_domain(**kwargs) -> None:
     out.mkdir(parents=True, exist_ok=True)
     year = kwargs["year"]
     for month in kwargs["monthly_data_dict"]:
-        _schema_frame("themed_output").to_csv(
-            out / f"{month}_{year}_with_themes.csv", index=False
+        _schema_frame("themed_output").to_parquet(
+            out / f"{month}_{year}_with_themes.parquet", index=False
         )
-    _schema_frame("community_transition").to_csv(
-        out / "community_transition.csv", index=False
+    _schema_frame("community_transition").to_parquet(
+        out / "community_transition.parquet", index=False
     )
     sankey = out / "sankey"
     sankey.mkdir(exist_ok=True)
@@ -228,26 +232,31 @@ def _fake_network_domain(**kwargs) -> None:
     month = kwargs["month"]
     year = kwargs["year"]
 
-    csv_paths = {
+    parquet_paths = {
         "network_data": (
-            out / data_type / "network_data" / content_type / f"{month}{year}.csv"
+            out / data_type / "network_data" / content_type / f"{month}{year}.parquet"
         ),
         "user_centrality": (
-            out / data_type / "user_centrality" / content_type / f"{month}.csv"
+            out / data_type / "user_centrality" / content_type / f"{month}.parquet"
         ),
         "count_user_messages": (
-            out / data_type / "count_user_messages" / content_type / f"{month}.csv"
+            out / data_type / "count_user_messages" / content_type / f"{month}.parquet"
         ),
         "daily_messages_stat": (
-            out / data_type / "daily_messages_stat" / content_type / f"{month}.csv"
+            out / data_type / "daily_messages_stat" / content_type / f"{month}.parquet"
         ),
         "matched_communities": (
-            out / data_type / "communities" / "matched" / content_type / f"{month}.csv"
+            out
+            / data_type
+            / "communities"
+            / "matched"
+            / content_type
+            / f"{month}.parquet"
         ),
     }
-    for schema_name, path in csv_paths.items():
+    for schema_name, path in parquet_paths.items():
         path.parent.mkdir(parents=True, exist_ok=True)
-        _schema_frame(schema_name).to_csv(path, index=False)
+        _schema_frame(schema_name).to_parquet(path, index=False)
 
     topic_root = (
         out
@@ -258,13 +267,15 @@ def _fake_network_domain(**kwargs) -> None:
         / f"{month}_{year}"
     )
     topic_root.mkdir(parents=True, exist_ok=True)
-    COMMUNITY_MESSAGE_CSV.to_csv(
-        topic_root / "absolute_community_messages.csv", index=False
+    COMMUNITY_MESSAGE_FRAME.to_parquet(
+        topic_root / "absolute_community_messages.parquet", index=False
     )
-    COMMUNITY_MESSAGE_CSV.to_csv(
-        topic_root / "weighted_community_messages.csv", index=False
+    COMMUNITY_MESSAGE_FRAME.to_parquet(
+        topic_root / "weighted_community_messages.parquet", index=False
     )
-    MATCHED_COMMUNITY_CSV.to_csv(topic_root / "matched_communities.csv", index=False)
+    MATCHED_COMMUNITY_FRAME.to_parquet(
+        topic_root / "matched_communities.parquet", index=False
+    )
     (topic_root / "manifest.json").write_text(
         '{"schema_version": 1}\n', encoding="utf-8"
     )
@@ -285,6 +296,7 @@ def _assert_result_boundary(obj, path: str = "root") -> None:
     if type(obj).__name__ in {
         "Dictionary",
         "LdaModel",
+        "LdaMulticore",
         "Client",
         "Session",
         "MlflowClient",

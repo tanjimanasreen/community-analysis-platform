@@ -128,7 +128,7 @@ def test_defaults_are_preserved_for_ingestion_phase():
     assert DEFAULT_CONFIG.theme_provider.fallback is True
     assert DEFAULT_CONFIG.theme_provider.fallback_chain == [
         "llm7:fast",
-        "nvidia:meta/llama3-70b-instruct",
+        "nvidia:meta/llama-3.3-70b-instruct",
     ]
     assert normalize_month("03") == 3
     assert normalize_month("october") == 10

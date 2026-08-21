@@ -34,12 +34,16 @@ class _Reader:
                         "node_count": 50,
                         "edge_count": 1000,
                         "total_weight": 5000.0,
+                        "x": None,
+                        "y": None,
                     },
                     {
                         "community_id": "2",
                         "node_count": 25,
                         "edge_count": 500,
                         "total_weight": 2000.0,
+                        "x": None,
+                        "y": None,
                     },
                 ]
             ),
@@ -158,6 +162,8 @@ def test_longitudinal_global_graph_uses_samples_and_exact_node_indexes():
                         "node_count": 2,
                         "edge_count": 300,
                         "total_weight": 900.0,
+                        "x": None,
+                        "y": None,
                     }
                 ]
             ),

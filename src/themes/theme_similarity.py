@@ -113,6 +113,36 @@ def calculate_sentence_similarity(
     return cosine_similarity(embeddings)
 
 
+def calculate_sentence_similarity_with_missing(
+    sentences: list, model_name="paraphrase-MiniLM-L6-v2", model=None
+):
+    """Return cosine similarity while preserving missing themes as NaN gaps.
+
+    Missing/blank labels are never sent to the embedding model. Available-to-
+    available similarity uses the unchanged sentence-similarity implementation.
+    """
+    if not sentences:
+        return np.empty((0, 0), dtype=float)
+    matrix = np.full((len(sentences), len(sentences)), np.nan, dtype=float)
+    valid_indices = [
+        index
+        for index, sentence in enumerate(sentences)
+        if sentence is not None and str(sentence).strip()
+    ]
+    if not valid_indices:
+        return matrix
+    valid_sentences = [str(sentences[index]) for index in valid_indices]
+    valid_matrix = calculate_sentence_similarity(
+        valid_sentences, model_name=model_name, model=model
+    )
+    for left_position, left_index in enumerate(valid_indices):
+        for right_position, right_index in enumerate(valid_indices):
+            matrix[left_index, right_index] = valid_matrix[
+                left_position, right_position
+            ]
+    return matrix
+
+
 def extract_themes(
     matched_df: pd.DataFrame, paths: list, start_month_theme: str, end_month_theme: str
 ) -> dict:

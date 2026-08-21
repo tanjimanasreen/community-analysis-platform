@@ -133,8 +133,8 @@ def test_longitudinal_topic_inputs_save_load_two_months(tmp_path):
 
 def test_longitudinal_theme_manifest_accumulates_two_months_with_hashes(tmp_path):
     for month in ("03", "04"):
-        path = tmp_path / f"{month}_2017.csv"
-        _matched_lda_frame().to_csv(path, index=False)
+        path = tmp_path / f"{month}_2017.parquet"
+        _matched_lda_frame().to_parquet(path, index=False)
         save_theme_inputs(
             matched_lda_csv=path,
             output_base_path=str(tmp_path),
@@ -152,15 +152,18 @@ def test_longitudinal_theme_manifest_accumulates_two_months_with_hashes(tmp_path
     )
 
     assert bundle.manifest["months"] == ["03", "04"]
-    assert set(bundle.manifest["filenames"].values()) == {"03_2017.csv", "04_2017.csv"}
+    assert set(bundle.manifest["filenames"].values()) == {
+        "03_2017.parquet",
+        "04_2017.parquet",
+    }
     assert all(len(value) == 64 for value in bundle.manifest["hashes"].values())
     assert set(bundle.monthly_data) == {"03", "04"}
 
 
 def test_longitudinal_theme_inputs_produce_transition(tmp_path):
     for month, members in [("03", [1, 2, 3]), ("04", [1, 2, 3, 4])]:
-        path = tmp_path / f"{month}_2017.csv"
-        _matched_lda_frame(members).to_csv(path, index=False)
+        path = tmp_path / f"{month}_2017.parquet"
+        _matched_lda_frame(members).to_parquet(path, index=False)
         save_theme_inputs(
             matched_lda_csv=path,
             output_base_path=str(tmp_path),
@@ -186,7 +189,7 @@ def test_longitudinal_theme_inputs_produce_transition(tmp_path):
     )
 
     assert not transitions.empty
-    assert (tmp_path / "theme-output" / "community_transition.csv").exists()
+    assert (tmp_path / "theme-output" / "community_transition.parquet").exists()
 
 
 def test_longitudinal_fixtures_preserve_contract_and_self_spread_exclusion():

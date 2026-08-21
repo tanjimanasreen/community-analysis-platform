@@ -7,7 +7,7 @@ This contract covers the implemented features in `theme-analysis.py`.
 Theme analysis starts from monthly matched LDA outputs:
 
 ```text
-<data_type>/LDA/matched/<content_type>/<month>_<year>.csv
+<data_type>/LDA/matched/<content_type>/<month>_<year>.parquet
 ```
 
 Required columns:
@@ -46,13 +46,37 @@ Current generated theme types:
 - `weighted_theme_gpt`
 - `weighted_theme_names`
 
-Current GPT behavior:
+Current generated-theme provider behavior:
 
-- Model: `gpt-4o`
-- Temperature: `0`
-- Seed: `42`
-- Response format: JSON object
-- Prompt asks for meaningful themes from keyword lists.
+- `theme` is reserved for analytical theme-processing settings such as rendering,
+  similarity, and worker controls.
+- `theme_provider` is the canonical provider-routing namespace for `primary`,
+  `fallback`, `fallback_chain`, cache, timeout, and retry settings.
+- Legacy `theme.fallback` and `theme.fallback_chain` settings are rejected during
+  run-config validation so provider routing cannot be silently accepted and ignored.
+- Provider routing is configured through `theme_provider` in `configs/providers.yml`.
+- Current production primary: `openai:gpt-5-nano`.
+- OpenAI generation uses the Responses API with strict JSON Schema structured output.
+- Theme prompt contract `v3` is defined centrally in code (not repeated in dataset YAML).
+  It requires faithful, descriptive, non-endorsing, severity-preserving labels: supported
+  sensitive/extreme subject matter must not be euphemized or softened, and labels must not
+  introduce claims stronger than the LDA evidence supports.
+- Provider wire output returns theme names plus zero-based `keyword_indices`; Python
+  reconstructs supporting keyword strings from the exact ordered input, so providers do not
+  reproduce or rewrite the analytical keyword evidence. Prompt V3 presents each unchanged
+  keyword with an explicit bracketed zero-based ID, and each structured-output request derives
+  an independent schema bounded to `0..N-1` for that request's `N` keywords. The canonical
+  shared schema is never mutated, so concurrent requests with different keyword counts remain
+  isolated.
+- The benchmark/request layer preserves the current packaged Jinja prompt templates and
+  records prompt-contract/output-schema versions plus prompt hashes for reproducibility.
+- Prompt input remains ordered LDA keyword evidence; generated themes stay downstream of LDA.
+- A persistent typed provider safety outcome (`content_filter` or policy refusal) is scoped to
+  that unique payload. The community/LDA evidence remains present, the generated theme is
+  unavailable, provenance is recorded, and processing continues for other payloads. Unexpected
+  provider/software failures remain fail-fast.
+- Theme similarity never embeds a missing generated label; comparisons involving a missing
+  interpretation are persisted as unavailable/null rather than as an empty-string similarity.
 
 Production requirements:
 
@@ -67,9 +91,12 @@ Current behavior:
 
 - Compares consecutive months.
 - Uses Jaccard similarity over `members`.
-- For `reply`, threshold is `0.0`.
-- For all other content types, threshold is `0.5`.
-- Writes `community_transition.csv`.
+- Requires at least one shared member (`Jaccard > 0`) for every transition.
+- For `reply`, threshold is `0.0`, so every positive-overlap pair qualifies.
+- For all other content types, threshold is `0.5` and the boundary is inclusive.
+- Explicit threshold overrides remain an additional lower bound; a zero-overlap
+  pair is never a transition.
+- Writes `community_transition.parquet`.
 
 Output columns include:
 

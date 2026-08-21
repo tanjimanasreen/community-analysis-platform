@@ -1,5 +1,22 @@
 # Plan 016: Theme-Generation Alternatives Benchmark
 
+> **Current production note (2026-08-12):** Plan 016 originally froze GPT-4o as
+> the historical benchmark reference. Production theme generation has since
+> migrated to the provider registry in `configs/providers.yml`, whose current
+> primary is `openai:gpt-5-nano` with strict JSON Schema structured output.
+> Legacy `gpt4o_*` benchmark artifact/function names are retained only for
+> compatibility with existing benchmark bundles; they do not pin the current
+> production provider/model. Tests of current production metadata must follow
+> the current provider configuration, while historical benchmark artifacts may
+> retain their original names.
+>
+> **Current artifact note (2026-08-14):** Generated benchmark score summaries
+> are Parquet (`scores/summary.parquet` or `scores/<split>_summary.parquet`).
+> Current blinded-review artifacts are also Parquet
+> (`review/blinded_export.parquet` and `review/review_import_template.parquet`).
+> Historical `.csv` score/review references below document earlier benchmark
+> runs and are not the current generated-artifact contract.
+
 ## 1. Current Provider Assessment
 
 - Current production theme generation is OpenAI-centered through `src/themes/llm_provider.py` and `src/themes/gpt_themes.py`.
@@ -993,6 +1010,14 @@ Exact next entry point for Plan 016D:
   MLflow/champion-selection behavior until a later explicitly approved plan.
 
 ## 17. Dotenv Bootstrap Correction For Benchmark Live Providers
+
+> **Superseded configuration note (2026-08-12):** The implementation record below
+> describes the earlier CLI-specific dotenv bootstrap. The current provider layer
+> now reads `.env` and exported environment values through centralized
+> `ProviderSettings` in `src/config/settings.py`; benchmark providers consume those
+> settings directly. Exported environment values retain precedence, and settings
+> loading does not require mutating `os.environ`. The historical record below is
+> preserved for traceability.
 
 Status:
 

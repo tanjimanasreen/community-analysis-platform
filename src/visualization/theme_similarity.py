@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import os
 
-from src.themes.theme_similarity import calculate_sentence_similarity
+from src.themes.theme_similarity import calculate_sentence_similarity_with_missing
 
 logger = logging.getLogger(__name__)
 
@@ -42,11 +42,13 @@ def draw_theme_similarity_heatmap(
         themes = list(communities.values())
         if not themes:
             continue
-        similarity_matrix = calculate_sentence_similarity(
+        similarity_matrix = calculate_sentence_similarity_with_missing(
             themes, model_name=model_name, model=model
         )
-        max_similarity = max(max_similarity, np.max(similarity_matrix))
-        min_similarity = min(min_similarity, np.min(similarity_matrix))
+        finite_values = similarity_matrix[np.isfinite(similarity_matrix)]
+        if finite_values.size:
+            max_similarity = max(max_similarity, float(np.max(finite_values)))
+            min_similarity = min(min_similarity, float(np.min(finite_values)))
 
     if min_similarity == np.inf:
         min_similarity, max_similarity = 0, 1
@@ -60,7 +62,7 @@ def draw_theme_similarity_heatmap(
         if not themes:
             continue
 
-        similarity_matrix = calculate_sentence_similarity(
+        similarity_matrix = calculate_sentence_similarity_with_missing(
             themes, model_name=model_name, model=model
         )
 

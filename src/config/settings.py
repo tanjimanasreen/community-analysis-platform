@@ -175,8 +175,6 @@ class ProjectSettings(BaseSettings):
     """Settings used for interpolating YAML configurations."""
 
     data_root: str = "data"
-    longitudinal_output: str = "results/longitudinal"
-    longitudinal_theme_output: str = "results/themes/longitudinal"
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -196,8 +194,6 @@ def get_interpolated_env_vars() -> dict[str, str]:
         "GRAPH_DB_PASSWORD": db.password or "",
         "GRAPH_DB_DATABASE": db.database or "",
         "DATA_ROOT": proj.data_root,
-        "LONGITUDINAL_OUTPUT": proj.longitudinal_output,
-        "LONGITUDINAL_THEME_OUTPUT": proj.longitudinal_theme_output,
     }
 
 

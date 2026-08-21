@@ -5,7 +5,10 @@
 | Feature | Current code | Required tests |
 |---|---|---|
 | Neo4j export CSV | `neo4j_data_fetcher.py` | Query config, output columns, no hard-coded credentials. |
+| Graph database configuration | `DatabaseSettings`, `get_database_config`, `create_graph_repository` | `GRAPH_DB_*` environment values/default Memgraph are honored; analytical YAML `database:` is rejected; unsupported engines fail explicitly instead of constructing Memgraph. |
 | Creator/spreader split | `get_creator_spreader` | Correct relation filtering. |
+| Canonical evolution config mapping | `configs/*/*_evolution.yml`, `validate_canonical_raw_mapping` | Twitter reply, Twitter retweet/quote, and Telegram forward mappings resolve exactly; contradictory relation/column mappings fail before execution. |
+| Telegram network input boundary | `normalize_network_input`, `run_network_phase` | Raw `source,target,relation` and normalized `from_id,forwarder_id` inputs converge at the shared network boundary; raw forwarding rows produce unchanged IF/WIF metrics; invalid shapes fail clearly; orchestration delegates normalization to the shared pipeline. |
 | User dataframe | `create_user_df` | Unique users, anonymous username normalization. |
 | Neo4j datetime conversion | `convert_neo4j_datetime_strings` | Converts string pattern safely. |
 | Network dataframe parsing | `create_network_df` | Parses stringified node dictionaries. |
@@ -26,13 +29,16 @@
 | Keyword cutoff | `get_cutoff_probability` | Knee and fallback behavior. |
 | Matched topic export | `get_matched_topic_df` | Absolute/weighted unigram/bigram columns. |
 | Theme data loading | `load_prepare_data` | Month sorting and keyword column parsing. |
-| GPT theme generation | `generate_gpt_theme` | Mocked provider, JSON parsing, output columns. |
-| Month transition | `get_community_transition` | Reply threshold and non-reply threshold. |
+| GPT theme generation | `generate_gpt_theme` | Mocked provider, V2 theme-name + keyword-index wire schema, exact local keyword reconstruction, output columns, multi-filter payload recovery, provenance, unchanged known input hash, and fail-fast unexpected errors. |
+| Theme provider config contract | `validate_run_config`, `build_theme_provider` | Canonical `theme_provider.fallback` / `fallback_chain` remain valid; stale provider-routing keys under `theme` fail clearly; analytical `theme` settings remain valid; mock-only factory routing tests make no network calls. |
+| Month transition | `get_community_transition` | Zero overlap excluded at reply threshold `0.0`; positive overlap accepted for reply; exact `0.5` accepted and below `0.5` rejected for non-reply. |
 | Sankey path info | `get_path_info` | Correct source/target indices. |
 | Sankey path detection | `find_all_sankey_paths` | Finds all start-to-end paths. |
 | Membership changes | `calculate_membership_changes` | New/lost/existing/reappearing behavior. |
-| Theme similarity | `calculate_sentence_similarity` | Matrix shape and similarity bounds. |
-| Output artifact contract | `verify_output_contract` | Public CSV schemas, internal manifests, SHA256 hashes, copied LDA schema, optional outputs. |
+| Theme similarity | `calculate_sentence_similarity` | Matrix shape and similarity bounds; missing generated labels produce null/gap comparisons and are never sent to the embedder as empty strings. |
+| Output artifact contract | `verify_output_contract` | Generated Parquet paths/schemas, no CSV suffix fallback, internal manifests, SHA256 hashes, copied LDA schema, optional outputs, and canonical platform/content timestamp validation (`forwarded_date` for Telegram forwarding; `created_at` for Twitter workflows). |
+| Operational Make targets | `Makefile`, current operational docs | `tests/unit/test_release_hygiene.py` verifies documented `make <target>` commands resolve and current docs use canonical evolution target names. |
+| Provider environment settings | `src/config/settings.py` | `ProviderSettings` reads current-working-directory `.env` values, exported environment values take precedence, and settings loading does not require a CLI-specific dotenv helper or mutate the process environment. |
 
 ## Fixture Strategy
 
@@ -66,8 +72,8 @@ Generated sample outputs should be checked with:
 ```bash
 make run-pipeline-sample
 make verify-output-contract
-make run-longitudinal-sample
-make verify-longitudinal-output-contract
+make run-evolution-pipeline-test
+make verify-evolution-output-contract
 ```
 
 The verifier is read-only and must not call database, LLM, model-download, or
@@ -79,8 +85,8 @@ visualization services.
 |---|---|---|
 | Run layout | `src/artifacts/run_manifest.py` | Creates `runs/<run_id>` metadata, intermediate, data, report, and log directories. |
 | Manifest models | `src/artifacts/models.py` | Status/category values, relative paths, SHA-256 validation, unique keys. |
-| Canonical publication | `complete_run_bundle` | Classifies artifacts and preserves legacy source bytes. |
-| Manifest verification | `validate_run_manifest` | Path containment, checksum, byte size, row count, JSON schema version, CSV columns. |
+| Canonical publication | `complete_run_bundle` | Classifies generated Parquet artifacts and preserves source bytes during publication. |
+| Manifest verification | `validate_run_manifest` | Path containment, checksum, byte size, row count, JSON schema version, and known tabular schemas. |
 | Atomic lifecycle | `initialize_run_bundle`, `complete_run_bundle`, `fail_run_bundle` | No temporary files remain; failed runs are never completed. |
 
 ## Dashboard Data API Tests
@@ -129,7 +135,7 @@ availability.
 | Topic runtime settings | `src/topics/lda.py` | `LdaMulticore` retained; implementation metadata is not forwarded to Gensim, configured parameters are forwarded unchanged, explicit workers are honored, default workers remain implicit, and empty corpus is rejected. |
 | Prefect semantic keys | `src/orchestration/hashing.py` | Relevant nested theme/network/topic config changes invalidate cache keys. |
 | Theme progress/cache metrics | `src/themes/theme_generation.py` | Completed totals, cache hits/misses, outbound requests, and no external calls in tests. |
-| OpenAI usage and structured output | `src/providers/openai.py` | Mapping/object token usage including reasoning tokens, strict JSON Schema requests, 32K→64K bounded budget escalation, low reasoning effort, one bounded content-filter retry, Azure `model_extra.content_filters` annotation parsing, HTTP 400 prompt-filter handling, safe diagnostic logs, and no live calls. |
+| OpenAI usage and structured output | `src/providers/openai.py` | Mapping/object token usage including reasoning tokens, Prompt V3 with explicit zero-based IDs, request-bounded strict V2 JSON Schema (`name` + `keyword_indices`), exact keyword reconstruction, 32K→64K bounded budget escalation, low reasoning effort, one bounded content-filter retry, typed terminal prompt/completion filter or refusal outcomes, Azure `model_extra.content_filters` annotation parsing, safe diagnostic logs, and no live calls. |
 | Offline mock providers | `src/providers/mock.py` | Deterministic theme output and token metadata without tokenizer downloads or any network access. |
 | TEI batching/failure | `src/themes/tei_client.py`, `theme_similarity.py` | Session reuse, batch cardinality, malformed response, fail policy, explicit mock. |
 | Structured logs | `src/logging_config.py` | Text/JSON output and structured fields. |
@@ -138,7 +144,7 @@ availability.
 | Run catalog uniqueness | `RunCatalog` | Duplicate run IDs fail discovery with a diagnostic error. |
 | DeepEval optional adapter | `deepeval_judge.py` | Lazy optional imports, score scaling, schema validation, dataset filtering, and offline helper tests. |
 | spaCy container model | `Dockerfile`, topic smoke | Pinned model wheel imports and loads in the built image. |
-| Artifact month routing | `src/artifacts/run_manifest.py` | Numeric, abbreviated, and full month suffixes map to correct base schema/path. |
+| Artifact month routing and network schema | `src/artifacts/run_manifest.py` | Numeric, abbreviated, and full month suffixes map to correct base schema/path; manifest validation resolves `network_data` timestamp requirements from the persisted canonical run configuration, accepting Telegram `forwarded_date` while preserving Twitter `created_at`. |
 | Container smoke | `Dockerfile` | Frozen install, non-root execution, CLI import/help, writable configured output. |
 
 ## Dashboard Production Hardening Matrix

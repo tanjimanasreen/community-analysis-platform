@@ -54,7 +54,7 @@ class MockClient:
 
 def test_nvidia_provider_generate_success():
     client = MockClient(
-        '{"themes": [{"name": "test_theme", "keywords": ["apple", "banana"]}]}'
+        '{"themes": [{"name": "test_theme", "keyword_indices": [0, 1]}]}'
     )
     provider = NvidiaBenchmarkProvider(
         model_id="meta/llama3-70b-instruct",

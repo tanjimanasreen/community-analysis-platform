@@ -32,6 +32,9 @@ def validate_config(config_path, dataset_id=None):
             else:
                 print(f"Warning: dataset id '{dataset_id}' not found in {config_path}")
         validate_run_config(config)
+        from src.ingestion.schema import validate_canonical_raw_mapping
+
+        validate_canonical_raw_mapping(config)
         print("Config is valid.")
         return config
     except Exception as e:
@@ -108,12 +111,13 @@ def main():
     )
 
     parser_ingest_interactions = subparsers.add_parser(
-        "ingest-interactions", help="Build/import monthly interaction CSV into Memgraph"
+        "ingest-interactions",
+        help="Build/import monthly interaction Parquet into Memgraph",
     )
     parser_ingest_interactions.add_argument(
         "--file",
         required=True,
-        help="Path to raw legacy CSV or derived interaction CSV",
+        help="Path to a raw legacy relationship CSV or derived interaction Parquet",
     )
     parser_ingest_interactions.add_argument(
         "--config", required=True, help="Path to config file"
@@ -126,12 +130,12 @@ def main():
     parser_ingest_interactions.add_argument(
         "--out",
         required=False,
-        help="Derived interaction CSV output path when --file is raw",
+        help="Derived interaction Parquet output path when --file is raw",
     )
     parser_ingest_interactions.add_argument(
         "--no-db",
         action="store_true",
-        help="Build derived CSV without importing into Memgraph",
+        help="Build derived Parquet without importing into Memgraph",
     )
 
     # run-social-network command
@@ -164,6 +168,11 @@ def main():
         "--dataset-id",
         required=False,
         help="Optional dataset ID to execute within the config",
+    )
+    parser_theme.add_argument(
+        "--theme-provider",
+        required=False,
+        help="Override theme_provider.primary for this run",
     )
 
     # run-all command
@@ -273,6 +282,7 @@ def main():
     )
     parser_benchmark_dataset.add_argument(
         "--gpt-5-nano-outputs",
+        dest="gpt4o_outputs",
         required=False,
         help="Optional local JSONL file of prior GPT-5-nano outputs to copy as reference data",
     )
@@ -542,16 +552,12 @@ def main():
         validate_config(args.config, getattr(args, "dataset_id", None))
 
     elif args.command == "db-check":
-        from src.graph_store.memgraph_repository import MemgraphRepository
+        from src.graph_store.factory import create_graph_repository
 
         config = load_config(args.config) if args.config else {}
         db_config = get_database_config(config)
-        repo = MemgraphRepository(
-            uri=db_config["uri"],
-            user=db_config["user"],
-            password=db_config["password"],
-        )
-        repo.client.execute_query("RETURN 1 AS ok")
+        repo = create_graph_repository(db_config)
+        repo.check_connectivity()
         print("Database connection OK.")
 
     elif args.command == "db-up":
@@ -582,7 +588,7 @@ def main():
                 output_csv_path=args.out,
                 import_to_repository=False,
             )
-            print(f"Derived interaction CSV written to: {result.output_path}")
+            print(f"Derived interaction Parquet written to: {result.output_path}")
             if args.no_db:
                 print("Skipping database import because --no-db was provided.")
                 return
@@ -590,14 +596,10 @@ def main():
             print("No database import requested.")
             return
 
-        from src.graph_store.memgraph_repository import MemgraphRepository
+        from src.graph_store.factory import create_graph_repository
 
         db_config = get_database_config(config)
-        repo = MemgraphRepository(
-            uri=db_config["uri"],
-            user=db_config["user"],
-            password=db_config["password"],
-        )
+        repo = create_graph_repository(db_config)
         repo.create_indexes()
         if _csv_has_relation_column(args.file):
             repo.import_interactions(result.output_path, snapshot_meta)
@@ -669,7 +671,9 @@ def main():
 
     elif args.command == "run-theme-analysis":
         _run_theme_analysis_command(
-            args.config, dataset_id=getattr(args, "dataset_id", None)
+            args.config,
+            dataset_id=getattr(args, "dataset_id", None),
+            theme_provider=args.theme_provider,
         )
 
     elif args.command == "build-report":
@@ -702,15 +706,11 @@ def main():
 
 
 def _import_raw_graph(file_paths, platform, config_path):
-    from src.graph_store.memgraph_repository import MemgraphRepository
+    from src.graph_store.factory import create_graph_repository
 
     config = load_config(config_path) if config_path else {}
     db_config = get_database_config(config)
-    repo = MemgraphRepository(
-        uri=db_config["uri"],
-        user=db_config["user"],
-        password=db_config["password"],
-    )
+    repo = create_graph_repository(db_config)
     repo.create_indexes()
     for file_path in file_paths:
         print(f"Importing raw graph CSV: {file_path}")
@@ -815,8 +815,11 @@ def _run_social_pipeline_command(
     print("Pipeline finished successfully!")
 
 
-def _run_theme_analysis_command(config_path, dataset_id=None):
+def _run_theme_analysis_command(config_path, dataset_id=None, theme_provider=None):
     config = validate_config(config_path, dataset_id)
+    if theme_provider:
+        provider_cfg = config.setdefault("theme_provider", {})
+        provider_cfg["primary"] = theme_provider
     print("Running run-theme-analysis via Prefect orchestrator...")
     from prefect import flow
 
@@ -960,7 +963,11 @@ def _social_pipeline_params(config, graph_thresholds):
 def _csv_has_relation_column(file_path):
     import csv
 
-    with open(file_path, "r", encoding="utf-8", newline="") as handle:
+    path = Path(file_path)
+    if path.suffix.lower() != ".csv":
+        return False
+
+    with path.open("r", encoding="utf-8", newline="") as handle:
         reader = csv.reader(handle)
         try:
             header = next(reader)

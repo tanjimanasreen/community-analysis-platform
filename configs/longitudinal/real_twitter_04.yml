@@ -1,6 +1,0 @@
-# April 2017 real longitudinal sample
-include:
-  - "base_real_twitter.yml"
-
-month: "04"
-input_path: data/raw/twitter/retweet_quote/2017/retweet_april_2017.csv

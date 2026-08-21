@@ -1,3 +1,6 @@
+import sys
+import types
+
 import pandas as pd
 
 from src.cli import _run_theme_analysis_command
@@ -42,16 +45,16 @@ def _write_matched_lda(path):
             "weighted_unigram_keywords": ["['orange']"],
             "weighted_bigram_keywords": ["['big orange']"],
         }
-    ).to_csv(path, index=False)
+    ).to_parquet(path, index=False)
 
 
 def test_run_theme_analysis_loads_saved_inputs_without_network_topic(
     monkeypatch, tmp_path
 ):
-    matched_csv = tmp_path / "03_2017.csv"
-    _write_matched_lda(matched_csv)
+    matched_parquet = tmp_path / "03_2017.parquet"
+    _write_matched_lda(matched_parquet)
     save_theme_inputs(
-        matched_lda_csv=matched_csv,
+        matched_lda_csv=matched_parquet,
         output_base_path=str(tmp_path),
         data_type="twitter",
         content_type="reply",
@@ -87,12 +90,12 @@ def test_run_theme_analysis_loads_saved_inputs_without_network_topic(
     assert calls[0][1]["content_type"] == "reply"
 
 
-def test_run_theme_analysis_explicit_input_dir_keeps_legacy_fixture_mode(
+def test_run_theme_analysis_explicit_input_dir_uses_parquet_fixture_mode(
     monkeypatch, tmp_path
 ):
     fixture_dir = tmp_path / "fixture-lda"
     fixture_dir.mkdir()
-    _write_matched_lda(fixture_dir / "january_2017.csv")
+    _write_matched_lda(fixture_dir / "january_2017.parquet")
     config_path = _write_config(tmp_path, explicit_input_dir=fixture_dir)
 
     theme_pipeline = __import__("src.pipelines.theme_pipeline", fromlist=[""])
@@ -123,3 +126,95 @@ def test_run_theme_analysis_missing_inputs_exits_clearly(capsys, tmp_path):
     captured = capsys.readouterr()
     assert "make run-topic-sample first" in captured.err
     assert "make run-pipeline-sample" in captured.err
+
+
+def test_run_theme_analysis_cli_accepts_theme_provider(monkeypatch):
+    from src import cli
+
+    captured = {}
+
+    def fake_run_theme_analysis_command(
+        config_path, dataset_id=None, theme_provider=None
+    ):
+        captured.update(
+            {
+                "config_path": config_path,
+                "dataset_id": dataset_id,
+                "theme_provider": theme_provider,
+            }
+        )
+
+    monkeypatch.setattr(
+        cli, "_run_theme_analysis_command", fake_run_theme_analysis_command
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "community-analysis",
+            "run-theme-analysis",
+            "--config",
+            "tests/configs/test_single_month.yml",
+            "--dataset-id",
+            "march",
+            "--theme-provider",
+            "mock",
+        ],
+    )
+
+    cli.main()
+
+    assert captured == {
+        "config_path": "tests/configs/test_single_month.yml",
+        "dataset_id": "march",
+        "theme_provider": "mock",
+    }
+
+
+def test_run_theme_analysis_overrides_only_primary_provider(monkeypatch, tmp_path):
+    from src import cli
+    from src.pipelines import theme_pipeline
+
+    fixture_dir = tmp_path / "fixture-lda"
+    fixture_dir.mkdir()
+    config = {
+        "data_type": "twitter",
+        "content_type": "reply",
+        "year": "2017",
+        "output_base_path": str(tmp_path),
+        "orchestration": {"max_workers": 4},
+        "theme": {
+            "input_dir": str(fixture_dir),
+            "output_dir": str(tmp_path / "theme-output"),
+            "year": "2017",
+            "render_visuals": False,
+        },
+        "theme_provider": {
+            "primary": "openai:gpt-5-nano",
+            "fallback": True,
+            "fallback_chain": ["llm7:fast"],
+            "cache_backend": "memory",
+        },
+    }
+    captured = {}
+
+    monkeypatch.setattr(cli, "validate_config", lambda *_args, **_kwargs: config)
+    monkeypatch.setitem(
+        sys.modules,
+        "prefect",
+        types.SimpleNamespace(flow=lambda **_kwargs: (lambda func: func)),
+    )
+    monkeypatch.setattr(
+        theme_pipeline,
+        "run_theme_pipeline",
+        lambda **kwargs: captured.update(kwargs),
+    )
+
+    cli._run_theme_analysis_command("config.yml", theme_provider="mock")
+
+    assert captured["config"]["theme_provider"] == {
+        "primary": "mock",
+        "fallback": True,
+        "fallback_chain": ["llm7:fast"],
+        "cache_backend": "memory",
+    }

@@ -301,6 +301,8 @@ def read_safe_provider_summary(
         "configured_fallback_chain",
         "provider_config_digest",
         "prompt_version",
+        "output_schema_version",
+        "theme_generation_coverage",
         "generation_settings_digest",
         "semantic_task_version",
         "run_metrics",

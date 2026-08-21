@@ -13,8 +13,8 @@ def test_load_prepare_data_sorts_months_and_parses_keyword_lists(tmp_path):
         "weighted_unigram_keywords": ["orange,grape"],
         "weighted_bigram_keywords": [""],
     }
-    pd.DataFrame(columns).to_csv(tmp_path / "february_2017.csv", index=False)
-    pd.DataFrame(columns).to_csv(tmp_path / "january_2017.csv", index=False)
+    pd.DataFrame(columns).to_parquet(tmp_path / "february_2017.parquet", index=False)
+    pd.DataFrame(columns).to_parquet(tmp_path / "january_2017.parquet", index=False)
 
     data = load_prepare_data(str(tmp_path), "2017")
 

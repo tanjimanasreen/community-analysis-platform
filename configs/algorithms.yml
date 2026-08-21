@@ -1,5 +1,5 @@
 # Algorithm defaults — single source of truth for graph, LDA, and theme parameters.
-# These values are inherited by dataset and longitudinal configs via include:.
+# These values are inherited by dataset and evolution configs via include:.
 # Do not override these here — use the dataset-specific config file for overrides.
 #
 # THESIS CONSTRAINTS (do not change without documenting the experiment):
@@ -29,8 +29,8 @@ lda:
 
 theme:
   sleep_seconds: 2
-  # Reply networks intentionally use a zero-overlap threshold in the thesis
-  # workflow; other content types retain the 0.5 persistence threshold.
+  # Reply networks use a zero lower-bound threshold but still require positive
+  # member overlap; other content types retain the inclusive 0.5 threshold.
   reply_transition_threshold: 0.0
   transition_threshold: 0.5
   render_visuals: false

@@ -462,23 +462,50 @@ def test_network_service_builds_complete_community_structure_map() -> None:
     assert result["returned_edges"] == 0
     assert result["coverage"] == {
         "is_complete": True,
-        "scope": "prominent_community_partition",
-        "completeness_reason": None,
+        "scope": "prominent_community_interaction_network",
+        "completeness_reason": "cross_community_artifact_unavailable",
         "available_users": 5,
         "represented_users": 5,
-        "available_edges": 3,
-        "represented_edges": 3,
+        "available_edges": 0,
+        "represented_edges": 0,
         "available_communities": 2,
         "represented_communities": 2,
-        "available_weight": 9.0,
-        "represented_weight": 9.0,
-        "weight_coverage_ratio": 1.0,
+        "available_weight": 0.0,
+        "represented_weight": 0.0,
+        "weight_coverage_ratio": None,
         "cross_community_edges_available": False,
+        "cross_community_edges_reason": "cross_community_artifact_unavailable",
     }
     assert result["nodes"][0]["community_id"] == "1"
     assert result["nodes"][0]["member_count"] == 3
     assert result["nodes"][0]["internal_edge_count"] == 2
     NetworkResponse(**result)
+
+
+def test_community_summary_preserves_optional_layout_coordinates() -> None:
+    reader = _monthly_reader()
+    reader.frames["community_summary_absolute_03"] = reader.frames[
+        "community_summary_absolute_03"
+    ].assign(x=[125.0, -75.0], y=[50.0, 25.0])
+    service = NetworkService(reader, GraphLimits(max_nodes=100, max_edges=100))
+
+    result = service.graph(
+        "monthly-run",
+        metric="if",
+        period="2017-03",
+        community_id=None,
+        min_weight=0,
+        max_nodes=100,
+        max_edges=100,
+        view="communities",
+        sampling=None,
+    )
+
+    by_id = {node["community_id"]: node for node in result["nodes"]}
+    assert by_id["1"]["x"] == 125.0
+    assert by_id["1"]["y"] == 50.0
+    assert by_id["2"]["x"] == -75.0
+    assert by_id["2"]["y"] == 25.0
 
 
 def test_community_aware_user_sampling_is_deterministic_and_balanced() -> None:

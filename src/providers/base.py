@@ -12,8 +12,10 @@ from typing import Any, Callable, TypeVar
 from src.themes.benchmark.contracts import (
     OUTPUT_SCHEMA_VERSION,
     REQUEST_SCHEMA_VERSION,
+    THEME_PROMPT_CONTRACT_VERSION,
     ProviderMetadata,
-    THEME_OUTPUT_JSON_SCHEMA,
+    ThemeBenchmarkError,
+    build_theme_output_json_schema,
     ThemeBenchmarkRequest,
 )
 
@@ -38,20 +40,25 @@ def build_theme_request(keywords: list[str]) -> ThemeBenchmarkRequest:
     from src.themes.benchmark.dataset import (
         RAW_SYSTEM_TEMPLATE,
         RAW_USER_TEMPLATE,
+        format_indexed_keywords_for_prompt,
         get_jinja_env,
     )
 
     keyword_text = json.dumps(keywords, ensure_ascii=False)
+    output_schema = build_theme_output_json_schema(len(keywords))
     env = get_jinja_env()
     system_prompt = env.get_template("system.jinja2").render(
-        json_schema=json.dumps(THEME_OUTPUT_JSON_SCHEMA, indent=2)
+        json_schema=json.dumps(output_schema, indent=2)
     )
-    user_prompt = env.get_template("user.jinja2").render(keywords=keyword_text)
+    user_prompt = env.get_template("user.jinja2").render(
+        keywords=format_indexed_keywords_for_prompt(keywords)
+    )
 
     prompt_contract = {
         "system_template": RAW_SYSTEM_TEMPLATE,
         "user_template": RAW_USER_TEMPLATE,
-        "output_schema": THEME_OUTPUT_JSON_SCHEMA,
+        "output_schema": output_schema,
+        "prompt_contract_version": THEME_PROMPT_CONTRACT_VERSION,
         "request_schema_version": REQUEST_SCHEMA_VERSION,
         "output_schema_version": OUTPUT_SCHEMA_VERSION,
     }
@@ -74,7 +81,36 @@ def build_theme_request(keywords: list[str]) -> ThemeBenchmarkRequest:
         user_prompt=user_prompt,
         prompt_hash=prompt_hash,
         input_hash=input_hash,
+        prompt_contract_version=THEME_PROMPT_CONTRACT_VERSION,
     )
+
+
+class ProviderSafetyError(ThemeBenchmarkError):
+    """Typed, payload-safe provider safety outcome recoverable by theme batching."""
+
+    def __init__(
+        self,
+        *,
+        category: str,
+        stage: str,
+        provider_id: str,
+        model_id: str,
+        input_hash: str,
+        prompt_hash: str,
+        diagnostics: dict[str, Any] | None = None,
+    ) -> None:
+        self.category = str(category)
+        self.stage = str(stage)
+        self.provider_id = str(provider_id)
+        self.model_id = str(model_id)
+        self.input_hash = str(input_hash)
+        self.prompt_hash = str(prompt_hash)
+        self.diagnostics = dict(diagnostics or {})
+        super().__init__(
+            f"Provider safety outcome category={self.category} stage={self.stage} "
+            f"provider={self.provider_id} model={self.model_id} "
+            f"input_hash={self.input_hash[:12]} prompt_hash={self.prompt_hash[:12]}"
+        )
 
 
 class BaseLLMProvider(ABC):

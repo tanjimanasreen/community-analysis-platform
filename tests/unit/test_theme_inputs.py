@@ -26,16 +26,16 @@ def _matched_lda_frame():
     )
 
 
-def _write_matched_csv(tmp_path, name="03_2017.csv"):
+def _write_matched_parquet(tmp_path, name="03_2017.parquet"):
     path = tmp_path / name
-    _matched_lda_frame().to_csv(path, index=False)
+    _matched_lda_frame().to_parquet(path, index=False)
     return path
 
 
 def test_theme_input_save_load_round_trip_with_list_columns(tmp_path):
-    matched_csv = _write_matched_csv(tmp_path)
+    matched_parquet = _write_matched_parquet(tmp_path)
     save_theme_inputs(
-        matched_lda_csv=matched_csv,
+        matched_lda_csv=matched_parquet,
         output_base_path=str(tmp_path),
         data_type="twitter",
         content_type="reply",
@@ -69,9 +69,9 @@ def test_theme_input_missing_manifest_explains_run_topics_first(tmp_path):
 
 
 def test_theme_input_manifest_metadata_mismatch_fails(tmp_path):
-    matched_csv = _write_matched_csv(tmp_path)
+    matched_parquet = _write_matched_parquet(tmp_path)
     input_dir = save_theme_inputs(
-        matched_lda_csv=matched_csv,
+        matched_lda_csv=matched_parquet,
         output_base_path=str(tmp_path),
         data_type="twitter",
         content_type="reply",
@@ -93,16 +93,16 @@ def test_theme_input_manifest_metadata_mismatch_fails(tmp_path):
 
 
 def test_theme_input_manifest_hash_mismatch_fails(tmp_path):
-    matched_csv = _write_matched_csv(tmp_path)
+    matched_parquet = _write_matched_parquet(tmp_path)
     input_dir = save_theme_inputs(
-        matched_lda_csv=matched_csv,
+        matched_lda_csv=matched_parquet,
         output_base_path=str(tmp_path),
         data_type="twitter",
         content_type="reply",
         month="03",
         year="2017",
     )
-    (input_dir / "03_2017.csv").write_text("corrupted\n", encoding="utf-8")
+    (input_dir / "03_2017.parquet").write_bytes(b"corrupted\n")
 
     with pytest.raises(ThemeInputError, match="hash mismatch"):
         load_theme_inputs(
@@ -114,7 +114,7 @@ def test_theme_input_manifest_hash_mismatch_fails(tmp_path):
 
 
 def test_explicit_theme_input_dir_can_load_without_manifest(tmp_path):
-    _write_matched_csv(tmp_path, "january_2017.csv")
+    _write_matched_parquet(tmp_path, "january_2017.parquet")
 
     bundle = load_theme_inputs(input_dir=tmp_path, year="2017", require_manifest=False)
 
@@ -123,8 +123,8 @@ def test_explicit_theme_input_dir_can_load_without_manifest(tmp_path):
 
 
 def test_theme_input_required_columns_are_validated(tmp_path):
-    path = tmp_path / "03_2017.csv"
-    pd.DataFrame({"members": ["[1]"]}).to_csv(path, index=False)
+    path = tmp_path / "03_2017.parquet"
+    pd.DataFrame({"members": ["[1]"]}).to_parquet(path, index=False)
 
     missing_columns = [column for column in REQUIRED_COLUMNS if column != "members"]
     with pytest.raises(ThemeInputError, match=missing_columns[0]):

@@ -46,7 +46,7 @@ def test_topic_reproducibility(tmp_path, run_config):
     input_dir = tmp_path / "inputs"
     input_dir.mkdir()
 
-    abs_csv = input_dir / "abs.csv"
+    abs_parquet = input_dir / "abs.parquet"
     pd.DataFrame(
         {
             "community_number": [1, 1, 2, 2],
@@ -61,12 +61,12 @@ def test_topic_reproducibility(tmp_path, run_config):
             "user_id": [10, 11, 20, 21],
             "created_at": ["2017-03-01", "2017-03-01", "2017-03-01", "2017-03-01"],
         }
-    ).to_csv(abs_csv, index=False)
+    ).to_parquet(abs_parquet, index=False)
 
-    wgt_csv = input_dir / "wgt.csv"
-    shutil.copy(abs_csv, wgt_csv)
+    wgt_parquet = input_dir / "wgt.parquet"
+    shutil.copy(abs_parquet, wgt_parquet)
 
-    match_csv = input_dir / "match.csv"
+    match_parquet = input_dir / "match.parquet"
     pd.DataFrame(
         {
             "abs_community": [1, 2],
@@ -74,20 +74,23 @@ def test_topic_reproducibility(tmp_path, run_config):
             "members": ["user1,user2", "user3,user4"],
             "jaccard_score": [1.0, 1.0],
         }
-    ).to_csv(match_csv, index=False)
+    ).to_parquet(match_parquet, index=False)
 
     def make_ref(p):
         import hashlib
 
         h = hashlib.sha256(p.read_bytes()).hexdigest()
         return ArtifactReference(
-            path=str(p), sha256=h, media_type="text/csv", byte_size=p.stat().st_size
+            path=str(p),
+            sha256=h,
+            media_type="application/octet-stream",
+            byte_size=p.stat().st_size,
         )
 
     bundle = TopicInputBundle(
-        absolute_community_messages=make_ref(abs_csv),
-        weighted_community_messages=make_ref(wgt_csv),
-        matched_communities=make_ref(match_csv),
+        absolute_community_messages=make_ref(abs_parquet),
+        weighted_community_messages=make_ref(wgt_parquet),
+        matched_communities=make_ref(match_parquet),
         partial_matched_communities=None,
         allowed_input_roots=(str(input_dir),),
     )
@@ -127,21 +130,21 @@ def test_topic_reproducibility(tmp_path, run_config):
         res_2 = run_monthly_topic_phase_task.fn(bundle, rc2, ctx2)
 
     # Compare LDA scores
-    df1_lda = pd.read_csv(res_1.lda_scores.path)
-    df2_lda = pd.read_csv(res_2.lda_scores.path)
+    df1_lda = pd.read_parquet(res_1.lda_scores.path)
+    df2_lda = pd.read_parquet(res_2.lda_scores.path)
     pd.testing.assert_frame_equal(df1_lda, df2_lda)
 
     # Compare matched communities topics
     if res_1.matched_communities_topics:
         assert res_2.matched_communities_topics is not None
-        df1_mch = pd.read_csv(res_1.matched_communities_topics.path)
-        df2_mch = pd.read_csv(res_2.matched_communities_topics.path)
+        df1_mch = pd.read_parquet(res_1.matched_communities_topics.path)
+        df2_mch = pd.read_parquet(res_2.matched_communities_topics.path)
         pd.testing.assert_frame_equal(df1_mch, df2_mch)
 
     if res_1.partial_matched_communities_topics:
         assert res_2.partial_matched_communities_topics is not None
-        df1_pmch = pd.read_csv(res_1.partial_matched_communities_topics.path)
-        df2_pmch = pd.read_csv(res_2.partial_matched_communities_topics.path)
+        df1_pmch = pd.read_parquet(res_1.partial_matched_communities_topics.path)
+        df2_pmch = pd.read_parquet(res_2.partial_matched_communities_topics.path)
         pd.testing.assert_frame_equal(df1_pmch, df2_pmch)
 
     # Compare all theme_inputs (manifest)
@@ -150,7 +153,6 @@ def test_topic_reproducibility(tmp_path, run_config):
             with open(t1.path) as f1, open(t2.path) as f2:
                 assert json.load(f1) == json.load(f2)
         else:
-            # fallback for csv
-            df1_theme = pd.read_csv(t1.path)
-            df2_theme = pd.read_csv(t2.path)
+            df1_theme = pd.read_parquet(t1.path)
+            df2_theme = pd.read_parquet(t2.path)
             pd.testing.assert_frame_equal(df1_theme, df2_theme)

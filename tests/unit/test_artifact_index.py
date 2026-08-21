@@ -8,8 +8,8 @@ def test_build_artifact_index_lists_existing_outputs(tmp_path):
     theme_root = tmp_path / "theme"
     output_root.mkdir()
     theme_root.mkdir()
-    (output_root / "network.csv").write_text("x\n", encoding="utf-8")
-    (theme_root / "themes.csv").write_text("y\n", encoding="utf-8")
+    (output_root / "network.parquet").write_text("x\n", encoding="utf-8")
+    (theme_root / "themes.parquet").write_text("y\n", encoding="utf-8")
 
     report = build_artifact_index(
         {
@@ -20,5 +20,5 @@ def test_build_artifact_index_lists_existing_outputs(tmp_path):
     )
 
     text = Path(report).read_text(encoding="utf-8")
-    assert "network.csv" in text
-    assert "themes.csv" in text
+    assert "network.parquet" in text
+    assert "themes.parquet" in text

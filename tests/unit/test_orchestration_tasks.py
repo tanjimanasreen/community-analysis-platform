@@ -37,6 +37,28 @@ def test_validate_run_configuration_task():
     assert val_config.config_digest is not None
 
 
+def test_validate_run_configuration_rejects_mismatched_reply_mapping():
+    config = {
+        "output_base_path": "/mock/out",
+        "input_path": "/mock/in.csv",
+        "data_type": "twitter",
+        "content_type": "reply",
+        "month": "march",
+        "year": "2017",
+        "creator_relation": "TWEETED",
+        "spreader_relation": "RETWEETED_BY",
+        "creator_node_column": "source",
+        "spreader_node_column": "target",
+        "text_node_column": "target",
+        "date_column": "created_at",
+    }
+
+    with pytest.raises(
+        PipelineError, match="Invalid analytical mapping for twitter/reply"
+    ):
+        validate_run_configuration_task.fn(config)
+
+
 def test_validate_run_configuration_rejects_ldamulticore_auto_alpha():
     config = {
         "output_base_path": "/mock/out",
@@ -163,6 +185,63 @@ def test_resolve_dataset_identity_task_known_hash(tmp_path):
     )
     assert ident.sha256 == "a" * 64
     assert ident.identity_source == "supplied"
+
+
+def test_network_task_delegates_raw_telegram_normalization_to_shared_pipeline(
+    tmp_path,
+):
+    dataset_path = tmp_path / "telegram.csv"
+    dataset_path.write_text(
+        "source,target,relation\n"
+        "creator,message,PRODUCED\n"
+        "message,spreader,FORWARDED_BY\n",
+        encoding="utf-8",
+    )
+    identity = DatasetIdentity(
+        dataset_id="telegram-test",
+        path=str(dataset_path),
+        sha256="a" * 64,
+        platform="telegram",
+        identity_source="computed",
+    )
+    config = ValidatedRunConfiguration(
+        config_digest="123",
+        output_root=str(tmp_path),
+        raw_config={
+            "data_type": "telegram",
+            "content_type": "forward",
+            "month": "09",
+            "year": "2019",
+            "creator_relation": "PRODUCED",
+            "spreader_relation": "FORWARDED_BY",
+            "creator_node_column": "source",
+            "spreader_node_column": "target",
+            "text_node_column": "target",
+            "date_column": "forwarded_date",
+        },
+    )
+    context = PipelineRunContext.create(
+        pipeline_run_id="run-telegram",
+        git_commit="abc",
+        config_digest="123",
+        output_root=str(tmp_path),
+        datasets=[],
+    )
+
+    with patch(
+        "src.pipelines.social_network_pipeline.run_network_community_pipeline"
+    ) as mock_run:
+        with pytest.raises(
+            PipelineError, match="expected output artifact not found after execution"
+        ):
+            run_monthly_network_community_phase_task.fn(
+                dataset_identity=identity, config=config, context=context
+            )
+
+    delegated = mock_run.call_args.kwargs["df"]
+    assert list(delegated.columns) == ["source", "target", "relation"]
+    assert "from_id" not in delegated.columns
+    assert "forwarder_id" not in delegated.columns
 
 
 def test_run_monthly_network_community_phase_task_missing_required(tmp_path):

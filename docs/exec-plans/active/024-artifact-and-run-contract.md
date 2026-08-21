@@ -137,3 +137,11 @@ make test
 ```
 
 in the repository's normal dependency-complete development environment.
+
+## Supersession note — 2026-08-11
+
+Plan 055 supersedes only the additive legacy-generated-CSV compatibility clauses
+in this plan. The immutable run bundle, manifest lifecycle, integrity validation,
+and canonical publication architecture remain unchanged. New generated tabular
+artifacts are Parquet; raw `data/raw/**` relationship inputs remain CSV. Historical
+implementation and validation records above are retained unchanged.

@@ -59,23 +59,27 @@ def test_factory_fallback_true_empty_chain_no_routing():
 def test_factory_mock_generate_theme():
     """Factory-built mock provider returns expected theme structure."""
     provider = build_theme_provider(_mock_config(primary="mock", fallback=False))
-    result = provider.generate_theme("apple orange discussion")
+    result = provider.generate_theme(["apple", "orange", "discussion"])
     assert isinstance(result, dict)
     assert len(result) > 0
 
 
 def test_factory_cache_avoids_duplicate_calls():
-    """CachedProvider caches generate_theme responses by text key."""
+    """CachedProvider reports a cache hit for an identical keyword request."""
     provider = build_theme_provider(_mock_config())
-    text = "apple orange"
-    _ = provider.generate_theme(text)
-    _ = provider.generate_theme(text)
-    assert provider.cache_size == 1
+    keywords = ["apple", "orange"]
+
+    _ = provider.generate_theme(keywords)
+    _ = provider.generate_theme(keywords)
+
+    assert provider.run_metrics["cache_misses"] == 1
+    assert provider.run_metrics["cache_hits"] == 1
+    assert provider.run_metrics["cache_writes"] == 1
 
 
 def test_factory_config_without_theme_provider_uses_defaults():
     """Empty config falls back to defaults (mock primary, no fallback)."""
     provider = build_theme_provider({})
     assert isinstance(provider, CachedProvider)
-    result = provider.generate_theme("test keyword")
+    result = provider.generate_theme(["test", "keyword"])
     assert isinstance(result, dict)

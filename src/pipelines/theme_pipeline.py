@@ -8,7 +8,11 @@ import pandas as pd
 
 from src.providers.cached import CachedProvider
 from src.providers import factory
-from src.themes.theme_generation import generate_llm_themes
+from src.themes.theme_generation import (
+    THEME_GENERATION_PROVENANCE_COLUMNS,
+    build_theme_generation_coverage,
+    generate_llm_themes,
+)
 
 # Future imports from Milestone 4, 5, 6 will go here:
 # from src.themes.community_transition import calculate_jaccard_transitions
@@ -44,7 +48,13 @@ logger = logging.getLogger(__name__)
 
 
 def process_single_file_themes(
-    df: pd.DataFrame, provider, *, max_workers: int = 6
+    df: pd.DataFrame,
+    provider,
+    *,
+    max_workers: int = 6,
+    provenance_records: list[dict] | None = None,
+    year: str | int | None = None,
+    month: str | None = None,
 ) -> pd.DataFrame:
     frame = df.copy()
     if "absolute_community" not in frame.columns:
@@ -52,7 +62,14 @@ def process_single_file_themes(
     if "weighted_community" not in frame.columns:
         frame["weighted_community"] = -1
 
-    return generate_llm_themes(provider, frame, max_workers=max_workers)
+    return generate_llm_themes(
+        provider,
+        frame,
+        max_workers=max_workers,
+        provenance_records=provenance_records,
+        year=year,
+        month=month,
+    )
 
 
 def run_theme_pipeline(
@@ -158,11 +175,17 @@ def run_theme_pipeline_from_monthly_data(
         provider = factory.build_theme_provider(config or {})
 
     themed_monthly_dict = {}
+    provenance_records: list[dict] = []
     for month, df in monthly_data_dict.items():
         month_started = time.perf_counter()
         logger.info("theme_month_started month=%s rows=%d", month, len(df))
         themed_df = process_single_file_themes(
-            df, provider, max_workers=max_theme_workers
+            df,
+            provider,
+            max_workers=max_theme_workers,
+            provenance_records=provenance_records,
+            year=year,
+            month=str(month),
         )
         themed_monthly_dict[month] = themed_df
         # Save themed output
@@ -175,6 +198,21 @@ def run_theme_pipeline_from_monthly_data(
             output_path,
             time.perf_counter() - month_started,
         )
+
+    provenance_frame = pd.DataFrame(
+        provenance_records, columns=THEME_GENERATION_PROVENANCE_COLUMNS
+    )
+    provenance_path = os.path.join(output_dir, "theme_generation_provenance.parquet")
+    provenance_frame.to_parquet(provenance_path, index=False)
+    theme_generation_coverage = build_theme_generation_coverage(provenance_records)
+    logger.info(
+        "theme_generation_provenance_saved rows=%d unique_payloads=%d "
+        "unavailable=%d path=%s",
+        len(provenance_frame),
+        theme_generation_coverage["unique_payloads_requested"],
+        theme_generation_coverage["unique_payloads_unavailable"],
+        provenance_path,
+    )
 
     theme_settings = (config or {}).get("theme", {})
     if not isinstance(theme_settings, dict):
@@ -427,11 +465,15 @@ def run_theme_pipeline_from_monthly_data(
     else:
         logger.info("theme_visualizations_skipped render_visuals=false")
 
-    # Save run metrics
+    # Preserve the existing detailed run-metrics artifact and add aggregate theme
+    # coverage. Orchestration continues to sanitize prompts/responses before
+    # publishing provider_run_summary.json.
     if provider is not None and hasattr(provider, "run_metrics"):
         metrics_path = os.path.join(output_dir, "run_metrics.json")
+        run_metrics = dict(provider.run_metrics)
+        run_metrics["theme_generation_coverage"] = theme_generation_coverage
         with open(metrics_path, "w", encoding="utf-8") as handle:
-            json.dump(provider.run_metrics, handle, indent=2, ensure_ascii=False)
+            json.dump(run_metrics, handle, indent=2, ensure_ascii=False)
         logger.info("provider_run_metrics_saved path=%s", metrics_path)
 
     logger.info("theme_pipeline_completed")

@@ -2,6 +2,11 @@ import hashlib
 import json
 from typing import Any, Mapping, Sequence
 
+from src.themes.benchmark.contracts import (
+    OUTPUT_SCHEMA_VERSION,
+    THEME_PROMPT_CONTRACT_VERSION,
+)
+
 from src.orchestration.models import (
     DatasetIdentity,
     ThemeInputBundle,
@@ -166,7 +171,8 @@ def theme_cache_key_fn(context: Any, parameters: dict[str, Any]) -> str:
         "data_type": raw.get("data_type"),
         "year": raw.get("year"),
         "theme_provider": raw.get("theme_provider", {}),
-        "prompt_version": raw.get("prompt_version"),
+        "prompt_contract_version": THEME_PROMPT_CONTRACT_VERSION,
+        "output_schema_version": OUTPUT_SCHEMA_VERSION,
         "render_visuals": theme.get("render_visuals", raw.get("render_visuals")),
         "similarity_model": theme.get(
             "similarity_model", raw.get("similarity_model_name")
@@ -188,7 +194,7 @@ def theme_cache_key_fn(context: Any, parameters: dict[str, Any]) -> str:
 
     return build_stage_cache_key(
         stage="theme_generation",
-        semantic_version="1.2.0",
+        semantic_version="1.3.0",
         input_hashes=hashes,
         config_subset=config_subset,
     )

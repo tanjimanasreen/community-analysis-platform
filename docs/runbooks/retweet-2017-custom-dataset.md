@@ -69,7 +69,7 @@ graph_thresholds:
 .venv/bin/python -m src.cli ingest-interactions \
   --file <LOCAL_PROJECT_PATH>/Projects/Telegram/cleaned_code/data/twitter-neo4j/monthly_retweet/retweet_january_2017.csv \
   --config configs/my_retweet_january_2017.yml \
-  --out outputs/my-retweet-2017/interactions_01_2017.csv \
+  --out outputs/my-retweet-2017/interactions_01_2017.parquet \
   --no-db
 ```
 
@@ -89,7 +89,7 @@ MPLBACKEND=Agg MPLCONFIGDIR=/tmp \
 .venv/bin/python -m src.cli ingest-interactions \
   --file <LOCAL_PROJECT_PATH>/Projects/Telegram/cleaned_code/data/twitter-neo4j/monthly_retweet/retweet_february_2017.csv \
   --config configs/my_retweet_february_2017.yml \
-  --out outputs/my-retweet-2017/interactions_02_2017.csv \
+  --out outputs/my-retweet-2017/interactions_02_2017.parquet \
   --no-db
 ```
 
@@ -109,7 +109,7 @@ MPLBACKEND=Agg MPLCONFIGDIR=/tmp \
 .venv/bin/python -m src.cli ingest-interactions \
   --file <LOCAL_PROJECT_PATH>/Projects/Telegram/cleaned_code/data/twitter-neo4j/monthly_retweet/retweet_march_2017.csv \
   --config configs/my_retweet_march_2017.yml \
-  --out outputs/my-retweet-2017/interactions_03_2017.csv \
+  --out outputs/my-retweet-2017/interactions_03_2017.parquet \
   --no-db
 ```
 
@@ -129,7 +129,7 @@ MPLBACKEND=Agg MPLCONFIGDIR=/tmp \
 .venv/bin/python -m src.cli ingest-interactions \
   --file <LOCAL_PROJECT_PATH>/Projects/Telegram/cleaned_code/data/twitter-neo4j/monthly_retweet/retweet_april_2017.csv \
   --config configs/my_retweet_april_2017.yml \
-  --out outputs/my-retweet-2017/interactions_04_2017.csv \
+  --out outputs/my-retweet-2017/interactions_04_2017.parquet \
   --no-db
 ```
 
@@ -202,11 +202,11 @@ outputs/my-retweet-2017/twitter/_intermediate/theme_inputs/retweet_quote/2017/
 Expected monthly theme files:
 
 ```text
-outputs/my-retweet-2017-theme/01_2017_with_themes.csv
-outputs/my-retweet-2017-theme/02_2017_with_themes.csv
-outputs/my-retweet-2017-theme/03_2017_with_themes.csv
-outputs/my-retweet-2017-theme/04_2017_with_themes.csv
-outputs/my-retweet-2017-theme/community_transition.csv
+outputs/my-retweet-2017-theme/01_2017_with_themes.parquet
+outputs/my-retweet-2017-theme/02_2017_with_themes.parquet
+outputs/my-retweet-2017-theme/03_2017_with_themes.parquet
+outputs/my-retweet-2017-theme/04_2017_with_themes.parquet
+outputs/my-retweet-2017-theme/community_transition.parquet
 ```
 
 ## Current Theme Input Counts

@@ -174,8 +174,7 @@ def validate_lda_config(lda_config: Mapping[str, Any] | None = None) -> None:
     ).strip()
     if implementation != DEFAULT_CONFIG.lda.implementation:
         raise ValueError(
-            "lda.implementation must be 'ldamulticore'; "
-            f"got {implementation!r}"
+            "lda.implementation must be 'ldamulticore'; " f"got {implementation!r}"
         )
 
     alpha = raw.get("alpha", DEFAULT_CONFIG.lda.alpha)
@@ -186,7 +185,51 @@ def validate_lda_config(lda_config: Mapping[str, Any] | None = None) -> None:
         )
 
 
+def validate_theme_provider_config_policy(config: Mapping[str, Any]) -> None:
+    """Reject provider-routing keys from the analytical ``theme`` namespace."""
+    theme = config.get("theme", {})
+    if not isinstance(theme, Mapping):
+        return
+
+    stale_keys = [key for key in ("fallback", "fallback_chain") if key in theme]
+    if stale_keys:
+        stale_paths = ", ".join(f"theme.{key}" for key in stale_keys)
+        canonical_paths = ", ".join(f"theme_provider.{key}" for key in stale_keys)
+        raise ValueError(
+            f"Unsupported provider-routing setting(s): {stale_paths}. "
+            f"Use {canonical_paths} instead; the `theme` section is reserved "
+            "for analytical theme-processing settings."
+        )
+
+
+def validate_database_config_policy(config: Mapping[str, Any]) -> None:
+    """Reject graph-database connection settings in analytical YAML configs."""
+    locations: list[str] = []
+    if "database" in config:
+        locations.append("database")
+
+    for collection_key in ("datasets", "longitudinal_datasets"):
+        entries = config.get(collection_key, [])
+        if not isinstance(entries, list):
+            continue
+        for index, entry in enumerate(entries):
+            if isinstance(entry, Mapping) and "database" in entry:
+                locations.append(f"{collection_key}[{index}].database")
+
+    if locations:
+        location_text = ", ".join(locations)
+        raise ValueError(
+            "Database connection settings are environment-only. "
+            f"Remove YAML section(s): {location_text}. "
+            "Configure GRAPH_DB_ENGINE, GRAPH_DB_URI, GRAPH_DB_USER, and "
+            "GRAPH_DB_PASSWORD instead."
+        )
+
+
 def validate_run_config(config: dict[str, Any]) -> None:
+    validate_database_config_policy(config)
+    validate_theme_provider_config_policy(config)
+
     required = (
         "data_type",
         "content_type",
@@ -242,7 +285,9 @@ def validate_provider_config(config: dict[str, Any]) -> None:
 
 
 def get_database_config(config: dict[str, Any]) -> dict[str, Any]:
-    # Strictly load from the environment via Pydantic — config dict is ignored.
+    # Runtime graph-database connectivity is environment-only. Reject stale YAML
+    # sections explicitly instead of silently ignoring operator configuration.
+    validate_database_config_policy(config)
     db_settings = get_database_settings()
     return {
         "engine": db_settings.engine,

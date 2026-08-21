@@ -8,7 +8,7 @@ constructed directly via src.themes.benchmark.providers.get_provider() so each
 model is evaluated independently without fallback interference.
 
 Usage:
-    config = load_config("configs/longitudinal/sample_twitter_reply_04.yml")
+    config = load_config("configs/twitter/reply_evolution.yml")
     provider = build_theme_provider(config)
     themes = provider.generate_theme(["apple", "orange", "discussion"])
 """

@@ -5,18 +5,24 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from src.themes.benchmark.contracts import ThemeBenchmarkError, read_json, read_jsonl
+from src.themes.benchmark.contracts import (
+    BenchmarkProviderStats,
+    ThemeBenchmarkError,
+    read_json,
+    read_jsonl,
+    write_json,
+)
 from src.themes.benchmark.freeze import freeze_dataset, inventory_artifacts
 from src.themes.benchmark.integrity import validate_frozen_dataset
 from src.themes.benchmark.review import REVIEW_SCORE_COLUMNS, validate_review_import
-from src.themes.benchmark.runner import run_benchmark
+from src.themes.benchmark.runner import _update_manifest, run_benchmark
 from src.themes.theme_inputs import save_theme_inputs
 
 FIXTURE = (
     Path(__file__).resolve().parents[1]
     / "fixtures"
     / "theme_benchmark"
-    / "matched_lda.csv"
+    / "matched_lda.parquet"
 )
 
 
@@ -207,6 +213,34 @@ def test_validate_frozen_dataset_writes_split_distribution_report(tmp_path):
     assert (frozen["output_dir"] / "reports" / "split_distribution.json").exists()
 
 
+def test_benchmark_manifest_records_parquet_score_paths(tmp_path):
+    root = tmp_path / "benchmark"
+    write_json(root / "manifest.json", {"providers": [], "artifacts": {}})
+    stats = BenchmarkProviderStats(provider_id="keyword_baseline")
+
+    _update_manifest(
+        root,
+        ["keyword_baseline"],
+        {"keyword_baseline": stats},
+        {"keyword_baseline": {}},
+        split="development",
+    )
+    split_manifest = read_json(root / "manifest.json")
+    assert (
+        split_manifest["artifacts"]["development_scores"]
+        == "scores/development_summary.parquet"
+    )
+
+    _update_manifest(
+        root,
+        ["keyword_baseline"],
+        {"keyword_baseline": stats},
+        {"keyword_baseline": {}},
+    )
+    manifest = read_json(root / "manifest.json")
+    assert manifest["artifacts"]["scores"] == "scores/summary.parquet"
+
+
 def test_split_aware_benchmark_run_executes_only_requested_split(tmp_path):
     config = _config(tmp_path)
     _save_two_months(config)
@@ -254,7 +288,7 @@ def test_split_aware_benchmark_run_executes_only_requested_split(tmp_path):
     assert (
         frozen["output_dir"] / "generations" / "development" / "keyword_baseline.jsonl"
     ).exists()
-    assert (frozen["output_dir"] / "scores" / "development_summary.csv").exists()
+    assert (frozen["output_dir"] / "scores" / "development_summary.parquet").exists()
 
 
 def test_resume_unresolved_runs_only_uncached_failed_requests(monkeypatch, tmp_path):
@@ -350,21 +384,23 @@ def test_review_import_validation_rejects_duplicate_ids_and_provider_leaks(tmp_p
         "review_id": ["r1", "r2"],
         **{column: [1, 5] for column in REVIEW_SCORE_COLUMNS},
     }
-    duplicate_path = tmp_path / "duplicate.csv"
-    pd.DataFrame({**valid, "review_id": ["r1", "r1"]}).to_csv(
+    duplicate_path = tmp_path / "duplicate.parquet"
+    pd.DataFrame({**valid, "review_id": ["r1", "r1"]}).to_parquet(
         duplicate_path, index=False
     )
     with pytest.raises(ThemeBenchmarkError, match="duplicate review_id"):
         validate_review_import(duplicate_path)
 
-    leaked_path = tmp_path / "leaked.csv"
-    pd.DataFrame({**valid, "provider_id": ["gemini", "mock"]}).to_csv(
+    leaked_path = tmp_path / "leaked.parquet"
+    pd.DataFrame({**valid, "provider_id": ["gemini", "mock"]}).to_parquet(
         leaked_path, index=False
     )
     with pytest.raises(ThemeBenchmarkError, match="provider identity"):
         validate_review_import(leaked_path)
 
-    invalid_score_path = tmp_path / "invalid-score.csv"
-    pd.DataFrame({**valid, "fidelity": [0, 6]}).to_csv(invalid_score_path, index=False)
+    invalid_score_path = tmp_path / "invalid-score.parquet"
+    pd.DataFrame({**valid, "fidelity": [0, 6]}).to_parquet(
+        invalid_score_path, index=False
+    )
     with pytest.raises(ThemeBenchmarkError, match="scores from 1 to 5"):
         validate_review_import(invalid_score_path)

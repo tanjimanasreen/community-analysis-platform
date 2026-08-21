@@ -175,13 +175,12 @@ make test
 ## Canonical Pipeline-to-Dashboard Workflow
 
 The dashboard discovers only immutable run bundles with a completed
-`manifest.json`. Use `run-all` for a real analytical run that must become
-visible through the API and frontend:
+`manifest.json`. Use the evolution pipeline with one of the canonical production
+configs for a real multi-month analytical run that must become visible through
+the API and frontend:
 
 ```bash
-community-analysis run-all \
-  --config configs/twitter/retweet_quote.yml \
-  --dataset-id january
+make run-evolution-pipeline CONFIG=configs/twitter/retweet_quote_evolution.yml
 ```
 
 On success, the CLI prints the generated run ID and artifact root. Start the API
@@ -253,7 +252,7 @@ Start with the full offline sample pipeline:
 make run-pipeline-sample
 ```
 
-This runs CSV ingestion, social network/community analysis, topic modeling,
+This ingests legacy raw CSV relationships, then runs social network/community analysis, topic modeling,
 theme intelligence, and artifact indexing from tiny checked-in fixtures. It
 does not require Neo4j, Memgraph, Docker, OpenAI, Hugging Face downloads, or
 Kaleido.
@@ -263,7 +262,7 @@ Sample outputs are written to:
 ```text
 local_output/tests/community-analysis-sample/
 local_output/tests/community-analysis-theme-sample/
-local_output/tests/community-analysis-sample-interactions.csv
+local_output/tests/community-analysis-sample-interactions.parquet
 local_output/tests/community-analysis-artifact-index.md
 ```
 
@@ -283,8 +282,8 @@ For a full release/demo proof from generated fixtures, run:
 make demo
 ```
 
-This runs the one-month sample, output-contract verification, the longitudinal
-sample, longitudinal verification, artifact indexing, and the read-only API
+This runs the one-month sample, output-contract verification, the two-month
+evolution sample, evolution verification, artifact indexing, and the read-only API
 smoke tests.
 
 Run individual stages with:
@@ -300,9 +299,9 @@ make run-topic-sample
 make run-theme-sample
 make run-pipeline-sample
 make run-dashboard-sample
-make run-longitudinal-sample
+make run-evolution-pipeline-test
 make verify-output-contract
-make verify-longitudinal-output-contract
+make verify-evolution-output-contract
 make api-smoke-test
 make demo
 make demo-api
@@ -331,10 +330,10 @@ What each command does:
 - `make run-theme-sample`: runs only theme intelligence from saved theme-input prerequisites. Run `make run-topic-sample` first, or use `make run-pipeline-sample`.
 - `make run-pipeline-sample`: runs the legacy stage-by-stage offline sample workflow and writes the artifact index.
 - `make run-dashboard-sample`: runs the canonical Prefect sample and publishes a manifest-backed run for the API/dashboard.
-- `make run-longitudinal-sample`: runs a two-month offline workflow and verifies longitudinal theme transitions.
+- `make run-evolution-pipeline-test`: runs the canonical two-month offline evolution workflow and verifies theme transitions.
 - `make run-evolution-pipeline`: runs the multi-month evolution pipeline dynamically using a custom config file (e.g., `make run-evolution-pipeline CONFIG=configs/twitter/reply_evolution.yml`).
 - `make verify-output-contract`: validates generated one-month sample artifact paths and schemas without rerunning the pipeline.
-- `make verify-longitudinal-output-contract`: validates generated two-month longitudinal artifact paths, manifests, hashes, and transitions.
+- `make verify-evolution-output-contract`: validates generated two-month evolution artifact paths, manifests, hashes, and transitions.
 - `make api-smoke-test`: runs offline tests for the read-only artifact API.
 - `make demo`: runs the full offline demo proof and read-only API smoke tests.
 - `make demo-api`: starts the read-only artifact API for generated demo outputs.
@@ -364,7 +363,7 @@ The same checks can be run directly through the CLI:
 .venv/bin/python -m src.cli ingest-interactions \
   --file tests/fixtures/sample_relationships.csv \
   --config tests/configs/test_single_month.yml \
-  --out local_output/tests/community-analysis-sample-interactions.csv \
+  --out local_output/tests/community-analysis-sample-interactions.parquet \
   --no-db
 .venv/bin/python -m src.cli run-social-network --config tests/configs/test_single_month.yml --debug
 .venv/bin/python -m src.cli run-topics --config tests/configs/test_single_month.yml
@@ -385,11 +384,12 @@ Run `run-social-network` first when using direct CLI commands.
 Run `run-topics` first when using direct CLI commands, or set `theme.input_dir`
 explicitly for manual fixture runs.
 
-`verify-output-contract` is read-only. It checks generated public thesis CSVs,
+`verify-output-contract` is read-only. It checks generated Parquet artifact paths and schemas,
 internal topic/theme-input manifests, theme-input SHA256 hashes, and schema
-compatibility between public matched LDA outputs and copied theme inputs. Use
-`--longitudinal` with the April longitudinal config after
-`make run-longitudinal-sample`.
+compatibility between generated matched LDA outputs and copied theme inputs. Raw
+`source,target,relation` CSV compatibility remains limited to the ingestion boundary.
+Use the internal `--longitudinal` verifier flag with the two-month evolution test
+config after `make run-evolution-pipeline-test`.
 
 ## Read-Only Artifact API
 
@@ -566,10 +566,10 @@ profile when heatmaps are rendered, are persisted as immutable `float32` Parquet
 run artifacts under `data/themes/embeddings/`; no vector database or Memgraph
 vector storage is used.
 
-## Full Twitter Runs
+## Production Evolution Runs
 
 Bootstrap the locked local environment once, then preflight each real
-longitudinal configuration before spending compute/provider quota:
+evolution configuration before spending compute/provider quota:
 
 ```bash
 make bootstrap
@@ -583,21 +583,22 @@ real pipelines sequentially to avoid nested multicore pressure:
 ```bash
 make run-evolution-pipeline CONFIG=configs/twitter/reply_evolution.yml
 make run-evolution-pipeline CONFIG=configs/twitter/retweet_quote_evolution.yml
-python -m src.cli run-all --config configs/twitter/retweet_quote.yml
+make run-evolution-pipeline CONFIG=configs/telegram/forwarded_message_evolution.yml
 ```
 
 The preflight checks the locked direct dependency contract,
 `sklearn.cluster.HDBSCAN`, required input CSVs, output writability, live-provider
 credentials, and only the TEI profiles required by the selected config. Memgraph
-is not checked for the longitudinal command because that path consumes exported
+is not checked for the evolution command because that path consumes exported
 relationship CSVs directly. Tracking remains opt-in; install the `tracking`
 extra only when a config enables MLflow.
 
-The evolution commands each produce one January-April longitudinal run. The
-last command processes every dataset entry in `retweet_quote.yml` and publishes
-four independent monthly runs. The shared SQLite theme cache is cross-run; do
-not delete `.cache/theme_cache.sqlite3` unless a deliberate full provider rerun
-is required.
+The Twitter evolution configs each produce one January-April run. The Telegram
+forwarded-message evolution config produces one January-October 2019 run from
+legacy `source,target,relation` exports, which are normalized through the
+existing ingestion boundary before IF/WIF network analysis. The shared SQLite
+theme cache is cross-run; do not delete `.cache/theme_cache.sqlite3` unless a
+deliberate full provider rerun is required.
 
 ## Read-only API container
 

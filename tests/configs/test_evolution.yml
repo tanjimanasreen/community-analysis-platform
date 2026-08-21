@@ -1,14 +1,7 @@
-data_type: twitter
-content_type: reply
-year: "2017"
-output_base_path: local_output/tests/community-analysis-evolution-test/
+include:
+  - "../../configs/twitter/reply_evolution.yml"
 
-creator_relation: REPLIED_TO
-spreader_relation: REPLIED_BY
-creator_node_column: target
-spreader_node_column: target
-text_node_column: source
-date_column: created_at
+output_base_path: local_output/tests/community-analysis-evolution-test/
 
 graph_thresholds:
   min_total_post: 1

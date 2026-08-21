@@ -33,6 +33,7 @@ from src.orchestration.tasks import (
     validate_run_configuration_task,
 )
 from src.themes.benchmark.dataset import load_prompt_templates
+from src.themes.benchmark.contracts import THEME_PROMPT_CONTRACT_VERSION
 from src.tracking.contracts import TRACKING_ADAPTER_VERSION, TRACKING_SCHEMA_VERSION
 from src.tracking.factory import create_experiment_tracker
 from src.tracking.summaries import (
@@ -99,7 +100,7 @@ def _provider_parameters(raw: Mapping[str, Any]) -> dict[str, Any]:
         "configured_primary_provider": primary.split(":", 1)[0],
         "configured_primary_model": model,
         "configured_fallback_count": len(fallback_chain),
-        "theme_prompt_version": str(raw.get("prompt_version", "v1")),
+        "theme_prompt_version": THEME_PROMPT_CONTRACT_VERSION,
     }
 
 
@@ -436,6 +437,8 @@ def run_monthly_analysis_flow(
             all_artifacts.extend(theme_outputs.visualizations)
             if theme_outputs.provider_run_summary:
                 all_artifacts.append(theme_outputs.provider_run_summary)
+            if theme_outputs.theme_generation_provenance:
+                all_artifacts.append(theme_outputs.theme_generation_provenance)
 
         complete_run_bundle(
             context=context,
@@ -522,6 +525,8 @@ def run_monthly_analysis_flow(
             failed_artifacts.extend(theme_outputs.visualizations)
             if theme_outputs.provider_run_summary:
                 failed_artifacts.append(theme_outputs.provider_run_summary)
+            if theme_outputs.theme_generation_provenance:
+                failed_artifacts.append(theme_outputs.theme_generation_provenance)
         try:
             category = classify_error(exc)
             fail_run_bundle(
@@ -863,6 +868,8 @@ def run_evolution_analysis_flow(
             all_artifacts.extend(theme_outputs.visualizations)
             if theme_outputs.provider_run_summary:
                 all_artifacts.append(theme_outputs.provider_run_summary)
+            if theme_outputs.theme_generation_provenance:
+                all_artifacts.append(theme_outputs.theme_generation_provenance)
 
         context = PipelineRunContext.create(
             pipeline_run_id=context.pipeline_run_id,

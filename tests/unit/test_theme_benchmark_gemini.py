@@ -8,15 +8,12 @@ import pytest
 
 from src.themes.benchmark.contracts import (
     THEME_OUTPUT_JSON_SCHEMA,
+    build_theme_output_json_schema,
     ProviderMetadata,
     ThemeBenchmarkError,
     read_jsonl,
 )
-from src.themes.benchmark.dataset import (
-    SYSTEM_PROMPT,
-    USER_PROMPT_TEMPLATE,
-    build_dataset,
-)
+from src.themes.benchmark.dataset import build_dataset
 from src.providers.gemini import (
     GEMINI_INSTALL_MESSAGE,
     GeminiBenchmarkProvider,
@@ -30,14 +27,12 @@ FIXTURE = (
     Path(__file__).resolve().parents[1]
     / "fixtures"
     / "theme_benchmark"
-    / "matched_lda.csv"
+    / "matched_lda.parquet"
 )
 
 
 class FakeInteraction:
-    output_text = json.dumps(
-        {"themes": [{"name": "Fruit", "keywords": ["apple", "banana"]}]}
-    )
+    output_text = json.dumps({"themes": [{"name": "Fruit", "keyword_indices": [0, 1]}]})
     id = "interaction-1"
     status = "completed"
     usage_metadata = {
@@ -131,13 +126,20 @@ def test_gemini_provider_missing_key_fails_clearly(monkeypatch):
         GeminiBenchmarkProvider(model_id="gemini-3.5-flash", allow_live=True)
 
 
-def test_gemini_provider_missing_sdk_has_install_message(monkeypatch):
+@pytest.mark.parametrize(
+    "import_error",
+    [
+        ModuleNotFoundError("No module named 'google.genai'"),
+        ImportError("cannot import name 'genai' from 'google'"),
+    ],
+)
+def test_gemini_provider_missing_sdk_has_install_message(monkeypatch, import_error):
     monkeypatch.setenv("GEMINI_API_KEY", "not-persisted")
     real_import = builtins.__import__
 
     def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
         if name == "google" and "genai" in fromlist:
-            raise ModuleNotFoundError("No module named 'google.genai'")
+            raise import_error
         return real_import(name, globals, locals, fromlist, level)
 
     monkeypatch.setattr(builtins, "__import__", fake_import)
@@ -162,16 +164,14 @@ def test_gemini_request_construction_preserves_roles_and_settings(tmp_path):
 
     call = client.interactions.calls[0]
     assert call["model"] == "gemini-3.5-flash"
-    assert call["system_instruction"] == SYSTEM_PROMPT
-    assert call["input"] == USER_PROMPT_TEMPLATE.format(
-        keywords=request_row["keyword_text"]
-    )
+    assert call["system_instruction"] == request_row["system_prompt"]
+    assert call["input"] == request_row["user_prompt"]
     assert call["generation_config"] == {"temperature": 0.0}
     assert call["store"] is False
     assert call["response_format"] == {
         "type": "text",
         "mime_type": "application/json",
-        "schema": THEME_OUTPUT_JSON_SCHEMA,
+        "schema": build_theme_output_json_schema(len(request_row["keywords"])),
     }
     assert "not-persisted" not in json.dumps(call)
 

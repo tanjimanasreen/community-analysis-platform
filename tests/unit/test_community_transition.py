@@ -67,6 +67,42 @@ def test_community_transition_thresholds():
     assert result_df.iloc[0]["jaccard_score"] == 1.0
 
 
+def test_reply_zero_threshold_excludes_zero_overlap_and_accepts_positive_candidates():
+    df1 = pd.DataFrame(
+        {
+            "absolute_community": [0, 1],
+            "members": [[1, 2], [10, 11]],
+            "absolute_theme_names": ["ThemeA", "ThemeB"],
+            "weighted_theme_names": ["ThemeC", "ThemeD"],
+            "general_theme_names": ["ThemeE", "ThemeF"],
+        }
+    )
+    df2 = pd.DataFrame(
+        {
+            "absolute_community": [0, 1, 2],
+            "members": [[2, 3], [11, 12], [20, 21]],
+            "absolute_theme_names": ["ThemeA", "ThemeB", "ThemeG"],
+            "weighted_theme_names": ["ThemeC", "ThemeD", "ThemeH"],
+            "general_theme_names": ["ThemeE", "ThemeF", "ThemeI"],
+        }
+    )
+
+    result = get_community_transition({"month1": df1, "month2": df2}, "reply")
+
+    assert list(
+        zip(
+            result["start_month_community"],
+            result["end_month_community"],
+            result["jaccard_score"],
+            strict=True,
+        )
+    ) == [
+        ("month1_0", "month2_0", pytest.approx(1 / 3)),
+        ("month1_1", "month2_1", pytest.approx(1 / 3)),
+    ]
+    assert "month2_2" not in set(result["end_month_community"])
+
+
 def test_community_transition_empty_input():
     result_df = get_community_transition({}, "mixed")
     assert isinstance(result_df, pd.DataFrame)

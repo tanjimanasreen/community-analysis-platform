@@ -11,12 +11,6 @@ spreader_node_column: target
 text_node_column: source
 date_column: created_at
 
-database:
-  engine: memgraph
-  uri: ${GRAPH_DB_URI}
-  user: ${GRAPH_DB_USER}
-  password: ${GRAPH_DB_PASSWORD}
-
 graph_thresholds:
   min_total_post: 1
   min_shared_post: 1

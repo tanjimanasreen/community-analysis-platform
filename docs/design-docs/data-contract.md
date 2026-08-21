@@ -153,10 +153,10 @@ before creating analytical graph edges.
 
 ## 3. Analysis Results
 
-Analysis results are produced after running the pipeline.  They may be
-stored in the graph database, relational tables, or exported CSVs.  The
-schema here is provided to make explicit what information must be
-preserved.  Implementers may choose a suitable storage mechanism.
+Analysis results are produced after running the pipeline. Generated tabular
+artifacts are persisted as Parquet; raw external relationship inputs remain CSV
+at the `data/raw/**` ingestion boundary. The schema here is provided to make
+explicit what information must be preserved.
 
 ### 3.1 Communities
 

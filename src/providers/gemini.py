@@ -13,10 +13,11 @@ from typing import Any, Callable, Mapping
 from src.config.settings import get_provider_settings
 from src.config.defaults import DEFAULT_CONFIG
 from src.themes.benchmark.contracts import (
-    THEME_OUTPUT_JSON_SCHEMA,
+    build_theme_output_json_schema,
     ProviderMetadata,
     ThemeBenchmarkError,
     ThemeBenchmarkRequest,
+    normalize_indexed_theme_payload,
     write_json,
 )
 from src.themes.benchmark.live import LiveRequestBudget
@@ -142,7 +143,7 @@ class GeminiBenchmarkProvider(BaseLLMProvider):
                     response_format={
                         "type": "text",
                         "mime_type": "application/json",
-                        "schema": THEME_OUTPUT_JSON_SCHEMA,
+                        "schema": build_theme_output_json_schema(len(request.keywords)),
                     },
                     store=self.config.store,
                     generation_config={"temperature": self.config.temperature},
@@ -343,7 +344,7 @@ def _create_gemini_client(*, api_key: str | None):
         )
     try:
         from google import genai
-    except ModuleNotFoundError as exc:
+    except ImportError as exc:
         raise ThemeBenchmarkError(GEMINI_INSTALL_MESSAGE) from exc
     return genai.Client(api_key=resolved_api_key)
 
@@ -372,24 +373,9 @@ def _normalize_interaction(
         parsed = json.loads(output_text)
     except json.JSONDecodeError as exc:
         raise ThemeBenchmarkError(f"Gemini invalid_json: {exc}") from exc
-    if not _schema_valid(parsed):
-        raise ThemeBenchmarkError(
-            "Gemini schema_invalid: response did not match normalized theme schema"
-        )
-    allowed = set(request.keywords)
-    normalized_themes = []
-    for theme in parsed.get("themes", []):
-        name_val = theme.get("name") or theme.get("theme_name")
-        normalized_themes.append(
-            {
-                "name": str(name_val),
-                "keywords": [
-                    str(keyword)
-                    for keyword in theme.get("keywords", [])
-                    if str(keyword) in allowed
-                ],
-            }
-        )
+    normalized_themes = normalize_indexed_theme_payload(
+        parsed, request.keywords, provider_name="Gemini"
+    )
     metadata_payload = _raw_metadata(interaction)
 
     usage_dict = metadata_payload.get("usage", {}) or {}
@@ -459,7 +445,7 @@ def _schema_valid(value: Any) -> bool:
         name_val = theme.get("name") or theme.get("theme_name")
         if not isinstance(name_val, str):
             return False
-        if not isinstance(theme.get("keywords"), list):
+        if not isinstance(theme.get("keyword_indices"), list):
             return False
     return True
 

@@ -10,7 +10,7 @@ import pandas as pd
 
 from src.themes.membership_changes import calculate_membership_changes
 from src.themes.sankey_paths import find_all_sankey_paths, get_path_info
-from src.themes.theme_similarity import calculate_sentence_similarity
+from src.themes.theme_similarity import calculate_sentence_similarity_with_missing
 
 COMMUNITY_PATH_COLUMNS = [
     "path_id",
@@ -230,7 +230,7 @@ def build_path_theme_similarity_artifact(
         display_order = int(ordered.iloc[0]["display_order"])
         for theme_type, column in _THEME_COLUMNS.items():
             themes = [_theme_text(value) for value in ordered[column].tolist()]
-            matrix = calculate_sentence_similarity(
+            matrix = calculate_sentence_similarity_with_missing(
                 themes, model_name=model_name, model=model
             )
             for left_index in range(len(ordered)):
@@ -250,7 +250,9 @@ def build_path_theme_similarity_artifact(
                             "right_community_key": str(right["community_key"]),
                             "left_theme": themes[left_index],
                             "right_theme": themes[right_index],
-                            "cosine_similarity": float(matrix[left_index][right_index]),
+                            "cosine_similarity": _finite_float(
+                                matrix[left_index][right_index]
+                            ),
                             "embedding_provider": embedding_provider,
                             "embedding_model": embedding_model,
                             "embedding_model_revision": embedding_model_revision,

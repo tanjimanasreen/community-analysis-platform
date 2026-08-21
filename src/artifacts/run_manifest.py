@@ -105,6 +105,7 @@ _PUBLIC_SCHEMA_ALIASES = {
     "community_paths": "community_path",
     "community_path_membership": "community_path_membership",
     "community_path_theme_similarity": "community_path_theme_similarity",
+    "theme_generation_provenance": "theme_generation_provenance",
     "theme_canonical_families": "theme_canonical_family",
     "theme_embeddings_clustering": "theme_embedding",
     "theme_embeddings_similarity": "theme_embedding",
@@ -583,7 +584,7 @@ def _canonical_location(
         "community_path_theme_similarity",
     }:
         return ArtifactCategory.DATA, Path("data/evolution") / source.name
-    if base_key == "provider_run_summary":
+    if base_key in {"provider_run_summary", "theme_generation_provenance"}:
         return ArtifactCategory.DATA, Path("data/themes") / source.name
     if base_key.startswith("visualization_"):
         group = source.parent.name if source.parent != root else "general"
@@ -621,6 +622,7 @@ def _artifact_stage(key: str) -> str:
             "community_path_membership",
             "community_path_theme_similarity",
             "provider_run_summary",
+            "theme_generation_provenance",
         }
     ):
         return "theme"
@@ -684,7 +686,7 @@ def _validate_artifact_record(root: Path, record: ArtifactRecord) -> None:
         rows, columns = _parquet_shape(path)
         if record.rows is not None and rows != record.rows:
             raise ValueError(f"artifact row count mismatch: {record.key}")
-        required = _required_columns(record.key)
+        required = _required_columns(record.key, run_root=root)
         missing = [column for column in required if column not in columns]
         if missing:
             raise ValueError(
@@ -694,7 +696,7 @@ def _validate_artifact_record(root: Path, record: ArtifactRecord) -> None:
         rows, columns = _csv_shape(path)
         if record.rows is not None and rows != record.rows:
             raise ValueError(f"artifact row count mismatch: {record.key}")
-        required = _required_columns(record.key)
+        required = _required_columns(record.key, run_root=root)
         missing = [column for column in required if column not in columns]
         if missing:
             raise ValueError(
@@ -711,7 +713,7 @@ def _validate_artifact_record(root: Path, record: ArtifactRecord) -> None:
                 raise ValueError(f"artifact schema version mismatch: {record.key}")
 
 
-def _required_columns(key: str) -> list[str]:
+def _required_columns(key: str, *, run_root: Path | None = None) -> list[str]:
     base_key = _base_artifact_key(key)
 
     if base_key in {"topic_absolute_messages", "topic_weighted_messages"}:
@@ -745,7 +747,16 @@ def _required_columns(key: str) -> list[str]:
         return []
     from src.reporting.output_contract import get_required_columns_by_artifact
 
-    return list(get_required_columns_by_artifact().get(alias, []))
+    config: Mapping[str, Any] | None = None
+    if alias == "network_data" and run_root is not None:
+        config_path = run_root / RESOLVED_CONFIG_FILE
+        payload = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+        if not isinstance(payload, Mapping):
+            raise ValueError(
+                f"resolved run config must contain an object: {config_path}"
+            )
+        config = payload
+    return list(get_required_columns_by_artifact(config).get(alias, []))
 
 
 def _parquet_shape(path: Path) -> tuple[int, list[str]]:

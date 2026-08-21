@@ -99,3 +99,19 @@ make build-report
 |---|---|
 | Optional partial-match and visualization outputs are not always produced by tiny fixtures. | Verifier skips optional files when absent and validates their schema when present. |
 | Backend/frontend currently read some legacy or demo paths. | Plan 010 documents the stable contract only; implementation is out of scope. |
+
+## Supersession note — 2026-08-11
+
+Plan 055 supersedes only this plan's generated-CSV filename/compatibility
+assumptions. The schema-freeze and read-only verification goals remain valid,
+but current generated analytical/intermediate tabular artifacts are Parquet. Raw
+`data/raw/**` relationship inputs remain CSV. Historical validation records above
+are retained as evidence of the state at the time.
+
+## Supersession note — 2026-08-12
+
+Plan 059 supersedes this plan's current Make-target naming only. The historical
+`verify-longitudinal-output-contract` milestone and validation records above are
+retained as evidence of the state at the time. Current operational documentation
+uses `run-evolution-pipeline-test` and `verify-evolution-output-contract`; the old
+verification target remains only as a backward-compatible Make alias.

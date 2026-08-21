@@ -54,5 +54,5 @@ def _artifact_roots(config: Mapping) -> list[str]:
     theme = config.get("theme", {})
     if isinstance(theme, Mapping) and theme.get("output_dir"):
         roots.append(str(theme["output_dir"]))
-    roots.append("/tmp/community-analysis-sample-interactions.csv")
+    roots.append("/tmp/community-analysis-sample-interactions.parquet")
     return roots

@@ -38,15 +38,17 @@ def test_no_absolute_paths_in_configs():
         )
 
 
-def test_canonical_paths_used_for_dataset_paths():
-    """Committed dataset configs should use ${DATA_ROOT} or data/raw/ for external file paths."""
-    dataset_dir = CONFIGS_ROOT / "datasets"
+def test_canonical_paths_used_for_configured_dataset_paths():
+    """Committed dataset paths should use ${DATA_ROOT} or data/raw/."""
     violations = []
-    for yaml_path in dataset_dir.rglob("*.yml"):
+    for yaml_path in _yaml_files():
         with yaml_path.open("r", encoding="utf-8") as f:
             config = yaml.safe_load(f) or {}
 
-        for ds in config.get("datasets", []):
+        datasets = list(config.get("datasets", []) or []) + list(
+            config.get("longitudinal_datasets", []) or []
+        )
+        for ds in datasets:
             input_path = str(ds.get("input_path", "")).strip()
             if not input_path:
                 continue
@@ -54,10 +56,12 @@ def test_canonical_paths_used_for_dataset_paths():
             if not (
                 input_path.startswith("${DATA_ROOT}")
                 or input_path.startswith("data/raw/")
+                or input_path.startswith("tests/fixtures/")
             ):
                 violations.append(
-                    f"{yaml_path.relative_to(CONFIGS_ROOT)}: dataset '{ds.get('id', 'unknown')}' "
-                    f"has non-canonical input_path '{input_path}'"
+                    f"{yaml_path.relative_to(CONFIGS_ROOT)}: dataset "
+                    f"'{ds.get('id', ds.get('month', 'unknown'))}' has "
+                    f"non-canonical input_path '{input_path}'"
                 )
 
     if violations:
@@ -73,12 +77,12 @@ def test_runtime_data_root_override(monkeypatch):
     """Ensure runtime DATA_ROOT securely overrides paths dynamically without modifying configs."""
     from src.config.loader import load_config
 
-    config_path = CONFIGS_ROOT / "datasets" / "retweet_2017.yml"
+    config_path = CONFIGS_ROOT / "twitter" / "retweet_quote_evolution.yml"
 
     # Test default behavior (data/raw)
     monkeypatch.setenv("DATA_ROOT", "data/raw")
     default_config = load_config(config_path)
-    for ds in default_config.get("datasets", []):
+    for ds in default_config.get("longitudinal_datasets", []):
         assert str(ds.get("input_path")).startswith(
             "data/raw/twitter/retweet_quote/2017/"
         ), f"Default DATA_ROOT did not resolve correctly for {ds.get('id')}"
@@ -86,7 +90,7 @@ def test_runtime_data_root_override(monkeypatch):
     # Test override behavior (/mnt/research-data)
     monkeypatch.setenv("DATA_ROOT", "/mnt/research-data")
     override_config = load_config(config_path)
-    for ds in override_config.get("datasets", []):
+    for ds in override_config.get("longitudinal_datasets", []):
         assert str(ds.get("input_path")).startswith(
             "/mnt/research-data/twitter/retweet_quote/2017/"
         ), f"Overridden DATA_ROOT did not resolve correctly for {ds.get('id')}"

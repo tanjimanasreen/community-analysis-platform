@@ -33,17 +33,19 @@ from src.communities.similarity import find_matching_communities
 logger = logging.getLogger(__name__)
 
 
-def save_csv_to_directory(
+def save_parquet_to_directory(
     base_dir: str, subfolder: str, filename: str, data: pd.DataFrame
 ):
-    """Persist a pipeline dataframe as Parquet under the legacy directory layout."""
+    """Persist a generated pipeline dataframe as Parquet."""
     if data is None:
         return
 
     path = Path(base_dir) / subfolder
     path.mkdir(parents=True, exist_ok=True)
 
-    parquet_path = path / filename.replace(".csv", ".parquet")
+    if Path(filename).suffix.lower() != ".parquet":
+        raise ValueError(f"Generated pipeline artifact must be Parquet: {filename}")
+    parquet_path = path / filename
     data.to_parquet(parquet_path, index=False)
     logger.info("artifact_saved path=%s rows=%d", parquet_path.resolve(), len(data))
     return parquet_path
@@ -230,7 +232,20 @@ def run_network_phase(
     )
 
     if data_type == "telegram":
-        df_network = df_data.copy()
+        from src.pipelines.ingestion_pipeline import normalize_network_input
+
+        df_network = normalize_network_input(
+            df_data,
+            {
+                "data_type": data_type,
+                "content_type": content_type,
+                "creator_relation": creator_relation,
+                "spreader_relation": spreader_relation,
+                "creator_node_column": creator_node_column,
+                "spreader_node_column": spreader_node_column,
+                "text_node_column": text_node_column_creator_df,
+            },
+        ).copy()
         # Create synthetic df_user for telegram from from_id and forwarder_id
         unique_users = set(df_network["from_id"].dropna().unique()).union(
             set(df_network["forwarder_id"].dropna().unique())
@@ -249,10 +264,10 @@ def run_network_phase(
     followee_follower_df = get_follower_followee_network(df_network)
 
     # Save network data
-    save_csv_to_directory(
+    save_parquet_to_directory(
         os.path.join(output_dir, data_type, "network_data"),
         content_type,
-        f"{month}{year}.csv",
+        f"{month}{year}.parquet",
         df_network,
     )
 
@@ -407,43 +422,43 @@ def run_community_phase(
             "weighted": [json.dumps(per_degree)],
         }
     )
-    save_csv_to_directory(
+    save_parquet_to_directory(
         os.path.join(output_dir, data_type, "user_centrality"),
         content_type,
-        f"{month}.csv",
+        f"{month}.parquet",
         df_user_centrality,
     )
 
     logger.info("dashboard_community_artifacts_started")
     if not abs_community.empty:
-        save_csv_to_directory(
+        save_parquet_to_directory(
             os.path.join(output_dir, data_type, "communities", "graphs", "absolute"),
             content_type,
-            f"{month}.csv",
+            f"{month}.parquet",
             abs_community,
         )
     if not per_community.empty:
-        save_csv_to_directory(
+        save_parquet_to_directory(
             os.path.join(output_dir, data_type, "communities", "graphs", "weighted"),
             content_type,
-            f"{month}.csv",
+            f"{month}.parquet",
             per_community,
         )
 
     # Additive, deterministic samples make the global dashboard graph bounded.
     # Community detail requests continue to use the complete graph artifact.
-    save_csv_to_directory(
+    save_parquet_to_directory(
         os.path.join(output_dir, data_type, "communities", "graph_samples", "absolute"),
         content_type,
-        f"{month}.csv",
+        f"{month}.parquet",
         _dashboard_graph_sample(
             abs_community, max_edges=dashboard_graph_sample_max_edges
         ),
     )
-    save_csv_to_directory(
+    save_parquet_to_directory(
         os.path.join(output_dir, data_type, "communities", "graph_samples", "weighted"),
         content_type,
-        f"{month}.csv",
+        f"{month}.parquet",
         _dashboard_graph_sample(
             per_community, max_edges=dashboard_graph_sample_max_edges
         ),
@@ -452,42 +467,42 @@ def run_community_phase(
     # Small dashboard-ready summaries avoid grouping every graph edge for each
     # communities API request.  They are additive and do not replace thesis
     # graph outputs.
-    save_csv_to_directory(
+    save_parquet_to_directory(
         os.path.join(output_dir, data_type, "communities", "summary", "absolute"),
         content_type,
-        f"{month}.csv",
+        f"{month}.parquet",
         _community_summary(abs_community, abs_community_interactions),
     )
-    save_csv_to_directory(
+    save_parquet_to_directory(
         os.path.join(output_dir, data_type, "communities", "summary", "weighted"),
         content_type,
-        f"{month}.csv",
+        f"{month}.parquet",
         _community_summary(per_community, per_community_interactions),
     )
-    save_csv_to_directory(
+    save_parquet_to_directory(
         os.path.join(output_dir, data_type, "communities", "interactions", "absolute"),
         content_type,
-        f"{month}.csv",
+        f"{month}.parquet",
         abs_community_interactions,
     )
-    save_csv_to_directory(
+    save_parquet_to_directory(
         os.path.join(output_dir, data_type, "communities", "interactions", "weighted"),
         content_type,
-        f"{month}.csv",
+        f"{month}.parquet",
         per_community_interactions,
     )
     # Compact one-column indexes let the API calculate exact cross-month node
     # counts without loading every authoritative graph edge.
-    save_csv_to_directory(
+    save_parquet_to_directory(
         os.path.join(output_dir, data_type, "communities", "node_index", "absolute"),
         content_type,
-        f"{month}.csv",
+        f"{month}.parquet",
         _community_node_index(abs_community),
     )
-    save_csv_to_directory(
+    save_parquet_to_directory(
         os.path.join(output_dir, data_type, "communities", "node_index", "weighted"),
         content_type,
-        f"{month}.csv",
+        f"{month}.parquet",
         _community_node_index(per_community),
     )
 
@@ -527,10 +542,10 @@ def run_community_phase(
             ],
         }
     )
-    save_csv_to_directory(
+    save_parquet_to_directory(
         os.path.join(output_dir, data_type, "count_user_messages"),
         content_type,
-        f"{month}.csv",
+        f"{month}.parquet",
         df_user_messages_count,
     )
 
@@ -566,10 +581,10 @@ def run_community_phase(
             "weighted": [json.dumps(per_msg_stat, default=_json_default)],
         }
     )
-    save_csv_to_directory(
+    save_parquet_to_directory(
         os.path.join(output_dir, data_type, "daily_messages_stat"),
         content_type,
-        f"{month}.csv",
+        f"{month}.parquet",
         df_daily_messages_stat,
     )
 
@@ -586,10 +601,10 @@ def run_community_phase(
             "total_weighted": [len(prominent_communities_per)],
         }
     )
-    save_csv_to_directory(
+    save_parquet_to_directory(
         os.path.join(output_dir, data_type, "communities", "matched"),
         content_type,
-        f"{month}.csv",
+        f"{month}.parquet",
         df_number_of_community,
     )
 
@@ -603,10 +618,10 @@ def run_community_phase(
         df_partial_matched_community = partial_matched_community[
             ["month", "absolute", "weighted", "jaccard_score"]
         ]
-        save_csv_to_directory(
+        save_parquet_to_directory(
             os.path.join(output_dir, data_type, "communities", "partially_matched"),
             content_type,
-            f"{month}.csv",
+            f"{month}.parquet",
             df_partial_matched_community,
         )
 
@@ -700,10 +715,10 @@ def run_topic_phase(
             "bigram_weighted": [[perplexity_bi_per, coherence_bi_per]],
         }
     )
-    save_csv_to_directory(
+    save_parquet_to_directory(
         os.path.join(output_dir, data_type, "LDA", "scores"),
         content_type,
-        f"{month}.csv",
+        f"{month}.parquet",
         df_lda_scores,
     )
 
@@ -735,14 +750,14 @@ def run_topic_phase(
         ).drop(["abs_community", "per_community"], axis=1)
 
         if not merged_match.empty:
-            matched_csv = save_csv_to_directory(
+            matched_parquet = save_parquet_to_directory(
                 os.path.join(output_dir, data_type, "LDA", "matched"),
                 content_type,
-                f"{month}_{year}.csv",
+                f"{month}_{year}.parquet",
                 merged_match,
             )
             save_pipeline_theme_inputs(
-                matched_lda_csv=matched_csv,
+                matched_lda_csv=matched_parquet,
                 month=month,
                 year=year,
                 data_type=data_type,
@@ -788,10 +803,10 @@ def run_topic_phase(
         ).drop(["abs_community", "per_community"], axis=1)
 
         if not merge_partial.empty:
-            save_csv_to_directory(
+            save_parquet_to_directory(
                 os.path.join(output_dir, data_type, "LDA", "partial_matched"),
                 content_type,
-                f"{month}_{year}.csv",
+                f"{month}_{year}.parquet",
                 merge_partial,
             )
 

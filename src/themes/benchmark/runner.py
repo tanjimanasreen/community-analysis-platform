@@ -359,7 +359,7 @@ def _update_manifest(
             {
                 f"{split}_generations": f"generations/{split}/",
                 "cache": "cache/",
-                f"{split}_scores": f"scores/{split}_summary.csv",
+                f"{split}_scores": f"scores/{split}_summary.parquet",
                 "split_distribution": "reports/split_distribution.json",
             }
         )
@@ -368,7 +368,7 @@ def _update_manifest(
             {
                 "generations": "generations/",
                 "cache": "cache/",
-                "scores": "scores/summary.csv",
+                "scores": "scores/summary.parquet",
             }
         )
     stats_key = "benchmark_run_stats_by_split" if split else "benchmark_run_stats"

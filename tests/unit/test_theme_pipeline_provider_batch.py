@@ -12,11 +12,11 @@ def test_one_provider_instance_handles_batch(monkeypatch, tmp_path):
         "march": pd.DataFrame({"topic": ["C"]}),
     }
 
-    constructed_provider = MagicMock(name="constructed-provider")
+    constructed_provider = object()
     build_provider = MagicMock(return_value=constructed_provider)
     recorded_providers = []
 
-    def fake_process(df, provider):
+    def fake_process(df, provider, *, max_workers=6, **_kwargs):
         recorded_providers.append(provider)
         return df
 
@@ -41,11 +41,6 @@ def test_one_provider_instance_handles_batch(monkeypatch, tmp_path):
         theme_pipeline,
         "get_path_info",
         lambda *_args, **_kwargs: ([], [], [], []),
-    )
-    monkeypatch.setattr(
-        theme_pipeline,
-        "find_all_sankey_paths",
-        lambda *_args, **_kwargs: [],
     )
     monkeypatch.setattr(
         theme_pipeline,

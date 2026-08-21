@@ -87,7 +87,7 @@ def save_theme_inputs(
 ) -> Path:
     source_path = Path(matched_lda_csv)
     if not source_path.exists():
-        raise ThemeInputError(f"Matched LDA CSV not found: {source_path}")
+        raise ThemeInputError(f"Matched LDA artifact not found: {source_path}")
 
     if source_path.name.endswith(".parquet"):
         frame = pd.read_parquet(source_path)
@@ -174,7 +174,7 @@ def load_theme_inputs(
                 "Run run-topics first; for samples run make run-topic-sample first, "
                 "or use make run-pipeline-sample."
             )
-        monthly_data = _load_csvs_without_manifest(base, expected["year"])
+        monthly_data = _load_parquet_without_manifest(base, expected["year"])
         return ThemeInputBundle(
             monthly_data=monthly_data, manifest=None, input_dir=base
         )
@@ -222,7 +222,7 @@ def validate_theme_dataframe(frame: pd.DataFrame, name: str) -> None:
         raise ThemeInputError(f"{name} is missing required columns: {missing}")
 
 
-def _load_csvs_without_manifest(base: Path, year: str) -> dict[str, pd.DataFrame]:
+def _load_parquet_without_manifest(base: Path, year: str) -> dict[str, pd.DataFrame]:
     if not base.exists():
         return {}
     monthly_data: dict[str, pd.DataFrame] = {}

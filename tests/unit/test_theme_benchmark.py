@@ -1,18 +1,26 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 import pandas as pd
 import pytest
+import yaml
 
-from src.themes.benchmark.contracts import ThemeBenchmarkError, read_jsonl
+from src.themes.benchmark.contracts import (
+    THEME_OUTPUT_JSON_SCHEMA,
+    ThemeBenchmarkError,
+    read_jsonl,
+)
 from src.themes.benchmark.dataset import (
-    SYSTEM_PROMPT,
-    USER_PROMPT_TEMPLATE,
+    RAW_SYSTEM_TEMPLATE,
+    RAW_USER_TEMPLATE,
     benchmark_root,
     build_dataset,
+    build_gpt4o_reference_metadata,
     format_keywords_for_production,
+    get_jinja_env,
 )
 from src.themes.benchmark.review import export_blinded_review, validate_review_import
 from src.themes.benchmark.runner import run_benchmark
@@ -22,7 +30,7 @@ FIXTURE = (
     Path(__file__).resolve().parents[1]
     / "fixtures"
     / "theme_benchmark"
-    / "matched_lda.csv"
+    / "matched_lda.parquet"
 )
 
 
@@ -99,19 +107,68 @@ def test_requests_match_current_production_theme_task(tmp_path):
     assert general["keyword_text"] == format_keywords_for_production(
         ["apple", "banana", "big apple", "orange", "big orange"]
     )
-    assert general["system_prompt"] == SYSTEM_PROMPT
-    assert general["user_prompt"] == USER_PROMPT_TEMPLATE.format(
+    env = get_jinja_env()
+    assert general["system_prompt"] == env.get_template("system.jinja2").render(
+        json_schema=json.dumps(THEME_OUTPUT_JSON_SCHEMA, indent=2)
+    )
+    assert general["user_prompt"] == env.get_template("user.jinja2").render(
         keywords="apple,banana,bigapple,orange,bigorange"
     )
 
     reference = json.loads(
         (result["output_dir"] / "reference" / "gpt4o_config.json").read_text()
     )
-    assert reference["model_id"] == "gpt-4o"
-    assert reference["temperature"] == 0.0
-    assert reference["seed"] == 42
-    assert reference["response_format"] == {"type": "json_object"}
-    assert reference["user_prompt_template"] == USER_PROMPT_TEMPLATE
+    assert reference["response_format"]["type"] == "json_schema"
+    assert reference["response_format"]["json_schema"]["strict"] is True
+    assert reference["system_prompt"] == RAW_SYSTEM_TEMPLATE
+    assert reference["user_prompt_template"] == RAW_USER_TEMPLATE
+
+
+def test_reference_metadata_tracks_current_production_provider_config():
+    providers_config = yaml.safe_load(Path("configs/providers.yml").read_text())
+    current_primary = providers_config["theme_provider"]["primary"]
+    provider_name, current_model = current_primary.split(":", 1)
+    reference = build_gpt4o_reference_metadata()
+
+    # The legacy function/artifact name is retained for benchmark compatibility;
+    # current-runtime reference metadata follows the configured OpenAI champion.
+    assert provider_name == "openai"
+    assert reference["model_id"] == current_model
+    assert reference["response_format"]["type"] == "json_schema"
+    assert reference["response_format"]["json_schema"]["strict"] is True
+
+
+def test_theme_benchmark_cli_maps_current_reference_option(monkeypatch):
+    from src import cli
+
+    captured = {}
+    monkeypatch.setattr(cli, "load_config", lambda _path: {})
+    monkeypatch.setattr(
+        cli,
+        "_run_theme_benchmark_command",
+        lambda args: captured.update(vars(args)),
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "community-analysis",
+            "theme-benchmark",
+            "build-dataset",
+            "--config",
+            "tests/configs/test_single_month.yml",
+            "--run-id",
+            "cli-reference-option",
+            "--gpt-5-nano-outputs",
+            "prior-outputs.jsonl",
+        ],
+    )
+
+    cli.main()
+
+    # Internally the dataset builder still accepts the historical gpt4o_outputs
+    # parameter so old benchmark artifact plumbing remains compatible.
+    assert captured["gpt4o_outputs"] == "prior-outputs.jsonl"
 
 
 def test_path_escape_is_rejected(tmp_path):
@@ -235,17 +292,19 @@ def test_blinded_review_export_hides_provider_identities(tmp_path):
 
     review_path = export_blinded_review(config["output_base_path"], "review-test")
 
-    text = review_path.read_text(encoding="utf-8")
-    assert "keyword_baseline" not in text
-    assert "mock" not in text.lower()
-    assert "deterministic-keyword-baseline" not in text
-    assert "provider_01" in text
-    assert "provider_02" in text
+    frame = pd.read_parquet(review_path)
+    assert "provider_id" not in frame.columns
+    assert "model_id" not in frame.columns
+    assert set(frame["provider_label"]) == {"provider_01", "provider_02"}
+    searchable = frame.astype(str).to_string(index=False).lower()
+    assert "keyword_baseline" not in searchable
+    assert "mock" not in searchable
+    assert "deterministic-keyword-baseline" not in searchable
 
 
 def test_review_import_validation_requires_score_columns(tmp_path):
-    path = tmp_path / "review.csv"
-    pd.DataFrame({"review_id": ["abc"], "fidelity": [1]}).to_csv(path, index=False)
+    path = tmp_path / "review.parquet"
+    pd.DataFrame({"review_id": ["abc"], "fidelity": [1]}).to_parquet(path, index=False)
 
     with pytest.raises(ThemeBenchmarkError, match="missing required columns"):
         validate_review_import(path)

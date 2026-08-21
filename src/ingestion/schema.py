@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Mapping
 
 USER = "User"
 MESSAGE = "Message"
@@ -115,3 +116,47 @@ RAW_TO_DERIVED_MAPPINGS = {
         date_field="created_at",
     ),
 }
+
+
+CONFIG_MAPPING_FIELDS = {
+    "creator_relation": "creator_relation",
+    "spreader_relation": "spreader_relation",
+    "creator_node_column": "source_user_column",
+    "spreader_node_column": "target_user_column",
+    "text_node_column": "message_node_column",
+    "date_column": "date_field",
+}
+
+
+def canonical_raw_to_derived_mapping(
+    config: Mapping[str, object],
+) -> RawToDerivedMapping | None:
+    """Return the canonical mapping for supported platform/content pairs."""
+    data_type = str(config.get("data_type", "")).strip()
+    content_type = str(config.get("content_type", "")).strip()
+    key = f"{data_type}_{content_type}"
+    return RAW_TO_DERIVED_MAPPINGS.get(key)
+
+
+def validate_canonical_raw_mapping(config: Mapping[str, object]) -> None:
+    """Reject contradictory relation/column mappings for canonical datasets."""
+    mapping = canonical_raw_to_derived_mapping(config)
+    if mapping is None:
+        return
+
+    mismatches: list[str] = []
+    for config_key, mapping_attr in CONFIG_MAPPING_FIELDS.items():
+        if config_key not in config:
+            continue
+        actual = str(config[config_key])
+        expected = str(getattr(mapping, mapping_attr))
+        if actual != expected:
+            mismatches.append(f"{config_key}={actual!r} (expected {expected!r})")
+
+    if mismatches:
+        data_type = str(config.get("data_type", ""))
+        content_type = str(config.get("content_type", ""))
+        raise ValueError(
+            "Invalid analytical mapping for "
+            f"{data_type}/{content_type}: " + "; ".join(mismatches)
+        )

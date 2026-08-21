@@ -11,7 +11,8 @@ from src.themes.benchmark.contracts import (
     ProviderMetadata,
     ThemeBenchmarkError,
     ThemeBenchmarkRequest,
-    THEME_OUTPUT_JSON_SCHEMA,
+    build_theme_output_json_schema,
+    normalize_indexed_theme_payload,
 )
 from src.themes.benchmark.live import LiveRequestBudget
 
@@ -131,7 +132,9 @@ class MistralBenchmarkProvider(BaseLLMProvider):
                         "type": "json_schema",
                         "json_schema": {
                             "name": "theme_output",
-                            "schema": THEME_OUTPUT_JSON_SCHEMA,
+                            "schema": build_theme_output_json_schema(
+                                len(request.keywords)
+                            ),
                         },
                     },
                     "temperature": self.config.temperature,
@@ -296,50 +299,13 @@ def _normalize_completion(
 def _normalize_theme_payload(
     parsed: Any, request: ThemeBenchmarkRequest, content: str = ""
 ) -> list[dict[str, Any]]:
-    if isinstance(parsed, Mapping) and isinstance(parsed.get("themes"), list):
-        source_themes = parsed["themes"]
-        allowed = set(request.keywords)
-        normalized = []
-        for theme in source_themes:
-            if not isinstance(theme, Mapping) or not isinstance(theme.get("name"), str):
-                raise ThemeBenchmarkError(
-                    f"MISTRAL schema_invalid: response did not match normalized theme schema. Raw: {content}"
-                )
-            keywords = theme.get("keywords")
-            if not isinstance(keywords, list):
-                raise ThemeBenchmarkError(
-                    f"MISTRAL schema_invalid: response did not match normalized theme schema. Raw: {content}"
-                )
-            normalized.append(
-                {
-                    "name": str(theme["name"]),
-                    "keywords": [
-                        str(keyword) for keyword in keywords if str(keyword) in allowed
-                    ],
-                }
-            )
-        return normalized
-
-    # Fallback for LLMs that just return {"theme_name": ["kw1", "kw2"]}
-    if isinstance(parsed, Mapping):
-        allowed = set(request.keywords)
-        normalized = []
-        for name, keywords in parsed.items():
-            if not isinstance(keywords, list):
-                raise ThemeBenchmarkError(
-                    f"MISTRAL schema_invalid: response did not match normalized theme schema. Raw: {content}"
-                )
-            normalized.append(
-                {
-                    "name": str(name),
-                    "keywords": [
-                        str(keyword) for keyword in keywords if str(keyword) in allowed
-                    ],
-                }
-            )
-        return normalized
-    raise ThemeBenchmarkError(
-        f"MISTRAL schema_invalid: response did not match normalized theme schema. Raw: {content}"
+    del content
+    if not isinstance(parsed, Mapping):
+        raise ThemeBenchmarkError(
+            "MISTRAL schema_invalid: response did not match normalized theme schema."
+        )
+    return normalize_indexed_theme_payload(
+        parsed, request.keywords, provider_name="MISTRAL"
     )
 
 

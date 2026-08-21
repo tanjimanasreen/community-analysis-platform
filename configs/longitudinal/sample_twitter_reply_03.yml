@@ -1,7 +1,0 @@
-# March 2017 longitudinal sample — inherits all shared settings from base.
-# Only overrides change between months: month identifier and input CSV path.
-include:
-  - "base_twitter_reply.yml"
-
-month: "03"
-input_path: tests/fixtures/longitudinal/twitter_reply_03_2017.csv

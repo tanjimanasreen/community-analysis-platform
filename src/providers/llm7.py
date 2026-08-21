@@ -16,6 +16,7 @@ from src.themes.benchmark.contracts import (
     ProviderMetadata,
     ThemeBenchmarkError,
     ThemeBenchmarkRequest,
+    normalize_indexed_theme_payload,
     write_json,
 )
 from src.themes.benchmark.live import LiveRequestBudget
@@ -454,49 +455,12 @@ def _normalize_completion(
 def _normalize_theme_payload(
     parsed: Any, request: ThemeBenchmarkRequest
 ) -> list[dict[str, Any]]:
-    if isinstance(parsed, Mapping) and isinstance(parsed.get("themes"), list):
-        source_themes = parsed["themes"]
-        allowed = set(request.keywords)
-        normalized = []
-        for theme in source_themes:
-            name_val = theme.get("name") or theme.get("theme_name")
-            if not isinstance(theme, Mapping) or not isinstance(name_val, str):
-                raise ThemeBenchmarkError(
-                    "LLM7 schema_invalid: response did not match normalized theme schema"
-                )
-            keywords = theme.get("keywords")
-            if not isinstance(keywords, list):
-                raise ThemeBenchmarkError(
-                    "LLM7 schema_invalid: response did not match normalized theme schema"
-                )
-            normalized.append(
-                {
-                    "name": str(name_val),
-                    "keywords": [
-                        str(keyword) for keyword in keywords if str(keyword) in allowed
-                    ],
-                }
-            )
-        return normalized
-    if isinstance(parsed, Mapping):
-        allowed = set(request.keywords)
-        normalized = []
-        for name, keywords in parsed.items():
-            if not isinstance(keywords, list):
-                raise ThemeBenchmarkError(
-                    "LLM7 schema_invalid: response did not match normalized theme schema"
-                )
-            normalized.append(
-                {
-                    "name": str(name),
-                    "keywords": [
-                        str(keyword) for keyword in keywords if str(keyword) in allowed
-                    ],
-                }
-            )
-        return normalized
-    raise ThemeBenchmarkError(
-        "LLM7 schema_invalid: response did not match normalized theme schema"
+    if not isinstance(parsed, Mapping):
+        raise ThemeBenchmarkError(
+            "LLM7 schema_invalid: response did not match normalized theme schema"
+        )
+    return normalize_indexed_theme_payload(
+        parsed, request.keywords, provider_name="LLM7"
     )
 
 
