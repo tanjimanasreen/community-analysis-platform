@@ -41,7 +41,12 @@ theme:
   clustering_model: sentence-transformers/all-MiniLM-L6-v2
   clustering_model_revision: 1110a243fdf4706b3f48f1d95db1a4f5529b4d41
   clustering_min_cluster_size: 2
+  # Legacy v2 Stage-B setting retained in resolved config/artifact provenance.
+  # Canonicalization contract 4.0 no longer uses a density min-cluster-size:
+  # Stage B is fixed to normalized monthly semantic representatives + cosine
+  # complete linkage at similarity 0.65 (distance 0.35).
   canonicalization_min_cluster_size: 2
+  # Monthly HDBSCAN metric only; Stage-B canonicalization uses cosine.
   clustering_metric: euclidean
 
 # Local experiment tracking is opt-in. DVC remains the dataset-versioning

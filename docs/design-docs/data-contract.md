@@ -194,8 +194,9 @@ generated downstream by GPT or rule‑based systems.
 | `ThemeEmbedding`          | `embedding_key: str`, `text: str`, `embedding: float32[384]` | Content-addressed clustering or similarity vector; profile, model ID/revision, text/vector hashes, dtype, dimensions, normalization and contract versions are persisted. |
 | `MonthlyThemeCluster`     | `period: str`, `monthly_cluster_id: str`                    | HDBSCAN cluster over `general_theme_names`; noise is evidence-only. |
 |                          | `representative_theme: str`, `source_theme_labels: List[str]`   | Representative is a deterministic semantic medoid.             |
-| `CanonicalTheme`         | `canonical_theme_id: str`, `canonical_theme_label: str`        | Run-local cross-month canonical family; Stage-B noise is singleton. |
-|                          | `monthly_cluster_ids: List[str]`, `periods: List[str]`         | Stable linkage across monthly semantic clusters.                |
+| `CanonicalTheme`         | `canonical_theme_id: str`, `canonical_theme_label: str`        | Run-local cross-month canonical family under canonicalization contract `4.0`. |
+|                          | `monthly_cluster_ids: List[str]`, `periods: List[str]`         | Stable linkage across monthly semantic clusters. Stage B uses the L2-normalized existing monthly semantic-medoid embedding with complete-linkage cosine clustering at similarity `0.65`; size-one groups remain valid singleton canonical themes. |
+|                          | `stage_b_cluster_label: int`, `stage_b_hdbscan_label: Optional[int]` | Generic Stage-B label is persisted; the legacy HDBSCAN label is null for contract `4.0`. |
 | `CanonicalThemeMonth`    | `canonical_theme_id: str`, `period: str`                       | Monthly reporting record.                                      |
 |                          | `community_count: int`, `community_pairs: List[...]`           | Counts distinct matched IF/WIF pairs.                           |
 |                          | `prominent_keywords: List[str]`, `percentage: float`           | General LDA evidence and themed-pair denominator.               |
@@ -224,3 +225,8 @@ To enable reproducibility, track metadata for every run.
 
 Keep run records in a separate collection or table.  They should not
 intermix with graph entities.
+
+## 5. Translation-Derived Topic Input
+
+When multilingual translation is enabled, source messages remain unchanged and the topic stage consumes an in-memory English analysis-text copy immediately before the existing preprocessing/LDA boundary. Translation provenance is persisted separately with the source hash/text, detected language and confidence, translated English text, translation-applied flag, provider, translation contract version, cache-hit state, status, and timestamp. Translation artifacts are derived topic inputs and must never overwrite canonical Telegram or Twitter source-message fields.
+For Azure fallback translations triggered by a `/detect` result that is not directly translation-supported, provenance status is `success_auto_detect_fallback`; the persisted detected-language fields continue to describe the prior detection evidence while the translated English text is the value consumed by LDA.

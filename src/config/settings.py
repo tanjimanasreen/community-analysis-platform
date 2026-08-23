@@ -119,6 +119,24 @@ class ThemeSimilaritySettings(BaseSettings):
     )
 
 
+class AzureTranslatorSettings(BaseSettings):
+    """Environment-only Azure Translator connection settings."""
+
+    key: Optional[SecretStr] = None
+    endpoint: AnyHttpUrl = Field(
+        default="https://api.cognitive.microsofttranslator.com"
+    )
+    region: Optional[str] = None
+
+    model_config = SettingsConfigDict(
+        env_prefix="AZURE_TRANSLATOR_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        env_ignore_empty=True,
+        extra="ignore",
+    )
+
+
 class ProviderSettings(BaseSettings):
     """Settings for all LLM providers."""
 
@@ -216,6 +234,10 @@ def get_clustering_settings() -> ThemeClusteringSettings:
 
 def get_similarity_settings() -> ThemeSimilaritySettings:
     return ThemeSimilaritySettings()
+
+
+def get_azure_translator_settings() -> AzureTranslatorSettings:
+    return AzureTranslatorSettings()
 
 
 def get_provider_settings() -> ProviderSettings:

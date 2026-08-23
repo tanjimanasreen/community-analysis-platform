@@ -169,11 +169,17 @@ Required:
 - Checksums, byte sizes, Parquet row counts, and known schemas are verified.
 - Generated analytical and intermediate tabular outputs are Parquet; no generated CSV compatibility copy is required.
 - Failed runs cannot retain completed status.
+- Equivalent runs with different run IDs compute the same stage cache identity.
+- Relevant input, configuration, stage-code/runtime, or contract changes invalidate the affected stage cache identity.
+- Valid cached artifacts are restored under the current run root; missing, incomplete, or tampered cache entries are treated as misses.
+- Prefect task-result caching is not used to reuse older run-scoped artifact references.
 
 Validation:
 
 ```bash
 pytest tests/unit/test_run_manifest.py
+pytest tests/unit/test_stage_artifact_cache.py
+pytest tests/unit/test_orchestration_hashing.py
 pytest tests/unit/test_orchestration_monthly_flow.py
 pytest tests/integration/test_orchestration_smoke.py
 ```
@@ -320,3 +326,48 @@ canvas, bounded node/edge counts, IF/WIF switching, resize, and fullscreen. API
 responses must include `X-Request-ID`, security headers, and a successful
 `/api/v1/ready` response when the artifact root is mounted. Artifact values must
 remain data: the browser may parse JSON but must never evaluate serialized text.
+
+## Multilingual Translation Gate
+- No automated test may call Azure Translator, Amazon Comprehend, or Amazon Translate live.
+- A complete per-message translation-cache hit must not construct a cloud provider.
+- Original community-message dataframes/artifacts must remain unchanged.
+- Azure↔AWS or translation-contract changes must invalidate topic cache identity; cache path/timeout changes must not.
+- Translation provenance must be included in topic-stage artifact reuse and final run-manifest validation.
+
+### Translation preflight gate
+- The translation workload planner must not construct a cloud provider or create an empty SQLite cache merely to report zero cache hits.
+- `translation-preflight` must stop before LDA/theme/provider execution and report exact cache misses at the post-community, pre-LDA boundary.
+- Azure/AWS language-detection request estimates must match the batching logic used by the corresponding provider adapter.
+- `translation-detect` must call language detection only, persist reusable detection results, never call a translation endpoint, and report the exact remaining provider translation-request count.
+- A subsequent full translation run must reuse cached detections and must not repeat detection for those texts.
+- Azure `/detect` results with `isTranslationSupported=false` must never be passed to LDA unchanged; the full translation path may retry them through `/translate` source auto-detection, must cache successful fallback output, and must fail explicitly for unresolved/oversized inputs.
+- Detection-only planning must include Azure auto-detect fallback requests in its exact request count and persist a message-level issue audit without calling `/translate`.
+
+## Canonical Theme Stage-B Benchmark Gate
+- Benchmark input must come from persisted non-noise monthly-cluster evidence plus the run's recorded clustering embedding artifact; no TEI/provider inference is allowed.
+- The baseline benchmark variant must reproduce the current Stage-B HDBSCAN partition for the same embedding matrix.
+- Candidate benchmarking must not mutate production canonicalization configuration or run artifacts.
+- Constituent-mean candidates must reconstruct monthly-cluster vectors from every persisted non-noise evidence occurrence using exact recorded source-label embeddings; duplicate observations must not be collapsed before averaging.
+- Raw and L2-normalized constituent means must be compared under the existing Euclidean Stage-B density settings so representation changes are isolated from parameter changes.
+- Plan-081 grouping candidates must keep the normalized constituent centroid fixed, vary HDBSCAN `min_samples` independently without changing production defaults, and evaluate average/complete-linkage cosine thresholds at the documented fixed grid.
+- Agglomerative singleton groups must be represented as benchmark singleton noise; complete-linkage threshold runs must expose the configured similarity/distance threshold in the summary so family cohesion can be audited directly.
+- Plan-083 representation candidates must keep cosine complete linkage fixed and compare the recorded monthly representative, occurrence-weighted constituent mean, individually normalized constituent mean, HDBSCAN-membership-probability-weighted constituent mean, and exact-unique-label constituent mean at similarity thresholds 0.60 through 0.80.
+- Probability-weighted reconstruction must use persisted monthly HDBSCAN `membership_probability` values and fail explicitly on missing, negative, non-finite, or zero-total weights; no fallback weighting is allowed.
+- Benchmark output must include monthly-cluster internal cohesion, representative-to-centroid agreement, representative-space within-family cohesion, observation-weighted largest-family concentration, representation/grouping provenance, constituent evidence counts, and full monthly-cluster membership for semantic review before any production default change is approved.
+- Regression coverage must include a centroid-collapse fixture where two heterogeneous monthly clusters merge in centroid space while their recorded representatives remain below the configured similarity threshold; representative-space diagnostics must expose that false merge.
+
+Validation:
+
+```bash
+python -m pytest -q tests/unit/test_canonical_theme_benchmark.py tests/unit/test_theme_clustering.py
+```
+
+## Production Canonical Theme Stage-B Gate
+- Production canonicalization contract `4.0` must reuse the already-produced embedding of each monthly cluster's deterministic semantic medoid/representative and L2-normalize that vector; production Stage B must not average constituent embeddings.
+- Stage B must use cosine-distance agglomerative clustering with complete linkage and similarity threshold `0.65` (`distance_threshold=0.35`); monthly HDBSCAN must remain unchanged.
+- Complete-linkage regression coverage must demonstrate that bridge/chaining points cannot force a canonical family whose furthest pair falls below the threshold.
+- Stage-B size-one groups must remain valid singleton canonical themes. `stage_b_hdbscan_label` must be null for contract `4.0`, while a generic Stage-B cluster label and full grouping provenance are persisted.
+- Stage B must not issue a second embedding request for monthly representative labels. A representative missing from its own constituent observations, or mapping to inconsistent recorded vectors, must fail explicitly rather than re-embed or fall back to a centroid.
+- Canonical labels must remain existing monthly representatives selected by deterministic semantic medoid over the normalized monthly representative vectors.
+- The production partition must match the approved Plan-083 representative + complete-linkage cosine-0.65 benchmark candidate when both receive the same normalized representative matrix.
+- Theme-stage cache identity must change across canonicalization contract revisions so contract-3.0 artifacts cannot be restored as contract-4.0 outputs.

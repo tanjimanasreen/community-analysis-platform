@@ -295,19 +295,66 @@ authoritative evidence and are never overwritten.
 
 ### Cross-month canonicalization
 
-- Monthly representatives are embedded with the same clustering TEI profile and
-  clustered again within one run only.
-- Stage-B noise becomes a singleton canonical theme rather than being discarded.
-- Canonical labels are existing monthly representative labels selected by the
-  same semantic-medoid rule; no GPT relabeling or manual standardization is
-  required.
+- Stage B reuses the exact observation embeddings already produced for monthly
+  clustering; monthly representative labels are not re-embedded.
+- Each non-noise monthly cluster is represented by the existing embedding of its
+  deterministic monthly semantic medoid/representative, and that vector is
+  L2-normalized. Constituent embeddings are not averaged for production Stage B.
+- Normalized monthly representative embeddings are grouped within one run only
+  using `sklearn.cluster.AgglomerativeClustering` with cosine distance, complete
+  linkage, and similarity threshold `0.65` (distance threshold `0.35`). A size-one
+  group is retained as a valid singleton canonical theme; it is not HDBSCAN noise.
+- Canonical labels are existing monthly representative labels selected by the same
+  deterministic semantic-medoid rule, evaluated over the normalized monthly
+  representative vectors; no GPT relabeling or manual standardization is required.
 - Canonical IDs, labels, source labels, matched-pair evidence, keywords, model
-  metadata, contract versions, and source hashes are persisted in additive
-  artifacts.
-- The monthly clustering and cross-month canonicalization contracts are versioned
-  `2.1` for the serialization-integrity correction; HDBSCAN parameters and the
-  semantic-medoid rule are unchanged from `2.0`.
+  metadata, Stage-B representation/grouping/threshold provenance, contract
+  versions, and source hashes are persisted in additive artifacts. Canonical-family
+  artifacts expose a generic `stage_b_cluster_label`; the legacy
+  `stage_b_hdbscan_label` column remains present but is null under this contract.
+- The monthly clustering contract remains `2.1`; the approved production
+  cross-month canonicalization contract is `4.0`. Monthly HDBSCAN parameters are
+  unchanged.
 
+### Stage-B canonicalization benchmark
+
+- `src/themes/canonical_benchmark.py` is a read-only diagnostic boundary over
+  persisted monthly-cluster evidence and the exact recorded clustering vectors.
+- The benchmark always includes the current representative-label/raw-embedding/
+  Euclidean Stage-B contract as a baseline and retains the small Plan-079 set of
+  normalized-Euclidean and brute-force cosine candidates.
+- Plan 080 adds representation-only candidates that replace each monthly
+  representative embedding with the arithmetic mean of all persisted constituent
+  general-theme observation embeddings, preserving duplicate observation
+  multiplicity. The centroid is evaluated both raw and L2-normalized while the
+  existing Euclidean Stage-B density settings remain fixed.
+- Plan 081 keeps the L2-normalized constituent centroid fixed and adds
+  benchmark-only grouping candidates: HDBSCAN with `min_samples` varied
+  independently at 1 and 2, plus cosine-distance agglomerative clustering with
+  average and complete linkage at similarity thresholds 0.60, 0.65, 0.70, 0.75,
+  and 0.80. Singleton agglomerative groups are reported as benchmark noise so
+  family/noise diagnostics remain comparable with the production Stage-B contract.
+- Plan 083 keeps cosine complete-linkage grouping fixed and adds a controlled
+  representation grid at similarity thresholds 0.60, 0.65, 0.70, 0.75, and 0.80:
+  the recorded monthly semantic representative/medoid embedding, the production
+  occurrence-weighted constituent mean, the mean of individually L2-normalized
+  constituents, the monthly-HDBSCAN membership-probability-weighted mean, and the
+  exact-unique-label constituent mean. All vectors are reconstructed from persisted
+  evidence and recorded clustering embeddings; no inference is permitted.
+- Plan 083 also reports monthly-cluster internal cohesion, representative-to-centroid
+  agreement, representative-space within-family cohesion, and observation-weighted
+  largest-family concentration. These diagnostics are specifically intended to
+  expose false recurrence caused by averaging internally heterogeneous monthly
+  clusters into generic centroids.
+- The benchmark reports representation, cluster/noise counts, largest-family
+  concentration, within-family cosine cohesion, constituent observation/unique-label
+  counts, and full monthly-cluster memberships for manual semantic review. It does
+  not run TEI or modify canonical artifacts. Plan 082 previously promoted the
+  normalized-constituent-centroid + complete-linkage cosine `0.65` candidate as
+  contract `3.0`; Plan 083 cross-corpus validation showed representative-space
+  drift from centroid averaging, so Plan 084 promotes the recorded monthly semantic
+  representative + complete-linkage cosine `0.65` candidate as contract `4.0`. The
+  benchmark remains read-only.
 
 ### Embedding persistence and reuse
 

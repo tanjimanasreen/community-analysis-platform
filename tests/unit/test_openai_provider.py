@@ -225,9 +225,9 @@ def test_requests_schema_maximum_tracks_request_keyword_count():
     provider.generate(build_theme_request(keywords))
 
     request = provider._client.responses.kwargs[0]
-    index_items = request["text"]["format"]["schema"]["properties"]["themes"][
-        "items"
-    ]["properties"]["keyword_indices"]["items"]
+    index_items = request["text"]["format"]["schema"]["properties"]["themes"]["items"][
+        "properties"
+    ]["keyword_indices"]["items"]
     assert index_items["minimum"] == 0
     assert index_items["maximum"] == 11
 

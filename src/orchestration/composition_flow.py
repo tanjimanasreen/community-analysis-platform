@@ -50,7 +50,7 @@ from src.tracking.summaries import (
 
 logger = logging.getLogger(__name__)
 
-ORCHESTRATION_SEMANTIC_VERSION = "1.0.0"
+ORCHESTRATION_SEMANTIC_VERSION = "1.1.0"
 
 
 def _extract_topic_bundle(artifacts: list[ArtifactReference]) -> TopicInputBundle:
@@ -416,6 +416,8 @@ def run_monthly_analysis_flow(
             if topic_outputs.partial_matched_communities_topics:
                 all_artifacts.append(topic_outputs.partial_matched_communities_topics)
             all_artifacts.extend(topic_outputs.theme_inputs)
+            if topic_outputs.translation_provenance:
+                all_artifacts.append(topic_outputs.translation_provenance)
         if theme_outputs:
             all_artifacts.extend(theme_outputs.themes)
             all_artifacts.extend(theme_outputs.clustered_themes)
@@ -504,6 +506,8 @@ def run_monthly_analysis_flow(
                     topic_outputs.partial_matched_communities_topics
                 )
             failed_artifacts.extend(topic_outputs.theme_inputs)
+            if topic_outputs.translation_provenance:
+                failed_artifacts.append(topic_outputs.translation_provenance)
         if theme_outputs:
             failed_artifacts.extend(theme_outputs.themes)
             failed_artifacts.extend(theme_outputs.clustered_themes)
@@ -757,6 +761,8 @@ def run_evolution_analysis_flow(
             if topic_outputs.partial_matched_communities_topics:
                 month_artifacts.append(topic_outputs.partial_matched_communities_topics)
             month_artifacts.extend(topic_outputs.theme_inputs)
+            if topic_outputs.translation_provenance:
+                month_artifacts.append(topic_outputs.translation_provenance)
 
             return (
                 str(month),

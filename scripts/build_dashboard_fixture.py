@@ -458,9 +458,18 @@ def _cluster_fixture_rows(spec: RunSpec, *, month: int) -> tuple[list[dict], lis
                     "clustering_min_cluster_size": 2,
                     "canonicalization_min_cluster_size": 2,
                     "clustering_metric": "euclidean",
+                    "canonicalization_representation": "monthly_semantic_representative_l2_normalized",
+                    "canonicalization_grouping_method": "agglomerative",
+                    "canonicalization_implementation": (
+                        "sklearn.cluster.AgglomerativeClustering"
+                    ),
+                    "canonicalization_metric": "cosine",
+                    "canonicalization_linkage": "complete",
+                    "canonicalization_similarity_threshold": 0.65,
+                    "canonicalization_distance_threshold": 0.35,
                     "source_artifact_sha256": "fixture",
                     "monthly_cluster_contract_version": "2.1",
-                    "canonicalization_contract_version": "2.1",
+                    "canonicalization_contract_version": "4.0",
                 }
             )
 
@@ -509,8 +518,17 @@ def _cluster_fixture_rows(spec: RunSpec, *, month: int) -> tuple[list[dict], lis
                 "clustering_min_cluster_size": 2,
                 "canonicalization_min_cluster_size": 2,
                 "clustering_metric": "euclidean",
+                "canonicalization_representation": "monthly_semantic_representative_l2_normalized",
+                "canonicalization_grouping_method": "agglomerative",
+                "canonicalization_implementation": (
+                    "sklearn.cluster.AgglomerativeClustering"
+                ),
+                "canonicalization_metric": "cosine",
+                "canonicalization_linkage": "complete",
+                "canonicalization_similarity_threshold": 0.65,
+                "canonicalization_distance_threshold": 0.35,
                 "monthly_cluster_contract_version": "2.1",
-                "canonicalization_contract_version": "2.1",
+                "canonicalization_contract_version": "4.0",
                 "source_artifact_sha256": "fixture",
             }
         )
@@ -960,7 +978,8 @@ def _build_run(artifact_root: Path, spec: RunSpec) -> Path:
             "monthly_representatives": json.dumps(sorted(item["monthly_representatives"])),
             "periods": json.dumps(sorted(item["periods"])),
             "months_present": len(item["periods"]),
-            "stage_b_hdbscan_label": 0,
+            "stage_b_cluster_label": 0,
+            "stage_b_hdbscan_label": None,
             "singleton_canonical_theme": len(item["periods"]) == 1,
             "embedding_provider": "fixture",
             "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
@@ -970,9 +989,18 @@ def _build_run(artifact_root: Path, spec: RunSpec) -> Path:
             "clustering_min_cluster_size": 2,
             "canonicalization_min_cluster_size": 2,
             "clustering_metric": "euclidean",
+            "canonicalization_representation": "monthly_semantic_representative_l2_normalized",
+            "canonicalization_grouping_method": "agglomerative",
+            "canonicalization_implementation": (
+                "sklearn.cluster.AgglomerativeClustering"
+            ),
+            "canonicalization_metric": "cosine",
+            "canonicalization_linkage": "complete",
+            "canonicalization_similarity_threshold": 0.65,
+            "canonicalization_distance_threshold": 0.35,
             "source_artifact_sha256s": json.dumps(["fixture"]),
-            "monthly_cluster_contract_version": "1.0",
-            "canonicalization_contract_version": "1.0",
+            "monthly_cluster_contract_version": "2.1",
+            "canonicalization_contract_version": "4.0",
         }
         for item in family_rows.values()
     ]

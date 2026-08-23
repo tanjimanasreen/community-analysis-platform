@@ -20,6 +20,8 @@ def test_sample_config_remains_valid():
     assert config.get("content_type") == "reply"
     assert config.get("lda", {}).get("num_topics") == 15
     assert config.get("theme", {}).get("render_visuals") is False
+    assert config.get("orchestration", {}).get("artifact_reuse") is True
+    assert "cache_expiration_days" not in config.get("orchestration", {})
 
 
 def test_canonical_theme_provider_fallback_settings_remain_valid():
@@ -60,6 +62,16 @@ def test_analytical_theme_settings_remain_valid():
     }
 
     validate_run_config(config)
+
+
+def test_artifact_reuse_must_be_boolean():
+    config = load_config("tests/configs/test_single_month.yml")
+    config.setdefault("orchestration", {})["artifact_reuse"] = "false"
+
+    with pytest.raises(
+        ValueError, match="orchestration.artifact_reuse must be a boolean"
+    ):
+        validate_run_config(config)
 
 
 def test_tracking_is_disabled_when_sample_config_omits_section():
@@ -202,3 +214,37 @@ def test_database_section_in_longitudinal_dataset_is_rejected():
 
     with pytest.raises(ValueError, match=r"longitudinal_datasets\[0\]\.database"):
         validate_database_config_policy(config)
+
+
+def test_translation_defaults_are_safe_and_disabled():
+    config = load_config("tests/configs/test_single_month.yml")
+    translation = config["translation"]
+    assert translation["enabled"] is False
+    assert translation["provider"] == "azure"
+    assert translation["target_language"] == "en"
+    assert translation["contract_version"] == "v1"
+
+
+def test_translation_provider_validation_rejects_unknown_provider():
+    config = load_config("tests/configs/test_single_month.yml")
+    config["translation"]["provider"] = "unknown"
+    with pytest.raises(ValueError, match="translation.provider"):
+        validate_run_config(config)
+
+
+def test_translation_v1_requires_english_target():
+    config = load_config("tests/configs/test_single_month.yml")
+    config["translation"]["target_language"] = "fr"
+    with pytest.raises(ValueError, match="translation.target_language"):
+        validate_run_config(config)
+
+
+def test_canonical_translation_enablement_is_telegram_only():
+    telegram = load_config("configs/telegram/forwarded_message_evolution.yml")
+    reply = load_config("configs/twitter/reply_evolution.yml")
+    retweet = load_config("configs/twitter/retweet_quote_evolution.yml")
+
+    assert telegram["translation"]["enabled"] is True
+    assert telegram["translation"]["provider"] == "azure"
+    assert reply["translation"]["enabled"] is False
+    assert retweet["translation"]["enabled"] is False

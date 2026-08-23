@@ -19,11 +19,10 @@ from src.themes.benchmark.contracts import (
 from src.orchestration.hashing import (
     hash_file,
     hash_mapping,
-    network_cache_key_fn,
-    theme_cache_key_fn,
-    topic_cache_key_fn,
+    network_stage_cache_key,
+    theme_stage_cache_key,
+    topic_stage_cache_key,
 )
-import datetime
 from src.orchestration.models import (
     ArtifactReference,
     DatasetIdentity,
@@ -35,6 +34,11 @@ from src.orchestration.models import (
     ValidatedRunConfiguration,
 )
 from src.orchestration.retry_policy import ErrorCategory, PipelineError
+from src.orchestration.stage_cache import (
+    artifact_reuse_enabled,
+    restore_stage_artifacts,
+    store_stage_artifacts,
+)
 
 # ---------------------------------------------------------------------------
 # Validation helpers
@@ -105,8 +109,118 @@ def _current_run_root(context: PipelineRunContext) -> str:
     return str(run_root_path(context.output_root, context.pipeline_run_id))
 
 
+def _topic_output_artifacts(bundle: TopicOutputBundle) -> tuple[ArtifactReference, ...]:
+    artifacts: list[ArtifactReference] = [bundle.lda_scores]
+    if bundle.matched_communities_topics is not None:
+        artifacts.append(bundle.matched_communities_topics)
+    if bundle.partial_matched_communities_topics is not None:
+        artifacts.append(bundle.partial_matched_communities_topics)
+    artifacts.extend(bundle.theme_inputs)
+    if bundle.translation_provenance is not None:
+        artifacts.append(bundle.translation_provenance)
+    return tuple(artifacts)
+
+
+def _topic_output_bundle_from_artifacts(
+    artifacts: tuple[ArtifactReference, ...],
+) -> TopicOutputBundle:
+    lda_scores = next(
+        (a for a in artifacts if (a.asset_key or "").startswith("lda_scores_")),
+        None,
+    )
+    if lda_scores is None:
+        raise ValueError("cached topic stage is missing lda_scores")
+    matched = next(
+        (
+            a
+            for a in artifacts
+            if (a.asset_key or "").startswith("matched_communities_topics_")
+        ),
+        None,
+    )
+    partial = next(
+        (
+            a
+            for a in artifacts
+            if (a.asset_key or "").startswith("partial_matched_communities_topics_")
+        ),
+        None,
+    )
+    theme_inputs = tuple(
+        a for a in artifacts if (a.asset_key or "").startswith("theme_manifest")
+    )
+    translation_provenance = next(
+        (
+            a
+            for a in artifacts
+            if (a.asset_key or "").startswith("translation_provenance_")
+        ),
+        None,
+    )
+    return TopicOutputBundle(
+        lda_scores=lda_scores,
+        matched_communities_topics=matched,
+        partial_matched_communities_topics=partial,
+        theme_inputs=theme_inputs,
+        translation_provenance=translation_provenance,
+    )
+
+
+def _theme_output_artifacts(bundle: ThemeOutputBundle) -> tuple[ArtifactReference, ...]:
+    artifacts: list[ArtifactReference] = []
+    artifacts.extend(bundle.themes)
+    artifacts.extend(bundle.clustered_themes)
+    artifacts.extend(bundle.cluster_evidence)
+    for artifact in (
+        bundle.canonical_theme_families,
+        bundle.clustering_embeddings,
+        bundle.similarity_embeddings,
+        bundle.community_transitions,
+        bundle.community_paths,
+        bundle.community_path_membership,
+        bundle.community_path_theme_similarity,
+    ):
+        if artifact is not None:
+            artifacts.append(artifact)
+    artifacts.extend(bundle.visualizations)
+    if bundle.provider_run_summary is not None:
+        artifacts.append(bundle.provider_run_summary)
+    if bundle.theme_generation_provenance is not None:
+        artifacts.append(bundle.theme_generation_provenance)
+    return tuple(artifacts)
+
+
+def _theme_output_bundle_from_artifacts(
+    artifacts: tuple[ArtifactReference, ...],
+) -> ThemeOutputBundle:
+    by_key = {a.asset_key or "": a for a in artifacts}
+    return ThemeOutputBundle(
+        themes=tuple(a for a in artifacts if (a.asset_key or "").startswith("themes_")),
+        clustered_themes=tuple(
+            a for a in artifacts if (a.asset_key or "").startswith("theme_clusters_")
+        ),
+        cluster_evidence=tuple(
+            a
+            for a in artifacts
+            if (a.asset_key or "").startswith("theme_cluster_observations_")
+        ),
+        canonical_theme_families=by_key.get("theme_canonical_families"),
+        clustering_embeddings=by_key.get("theme_embeddings_clustering"),
+        similarity_embeddings=by_key.get("theme_embeddings_similarity"),
+        community_transitions=by_key.get("community_transitions"),
+        community_paths=by_key.get("community_paths"),
+        community_path_membership=by_key.get("community_path_membership"),
+        community_path_theme_similarity=by_key.get("community_path_theme_similarity"),
+        visualizations=tuple(
+            a for a in artifacts if (a.asset_key or "").startswith("visualization_")
+        ),
+        provider_run_summary=by_key.get("provider_run_summary"),
+        theme_generation_provenance=by_key.get("theme_generation_provenance"),
+    )
+
+
 def _artifact_row_count(path: str) -> int:
-    """Return an exact row count for a validated analytical artifact (CSV or Parquet)."""
+    """Return exact row count for a validated analytical CSV or Parquet artifact."""
     suffix = Path(path).suffix.lower()
     if suffix == ".parquet":
         try:
@@ -275,8 +389,6 @@ def resolve_dataset_identity_task(
     name="run-monthly-network-community-phase",
     retries=0,
     persist_result=True,
-    cache_key_fn=network_cache_key_fn,
-    cache_expiration=datetime.timedelta(days=30),
 )
 def run_monthly_network_community_phase_task(
     dataset_identity: DatasetIdentity,
@@ -288,8 +400,6 @@ def run_monthly_network_community_phase_task(
     DataFrames are loaded and discarded inside the task; only ArtifactReferences
     cross the orchestration boundary.
     """
-    from src.pipelines.social_network_pipeline import run_network_community_pipeline
-
     if hasattr(dataset_identity, "result"):
         dataset_identity = dataset_identity.result()
 
@@ -297,12 +407,25 @@ def run_monthly_network_community_phase_task(
     if hasattr(config, "result"):
         val_config = config.result()
 
+    raw = val_config.raw_config
+    reuse_enabled = artifact_reuse_enabled(raw)
+    stage_cache_key = network_stage_cache_key(dataset_identity, val_config)
+    if reuse_enabled:
+        cached = restore_stage_artifacts(
+            context=context,
+            stage="network_community",
+            cache_key=stage_cache_key,
+        )
+        if cached is not None:
+            return list(cached)
+
+    from src.pipelines.social_network_pipeline import run_network_community_pipeline
+
     if dataset_identity.path.endswith(".parquet"):
         df = pd.read_parquet(dataset_identity.path)
     else:
         df = pd.read_csv(dataset_identity.path)
 
-    raw = val_config.raw_config
     isolated_output = _current_run_root(context)
     os.makedirs(isolated_output, exist_ok=True)
 
@@ -458,6 +581,14 @@ def run_monthly_network_community_phase_task(
                 )
             )
 
+    if reuse_enabled:
+        store_stage_artifacts(
+            context=context,
+            stage="network_community",
+            cache_key=stage_cache_key,
+            artifacts=artifacts,
+        )
+
     return artifacts
 
 
@@ -470,8 +601,6 @@ def run_monthly_network_community_phase_task(
     name="run-monthly-topic-phase",
     retries=0,
     persist_result=True,
-    cache_key_fn=topic_cache_key_fn,
-    cache_expiration=datetime.timedelta(days=30),
 )
 def run_monthly_topic_phase_task(
     input_bundle: TopicInputBundle,
@@ -506,12 +635,10 @@ def run_monthly_topic_phase_task(
         Reproducibility is limited to the same Gensim/NumPy/BLAS version.
 
     Caching:
-        Task caching is enabled with the stage-specific topic_cache_key_fn.
-        Topic input hashes plus preprocessing, LDA, and matching configuration
-        participate in invalidation; theme-provider and prompt settings do not.
+        Cross-run reuse is handled by the explicit content-addressed stage
+        artifact cache. Topic input hashes, relevant configuration, stage code,
+        and the topic cache-contract version participate in invalidation.
     """
-    from src.pipelines.social_network_pipeline import run_topic_phase
-
     raw = config.raw_config
     data_type = str(_required_config_value(raw, "data_type"))
     content_type = str(_required_config_value(raw, "content_type"))
@@ -562,6 +689,19 @@ def run_monthly_topic_phase_task(
             required=False,
             label="partial_matched_communities",
         )
+
+    reuse_enabled = artifact_reuse_enabled(raw)
+    stage_cache_key = topic_stage_cache_key(input_bundle, config)
+    if reuse_enabled:
+        cached = restore_stage_artifacts(
+            context=context,
+            stage="topic_model",
+            cache_key=stage_cache_key,
+        )
+        if cached is not None:
+            return _topic_output_bundle_from_artifacts(cached)
+
+    from src.pipelines.social_network_pipeline import run_topic_phase
 
     # --- Load DataFrames inside the task (never serialised to Prefect state) ---
     def _parse_lists_in_df(df, list_cols):
@@ -631,6 +771,7 @@ def run_monthly_topic_phase_task(
         content_type=content_type,
         output_dir=isolated_output,
         lda_config=raw.get("lda", {}),
+        translation_config=raw.get("translation", {}),
     )
 
     # --- Collect outputs using explicit expected paths ---
@@ -707,12 +848,47 @@ def run_monthly_topic_phase_task(
             )
         )
 
-    return TopicOutputBundle(
+    translation_provenance = None
+    translation_cfg = raw.get("translation", {})
+    if isinstance(translation_cfg, Mapping) and bool(
+        translation_cfg.get("enabled", False)
+    ):
+        from src.text.translation import translation_provenance_path
+
+        translation_path = translation_provenance_path(
+            isolated_output,
+            data_type=data_type,
+            content_type=content_type,
+            year=year,
+            month=month,
+        )
+        validate_artifact_output(
+            str(translation_path), isolated_output, label="translation_provenance"
+        )
+        translation_provenance = ArtifactReference(
+            path=str(translation_path),
+            sha256=hash_file(str(translation_path)),
+            media_type="application/octet-stream",
+            byte_size=os.path.getsize(translation_path),
+            row_count=_artifact_row_count(str(translation_path)),
+            asset_key=f"translation_provenance_{month}",
+        )
+
+    result = TopicOutputBundle(
         lda_scores=lda_scores,
         matched_communities_topics=matched_topics,
         partial_matched_communities_topics=partial_matched_topics,
         theme_inputs=tuple(theme_inputs),
+        translation_provenance=translation_provenance,
     )
+    if reuse_enabled:
+        store_stage_artifacts(
+            context=context,
+            stage="topic_model",
+            cache_key=stage_cache_key,
+            artifacts=_topic_output_artifacts(result),
+        )
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -739,6 +915,15 @@ def _build_provider_summary(
     raw: Mapping[str, Any], run_metrics: Mapping[str, Any] | None = None
 ) -> dict:
     """Build a small, secret-free provider lineage record."""
+    from src.themes.theme_clustering import (
+        CANONICALIZATION_CONTRACT_VERSION,
+        CANONICALIZATION_GROUPING_METHOD,
+        CANONICALIZATION_LINKAGE,
+        CANONICALIZATION_METRIC,
+        CANONICALIZATION_REPRESENTATION,
+        CANONICALIZATION_SIMILARITY_THRESHOLD,
+    )
+
     theme_cfg = raw.get("theme_provider", {})
     if isinstance(theme_cfg, str):
         primary = theme_cfg
@@ -792,12 +977,20 @@ def _build_provider_summary(
                 "canonicalization_min_cluster_size": theme_settings.get(
                     "canonicalization_min_cluster_size", 2
                 ),
+                "canonicalization_contract_version": CANONICALIZATION_CONTRACT_VERSION,
+                "canonicalization_representation": CANONICALIZATION_REPRESENTATION,
+                "canonicalization_grouping_method": CANONICALIZATION_GROUPING_METHOD,
+                "canonicalization_metric": CANONICALIZATION_METRIC,
+                "canonicalization_linkage": CANONICALIZATION_LINKAGE,
+                "canonicalization_similarity_threshold": (
+                    CANONICALIZATION_SIMILARITY_THRESHOLD
+                ),
                 "clustering_metric": theme_settings.get(
                     "clustering_metric", "euclidean"
                 ),
             }
         ),
-        "semantic_task_version": "1.3.0",
+        "semantic_task_version": "1.4.0",
     }
     if run_metrics:
         safe_metrics = dict(run_metrics)
@@ -813,8 +1006,6 @@ def _build_provider_summary(
     name="run-monthly-themes-phase",
     retries=0,
     persist_result=True,
-    cache_key_fn=theme_cache_key_fn,
-    cache_expiration=datetime.timedelta(days=30),
 )
 def run_monthly_themes_task(
     input_bundle: ThemeInputBundle,
@@ -838,8 +1029,6 @@ def run_monthly_themes_task(
     Provider ownership: domain layer (run_theme_pipeline_from_monthly_data).
     Retry policy: retries=0; provider fallback is router-owned.
     """
-    from src.pipelines.theme_pipeline import run_theme_pipeline_from_monthly_data
-
     raw = config.raw_config
     data_type = str(raw.get("data_type", "twitter"))
     content_type = str(_required_config_value(raw, "content_type"))
@@ -870,6 +1059,19 @@ def run_monthly_themes_task(
             required_csv_columns=REQUIRED_COLUMNS,
             label=f"theme_input[{month}]",
         )
+
+    reuse_enabled = artifact_reuse_enabled(raw)
+    stage_cache_key = theme_stage_cache_key(input_bundle, config)
+    if reuse_enabled:
+        cached = restore_stage_artifacts(
+            context=context,
+            stage="theme_generation",
+            cache_key=stage_cache_key,
+        )
+        if cached is not None:
+            return _theme_output_bundle_from_artifacts(cached)
+
+    from src.pipelines.theme_pipeline import run_theme_pipeline_from_monthly_data
 
     # --- 2. Load and parse DataFrames inside the task (never serialised) ---
     import ast
@@ -1170,7 +1372,7 @@ def run_monthly_themes_task(
         asset_key="provider_run_summary",
     )
 
-    return ThemeOutputBundle(
+    result = ThemeOutputBundle(
         themes=tuple(themes_artifacts),
         clustered_themes=tuple(clustered_themes),
         cluster_evidence=tuple(cluster_evidence),
@@ -1185,3 +1387,11 @@ def run_monthly_themes_task(
         provider_run_summary=provider_run_summary,
         theme_generation_provenance=theme_generation_provenance,
     )
+    if reuse_enabled:
+        store_stage_artifacts(
+            context=context,
+            stage="theme_generation",
+            cache_key=stage_cache_key,
+            artifacts=_theme_output_artifacts(result),
+        )
+    return result

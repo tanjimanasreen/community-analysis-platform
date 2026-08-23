@@ -64,9 +64,9 @@ def build_theme_output_json_schema(keyword_count: int) -> dict[str, Any]:
             "Theme output schema requires at least one input keyword."
         )
     schema = deepcopy(THEME_OUTPUT_JSON_SCHEMA)
-    schema["properties"]["themes"]["items"]["properties"]["keyword_indices"][
-        "items"
-    ]["maximum"] = keyword_count - 1
+    schema["properties"]["themes"]["items"]["properties"]["keyword_indices"]["items"][
+        "maximum"
+    ] = (keyword_count - 1)
     return schema
 
 

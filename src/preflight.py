@@ -18,6 +18,7 @@ from src.config.settings import (
     DEFAULT_CLUSTERING_MODEL_REVISION,
     DEFAULT_SIMILARITY_MODEL_ID,
     DEFAULT_SIMILARITY_MODEL_REVISION,
+    get_azure_translator_settings,
     get_clustering_tei_client_settings,
     get_provider_settings,
     get_tei_client_settings,
@@ -116,6 +117,13 @@ def _dependency_checks(config: Mapping[str, Any]) -> list[PreflightCheck]:
     tracking = config.get("tracking", {})
     if isinstance(tracking, Mapping) and bool(tracking.get("enabled", False)):
         modules.append("mlflow")
+    translation = config.get("translation", {})
+    if (
+        isinstance(translation, Mapping)
+        and bool(translation.get("enabled", False))
+        and str(translation.get("provider", "azure")).strip().lower() == "aws"
+    ):
+        modules.append("boto3")
 
     broken: list[str] = []
     for module in modules:
@@ -316,6 +324,34 @@ def _credential_checks(config: Mapping[str, Any]) -> list[PreflightCheck]:
                 ),
             )
         )
+
+    translation = config.get("translation", {})
+    if isinstance(translation, Mapping) and bool(translation.get("enabled", False)):
+        translation_provider = str(translation.get("provider", "azure")).strip().lower()
+        if translation_provider == "azure":
+            azure = get_azure_translator_settings()
+            key_present = azure.key is not None and bool(
+                azure.key.get_secret_value().strip()
+            )
+            checks.append(
+                PreflightCheck(
+                    "translation-azure",
+                    key_present,
+                    (
+                        "Azure Translator credentials configured"
+                        if key_present
+                        else "missing AZURE_TRANSLATOR_KEY"
+                    ),
+                )
+            )
+        elif translation_provider == "aws":
+            checks.append(
+                PreflightCheck(
+                    "translation-aws",
+                    True,
+                    "AWS SDK default credential chain/IAM role will be used",
+                )
+            )
     return checks
 
 

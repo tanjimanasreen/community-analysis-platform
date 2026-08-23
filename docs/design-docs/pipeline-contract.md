@@ -191,6 +191,31 @@ Orchestrated pipeline execution owns the run lifecycle:
 Dashboard, API, and report consumers must use the run manifest rather than
 inferring arbitrary filesystem paths.
 
+### Cross-Run Stage Artifact Reuse Contract
+
+Network/community, topic, and theme/evolution orchestration stages may reuse validated
+internal artifacts from:
+
+```text
+<output_base_path>/.stage_cache/v1/<stage>/<stage_cache_key>/
+```
+
+The stage key is derived only from computation dependencies: relevant input/dataset
+hashes, relevant resolved configuration, explicit stage cache/contract versions, and a
+stage-scoped code/runtime fingerprint. `pipeline_run_id`, Prefect flow-run identity,
+output paths, tracking metadata, and unrelated configuration are excluded.
+
+On a valid hit, cached bytes are integrity-checked and restored under the current
+`runs/<run_id>/` root before downstream stages execute. On a miss, incomplete entry, or
+hash/size mismatch, the unchanged domain stage executes and its successful artifacts
+are snapshotted atomically. Cached entries never replace the current run manifest or
+become a public consumer boundary. `orchestration.artifact_reuse: false` bypasses both
+cache restore and cache publication for an explicit recomputation run.
+
+Prefect result persistence remains enabled for orchestration observability, but Prefect
+task-result caching is not the cross-run artifact-reuse mechanism because cached task
+results may contain references to an older run directory.
+
 ## Theme Trend Publication
 
 The read-only API exposes additive deterministic views over existing theme
@@ -223,10 +248,18 @@ transition/similarity rendering:
    immutable content-addressed `float32` Parquet embedding artifact;
 2. persisted/in-memory vectors expanded back to all theme observations ->
    scikit-learn HDBSCAN monthly clusters;
-3. monthly cluster representatives -> the same embedding recorder/TEI profile ->
-   run-local HDBSCAN canonical families;
+3. each non-noise monthly cluster -> reuse its already-produced deterministic
+   semantic-medoid embedding -> L2 normalization -> run-local cosine complete-linkage
+   agglomerative canonical families at similarity `0.65`;
 4. canonical families -> distinct matched-pair counts and aggregated general LDA
    keyword evidence.
+
+Stage B does not issue a second representative-label embedding request and does not
+average heterogeneous constituent vectors. Canonical labels remain existing monthly
+representatives selected by deterministic semantic medoid over the normalized monthly
+representative vectors. Canonicalization contract `4.0` persists the fixed
+representation/grouping/threshold provenance, a generic Stage-B cluster label, and a
+null legacy Stage-B HDBSCAN label. Monthly HDBSCAN remains contract `2.1` and unchanged.
 
 The raw `themes_*` artifacts are unchanged. New logical artifact keys are:
 
@@ -242,6 +275,16 @@ The embedding artifacts are canonically published under
 artifact. TEI model IDs and exact Hugging Face revisions are configuration
 contracts; changing either changes embedding identity. Dashboard/API request
 handlers never compute or persist embeddings.
+
+The optional `canonical-theme-benchmark` command is outside the production
+pipeline. It reads only completed persisted Stage-A evidence and recorded
+clustering embeddings. The accepted roots are either the canonical published
+`data/themes/` layout (`clusters/evidence/*.parquet` plus
+`embeddings/clustering_general_themes.parquet`) or the run-local
+`theme_clusters/` layout (`evidence/*.parquet` plus
+`embeddings/clustering_general_themes.parquet`). The command writes diagnostic
+CSV files to a caller-selected benchmark directory and never changes run manifests
+or published analytical artifacts.
 
 Canonical production evolution runs use exactly these dataset configurations:
 
@@ -315,3 +358,15 @@ configuration. They do not run DFS, member classification, embeddings, cosine
 similarity, HDBSCAN, NetworkX, GPT, or database clients. Community Evolution
 continues to use the independently pinned `paraphrase-MiniLM-L6-v2` similarity
 profile and does not consume Plan 039 canonical theme clusters.
+
+## Multilingual Translation Before Topic Modeling
+
+The optional `translation` stage is logically inside the topic boundary, after community-message artifacts are loaded and before `message_preprocess`. It must not mutate or overwrite the saved original-language community-message artifacts. When enabled, exact source texts are deduplicated, resolved through the persistent translation cache, and only missing texts are sent to the configured provider. The resulting English message copies feed the existing preprocessing/unigram/phrase-LDA code unchanged.
+
+The topic computation identity includes only analytical translation settings (`enabled`, provider, target language, contract version), not operational cache path or timeout. Provider or contract changes therefore invalidate topic outputs and their downstream theme/evolution outputs while leaving network/community artifacts reusable. Language detections are cached separately from completed translations under the same provider/contract boundary so a detection-only planning pass can be reused by the later full topic run without repeating cloud language detection.
+
+## Translation Workload Preflight
+`make translation-preflight CONFIG=<config>` is a cloud-free planning path for the Plan 075 translation boundary. It runs or restores only the network/community preparation required to materialize the exact community-message inputs that can reach LDA, aggregates those messages across selected longitudinal datasets, deduplicates them, and inspects the persistent translation cache. It does not execute topic/LDA, themes, language detection, or translation provider calls. On a cold network cache, the preparation work is stored through the normal Plan 074 stage cache and is therefore reusable by the subsequent full evolution run. The report's language-detection request count follows the configured provider batching contract; exact translation-request count is intentionally reported as a range until language detection determines which cache misses are already in the target language.
+
+`make translation-detect CONFIG=<config>` is the optional second planning step. It uses the same exact LDA-bound message set, calls only the configured provider's language-detection API (Azure `/detect` or AWS Comprehend), persists those detections, and does not call a translation endpoint. It then reports the exact number of non-target texts/characters and the exact translation-request count implied by the provider's translation batching logic. A later full topic run reuses cached detections; target-language detections are already complete no-translation cache records.
+For Azure v3, `/detect` may identify a language/script while reporting `isTranslationSupported=false`. Those messages remain visible in the detection audit and are counted in the exact full-run workload; the later translation stage retries only those messages through `/translate` with the `from` parameter omitted so Azure performs translation-time source-language auto-detection. Successful fallback translations are cached normally. Unsupported foreign text must never be silently substituted as English analysis text, and messages above the Azure translate request-size limit remain blocking errors.

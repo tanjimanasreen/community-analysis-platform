@@ -67,6 +67,11 @@ Implemented behavior:
   ingestion mapping before the unchanged follower-followee IF/WIF calculation,
   so direct CLI, debug, Prefect, and programmatic pipeline entry points share the
   same normalization behavior.
+- Prefect orchestration now uses a run-independent, content-addressed stage artifact
+  cache for network/community, topic, and theme/evolution stages. Cache identity is
+  derived from relevant input hashes, configuration, stage code/runtime fingerprints,
+  and stage contract versions rather than `pipeline_run_id`. Valid hits are copied into
+  the current run root; corrupt or incomplete entries are recomputed.
 
 ### `theme-analysis.py`
 
@@ -251,3 +256,33 @@ inputs remain CSV. Generated tabular categories are:
 - `LDA/theme_similarity/<content_type>/absolute_theme.png`
 - `LDA/theme_similarity/<content_type>/weighted_theme.png`
 - `LDA/theme_similarity/<content_type>/general_theme.png`
+
+## Cached Multilingual Topic Preparation
+
+- Optional translation immediately before LDA preprocessing.
+- Azure Translator is the canonical Telegram provider; AWS Comprehend/Translate is provider-selectable without changing analytical pipeline code.
+- Persistent SQLite cache translates each exact message once per provider/target/translation-contract identity.
+- Original-language community-message artifacts are preserved; only in-memory topic-analysis copies are translated.
+- Translation provenance is published as a topic artifact and restored through the cross-run stage cache.
+
+### Translation workload dry run
+- `src/text/translation.py` can plan translation workload from exact LDA-bound message occurrences without constructing Azure/AWS clients or making cloud requests.
+- `python -m src.cli translation-preflight --config ...` / `make translation-preflight CONFIG=...` runs or reuses network/community preparation only, then reports cross-month translation cache hits/misses, characters, and provider request estimates.
+- Normal translated topic runs log the same workload immediately before provider construction.
+- `python -m src.cli translation-detect --config ...` / `make translation-detect CONFIG=...` performs language detection only (Azure `/detect` or AWS Comprehend), caches reusable detections, promotes target-language texts to complete no-translation cache records, and reports the exact remaining translation request count before any translation endpoint is called.
+- Azure detections marked `isTranslationSupported=false` are audited and, during the later full translation run, retried through `/translate` without an explicit `from` language. Successful fallback results are cached with `success_auto_detect_fallback`; original foreign text is never silently passed through to LDA.
+
+## Canonical Theme Stage-B Benchmark
+
+- `src/themes/canonical_benchmark.py` provides a read-only benchmark for cross-month canonicalization using persisted monthly-cluster evidence and the exact recorded clustering embeddings from a completed run.
+- `canonical-theme-benchmark` compares the current representative-label/raw-Euclidean Stage-B contract with the Plan-079 normalized-Euclidean/cosine candidates, Plan-080 occurrence-weighted constituent-mean representations, Plan-081 normalized-centroid grouping candidates, and Plan-083 complete-linkage representation-robustness candidates across similarity thresholds from 0.60 through 0.80.
+- Plan-083 representations include the recorded monthly semantic medoid, occurrence-weighted constituent mean, mean of individually normalized constituents, monthly-HDBSCAN membership-probability-weighted constituent mean, and exact-unique-label constituent mean. Constituent vectors are reconstructed only from persisted non-noise evidence rows and exact recorded clustering vectors; no TEI call is made.
+- The benchmark membership/summary outputs additionally report monthly-cluster internal cohesion, representative-to-centroid agreement, representative-space family cohesion, constituent observation/unique-label counts, and observation-weighted family concentration so centroid-collapse failure modes are visible directly.
+- The benchmark does not rerun TEI, LDA, theme generation, monthly clustering, or alter production canonicalization defaults/artifacts.
+
+## Production Canonical Theme Stage B
+
+- Plan 084 promotes the Plan-083 `representative_normalized_agglomerative_complete_cosine_s65` candidate into production canonicalization contract `4.0`, superseding Plan 082's centroid representation.
+- Production Stage B reuses the already-produced embedding of each non-noise monthly cluster's deterministic semantic medoid/representative, L2-normalizes it, and groups representatives with cosine complete-linkage agglomerative clustering at similarity `0.65` / distance `0.35`. Constituent embeddings are not averaged and no representative label is re-embedded.
+- Monthly HDBSCAN remains unchanged. Stage-B size-one agglomerative groups are retained as singleton canonical themes; the legacy `stage_b_hdbscan_label` artifact column is nullable and a generic `stage_b_cluster_label` is persisted.
+- Canonical labels remain deterministic existing monthly representatives chosen by semantic medoid over the normalized monthly representative vectors. No GPT relabeling or manual standardization is introduced.

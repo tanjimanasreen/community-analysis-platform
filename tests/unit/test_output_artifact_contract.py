@@ -482,3 +482,12 @@ def test_longitudinal_contract_rejects_empty_transition(tmp_path):
 def test_theme_cluster_summary_contract_includes_ambiguous_serialization_diagnostic():
     columns = contract.get_required_columns_by_artifact()["theme_cluster_summary"]
     assert "excluded_records_ambiguous_general_theme_serialization" in columns
+    assert "canonicalization_representation" in columns
+    assert "canonicalization_grouping_method" in columns
+    assert "canonicalization_similarity_threshold" in columns
+
+    family_columns = contract.get_required_columns_by_artifact()[
+        "theme_canonical_family"
+    ]
+    assert "stage_b_cluster_label" in family_columns
+    assert "stage_b_hdbscan_label" in family_columns

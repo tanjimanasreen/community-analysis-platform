@@ -113,6 +113,7 @@ class TopicOutputBundle:
     matched_communities_topics: ArtifactReference | None
     partial_matched_communities_topics: ArtifactReference | None
     theme_inputs: tuple[ArtifactReference, ...]
+    translation_provenance: ArtifactReference | None = None
 
 
 @dataclass(frozen=True)

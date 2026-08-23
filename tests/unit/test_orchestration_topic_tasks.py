@@ -659,6 +659,6 @@ def test_cache_key_changes_on_topic_count_change(tmp_path):
     assert topic_cache_key_fn(None, params_a) != topic_cache_key_fn(None, params_b)
 
 
-def test_topic_cache_key_fn_is_enabled_on_task():
-    """The topic Prefect task must use the stage-specific topic cache key."""
-    assert run_monthly_topic_phase_task.cache_key_fn is topic_cache_key_fn
+def test_topic_prefect_result_cache_is_not_used_for_cross_run_artifact_reuse():
+    """Cross-run reuse is validated/restored by the explicit artifact cache."""
+    assert run_monthly_topic_phase_task.cache_key_fn is None

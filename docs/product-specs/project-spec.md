@@ -32,6 +32,7 @@ The project analyzes social network interactions from graph-exported relationshi
 9. As an analyst, I can understand how Thematic Analysis results are derived, compare up to five canonical themes per month across variable-length timelines, inspect complete evidence for a selected canonical result, and separately browse month/community-scoped generated-label and LDA source records without changing analytical outputs.
 10. As an analyst, I can browse all communities in one monthly IF/WIF partition, select one month-local community, inspect its structural summary and member interaction network, and preview LDA evidence before downstream theme labels from one unified Communities workspace.
 11. As a researcher or analyst, I can inspect persisted Structural (RQ1), Semantic (RQ2), and Temporal (RQ3/RQ4) evidence plus verified run outputs from one unified Research Data & Reports workspace with truthful period/affinity scope.
+12. As a researcher or developer, I can rerun an equivalent Telegram or Twitter evolution configuration without recomputing unchanged analytical stages; relevant input, configuration, code, or contract changes invalidate only the affected stage identities and their downstream work.
 
 ## Functional Requirements
 
@@ -92,6 +93,7 @@ The system should be:
 - Testable with small fixtures.
 - Backward-compatible with existing raw relationship CSV exports; generated tabular artifacts are Parquet.
 - Able to run offline for all non-GPT stages.
+- Able to reuse validated immutable stage artifacts across equivalent runs without making run IDs part of analytical identity.
 
 ## Out Of Scope For First Production Version
 
@@ -113,3 +115,6 @@ The project is acceptable when:
 - Metrics and thresholds are covered by tests.
 - Hard-coded local paths and credentials are removed.
 - README explains setup, data preparation, and each pipeline command.
+
+### Multilingual topic input
+For multilingual datasets, the product may normalize topic-analysis text to English immediately before LDA while preserving exact original messages. Translation must be provider-configurable, provenance-tracked, cached per unique source text, and must not alter IF/WIF/network/community outputs. Telegram forwarded-message evolution enables the Azure provider by default; Twitter remains opt-in.

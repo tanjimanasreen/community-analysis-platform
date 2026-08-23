@@ -165,3 +165,24 @@ Each artifact record contains:
 Manifest readers must reject absolute paths, parent traversal, symlink escape,
 checksum mismatches, byte-size mismatches, row-count mismatches, and known Parquet
 schema violations before loading data.
+
+### Internal Stage Artifact Cache
+
+Cross-run reuse is stored separately from public run bundles at:
+
+```text
+<output_base_path>/.stage_cache/v1/<stage>/<stage_cache_key>/
+    manifest.json
+    <run-relative artifact paths...>
+```
+
+This is an internal orchestration cache, not a public artifact namespace. Its manifest
+uses relative paths and records SHA-256, byte size, media type, asset key, and row count
+for each cached artifact. A cache entry is usable only when every declared file passes
+path, size, and checksum validation. Cache hits are copied back into the same relative
+location beneath the new run root, so canonical run publication and API/dashboard
+discovery continue to operate only through `runs/<run_id>/manifest.json`.
+
+## Translation Provenance
+
+When multilingual translation is enabled, the topic stage emits `translation_provenance_<month>` as a Parquet artifact. It contains one row per unique non-empty source message: `source_hash`, `original_text`, `detected_language`, `language_confidence`, `target_language`, `translated_text_en`, `translation_applied`, `provider`, `translation_contract_version`, `cache_hit`, `status`, and `created_at`. The artifact is part of the topic-stage reusable snapshot and final run manifest. Original community-message artifacts are not rewritten.

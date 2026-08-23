@@ -132,6 +132,14 @@ Environment limitations such as missing optional Prefect or unavailable dependen
 - The task-only patch applies cleanly to a second pristine extraction of the exact source ZIP.
 - Every affected file byte-matches between the implementation workspace and the fresh patch-applied copy.
 
+## Historical Supersession
+
+Plan 074 intentionally supersedes the cross-run mechanism documented here. Prefect
+result persistence remains enabled, but analytical cross-run reuse now uses validated
+content-addressed stage artifacts so a cache hit cannot return an `ArtifactReference`
+owned by an older run directory. This plan remains unchanged as historical evidence of
+the prior Prefect cache contract.
+
 ## 8. Progress Log
 - 2026-08-14: Verified source ZIP checksum against the supplied manifest.
 - 2026-08-14: Reviewed mandatory repository contracts and Prefect orchestration plans before editing.

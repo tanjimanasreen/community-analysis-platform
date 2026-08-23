@@ -37,8 +37,18 @@ longitudinal_datasets:
   - month: "04"
     input_path: ${DATA_ROOT}/twitter/reply/2017/reply_april_2017.csv
 
+translation:
+  # Opt-in for Twitter; keep current analytical input unchanged by default.
+  enabled: false
+  provider: azure
+  target_language: en
+  contract_version: v1
+  cache_path: .cache/translation_cache.sqlite3
+  timeout_seconds: 30
+
 orchestration:
   # Keep month-level work serial because each month already uses LdaMulticore.
   month_workers: 1
-  cache_expiration_days: 30
+  # Reuse validated stage artifacts across equivalent runs.
+  artifact_reuse: true
   max_workers: 4

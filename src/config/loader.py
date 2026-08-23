@@ -127,15 +127,24 @@ def load_config(config_path: PathLike) -> dict[str, Any]:
     # Current config wins over included defaults
     _deep_merge(merged_config, config)
 
-    # Ensure orchestration defaults are populated
+    # Ensure orchestration defaults are populated. Cross-run analytical reuse is
+    # content/config/code addressed and does not expire on an arbitrary TTL.
     orch = merged_config.setdefault("orchestration", {})
-    orch.setdefault("cache_expiration_days", 30)
+    orch.setdefault("artifact_reuse", True)
     # Keep expensive monthly LDA jobs sequential by default. Each job already
     # uses LdaMulticore; running several months concurrently otherwise creates
     # nested process pools, memory spikes, and CPU oversubscription.
     orch.setdefault("month_workers", 1)
     # Theme-provider concurrency is I/O-bound and remains independently tunable.
     orch.setdefault("max_workers", 4)
+
+    translation = merged_config.setdefault("translation", {})
+    translation.setdefault("enabled", False)
+    translation.setdefault("provider", "azure")
+    translation.setdefault("target_language", "en")
+    translation.setdefault("contract_version", "v1")
+    translation.setdefault("cache_path", ".cache/translation_cache.sqlite3")
+    translation.setdefault("timeout_seconds", 30.0)
 
     dashboard = merged_config.setdefault("dashboard", {})
     # The complete graph remains a thesis artifact; this bounded additive sample
@@ -255,6 +264,41 @@ def validate_run_config(config: dict[str, Any]) -> None:
     for key in ("min_total_post", "min_shared_post", "min_members"):
         if key in thresholds and int(thresholds[key]) < 0:
             raise ValueError(f"graph_thresholds.{key} must be non-negative")
+
+    orchestration = config.get("orchestration", {})
+    if isinstance(orchestration, Mapping) and "artifact_reuse" in orchestration:
+        if not isinstance(orchestration["artifact_reuse"], bool):
+            raise ValueError("orchestration.artifact_reuse must be a boolean")
+
+    translation = config.get("translation", {})
+    if not isinstance(translation, Mapping):
+        raise ValueError("translation must be a mapping")
+    if not isinstance(translation.get("enabled", False), bool):
+        raise ValueError("translation.enabled must be a boolean")
+    provider = str(translation.get("provider", "azure")).strip().lower()
+    if provider not in {"azure", "aws"}:
+        raise ValueError("translation.provider must be one of: azure, aws")
+    target_language = str(translation.get("target_language", "en")).strip().lower()
+    if target_language != "en":
+        raise ValueError(
+            "translation.target_language must be 'en' in translation contract v1"
+        )
+    contract_version = str(translation.get("contract_version", "v1")).strip()
+    if not contract_version:
+        raise ValueError("translation.contract_version must be non-empty")
+    cache_path = str(
+        translation.get("cache_path", ".cache/translation_cache.sqlite3")
+    ).strip()
+    if not cache_path:
+        raise ValueError("translation.cache_path must be non-empty")
+    try:
+        timeout_seconds = float(translation.get("timeout_seconds", 30.0))
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "translation.timeout_seconds must be a positive number"
+        ) from exc
+    if timeout_seconds <= 0:
+        raise ValueError("translation.timeout_seconds must be a positive number")
 
     # Validate tracking shape and repository-relative local storage paths without
     # importing MLflow or creating any local tracking state.

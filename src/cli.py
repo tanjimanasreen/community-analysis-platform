@@ -222,6 +222,60 @@ def main():
         help="Skip live TEI requests (useful only for offline configuration checks)",
     )
 
+    parser_translation_preflight = subparsers.add_parser(
+        "translation-preflight",
+        help=(
+            "Run/reuse network-community preparation and report translation workload "
+            "without language-detection or translation cloud calls"
+        ),
+    )
+    parser_translation_preflight.add_argument(
+        "--config", required=True, help="Path to config file"
+    )
+    parser_translation_preflight.add_argument(
+        "--dataset-id",
+        required=False,
+        help="Optional longitudinal dataset ID/month to inspect",
+    )
+
+    parser_translation_detect = subparsers.add_parser(
+        "translation-detect",
+        help=(
+            "Run/reuse network-community preparation, call language detection only, "
+            "cache detections, and report exact translation workload"
+        ),
+    )
+    parser_translation_detect.add_argument(
+        "--config", required=True, help="Path to config file"
+    )
+    parser_translation_detect.add_argument(
+        "--dataset-id",
+        required=False,
+        help="Optional longitudinal dataset ID/month to inspect",
+    )
+
+    parser_canonical_benchmark = subparsers.add_parser(
+        "canonical-theme-benchmark",
+        help=(
+            "Benchmark Stage-B canonical-theme clustering from persisted monthly "
+            "cluster evidence and recorded embeddings without rerunning LDA, themes, "
+            "or TEI"
+        ),
+    )
+    parser_canonical_benchmark.add_argument(
+        "--themes-dir",
+        required=True,
+        help=(
+            "Path to a completed run's published data/themes or run-local "
+            "theme_clusters directory"
+        ),
+    )
+    parser_canonical_benchmark.add_argument(
+        "--out-dir",
+        required=True,
+        help="Directory for benchmark CSV outputs",
+    )
+
     parser_report = subparsers.add_parser(
         "build-report", help="Build a markdown artifact index"
     )
@@ -646,6 +700,19 @@ def main():
             theme_provider=args.theme_provider,
         )
 
+    elif args.command == "translation-preflight":
+        _run_translation_preflight_command(
+            args.config, dataset_id=getattr(args, "dataset_id", None)
+        )
+
+    elif args.command == "translation-detect":
+        _run_translation_detect_command(
+            args.config, dataset_id=getattr(args, "dataset_id", None)
+        )
+
+    elif args.command == "canonical-theme-benchmark":
+        _run_canonical_theme_benchmark_command(args.themes_dir, args.out_dir)
+
     elif args.command == "pipeline-preflight":
         from src.preflight import PipelinePreflightError, run_pipeline_preflight
 
@@ -718,6 +785,228 @@ def _import_raw_graph(file_paths, platform, config_path):
     print("Raw graph import complete.")
 
 
+def _prepare_translation_candidate_texts(config, dataset_id=None):
+    from src.artifacts.run_manifest import run_root_path
+    from src.orchestration.composition_flow import run_monthly_analysis_flow
+    from src.text.translation import collect_topic_message_texts
+    from src.topics.topic_inputs import load_topic_inputs
+
+    longitudinal = config.get("longitudinal_datasets", [])
+    if longitudinal:
+        datasets = [dict(item) for item in longitudinal]
+        if dataset_id is not None:
+            selected = [
+                item
+                for item in datasets
+                if str(item.get("id", item.get("month", ""))) == str(dataset_id)
+                or str(item.get("month", "")) == str(dataset_id)
+            ]
+            if not selected:
+                raise ValueError(f"translation dataset {dataset_id!r} was not found")
+            datasets = selected
+    else:
+        datasets = [
+            {
+                "id": config.get("id", dataset_id or "default"),
+                "month": config.get("month"),
+                "input_path": config.get("input_path"),
+            }
+        ]
+
+    all_texts: list[str] = []
+    for item in datasets:
+        month_config = dict(config)
+        month_config.update(item)
+        validate_run_config(month_config)
+        month = str(month_config.get("month", ""))
+        input_path = month_config.get("input_path")
+        if not input_path:
+            raise ValueError(f"translation input_path is missing for month {month!r}")
+
+        # Exact translation candidates exist only after community selection. Reuse
+        # Plan 074's network stage cache when possible; on a cold cache this warms
+        # that stage for the subsequent full evolution run. Topics/themes remain
+        # disabled during both translation workload commands.
+        result = run_monthly_analysis_flow(
+            config=month_config,
+            dataset_path=str(input_path),
+            dataset_id=str(item.get("id", month or "default")),
+            platform=str(month_config.get("data_type", "")) or None,
+            run_topics=False,
+            run_themes=False,
+        )
+        run_root = run_root_path(
+            result.context.output_root, result.context.pipeline_run_id
+        )
+        bundle = load_topic_inputs(
+            output_base_path=str(run_root),
+            data_type=str(month_config.get("data_type", "twitter")),
+            content_type=str(month_config.get("content_type", "reply")),
+            month=month,
+            year=str(month_config.get("year", "2017")),
+        )
+        month_texts = collect_topic_message_texts(
+            bundle.absolute_community_messages,
+            bundle.weighted_community_messages,
+        )
+        all_texts.extend(month_texts)
+        print(
+            "Prepared translation candidates: "
+            f"month={month} message_occurrences={len(month_texts)} "
+            f"network_run_id={result.context.pipeline_run_id}"
+        )
+
+    return all_texts, len(datasets)
+
+
+def _run_canonical_theme_benchmark_command(themes_dir, out_dir):
+    from src.themes.canonical_benchmark import write_canonicalization_benchmark
+
+    summary_path, membership_path = write_canonicalization_benchmark(
+        themes_dir, out_dir
+    )
+    import pandas as pd
+
+    summary = pd.read_csv(summary_path)
+    print("Canonical theme Stage-B benchmark (production artifacts unchanged):")
+    print(summary.to_string(index=False))
+    print(f"Summary: {summary_path}")
+    print(f"Membership: {membership_path}")
+
+
+def _run_translation_preflight_command(config_path, dataset_id=None):
+    """Estimate exact cache misses at the LDA boundary without cloud calls."""
+    config = validate_config(config_path)
+
+    from src.text.translation import TranslationOptions, plan_translation_workload
+
+    options = TranslationOptions.from_mapping(config.get("translation", {}))
+    if not options.enabled:
+        print(
+            "Translation is disabled for this configuration; no cloud work is planned."
+        )
+        return
+
+    all_texts, dataset_count = _prepare_translation_candidate_texts(
+        config, dataset_id=dataset_id
+    )
+    plan = plan_translation_workload(all_texts, options=options)
+    print("Translation preflight (no cloud detection/translation calls made):")
+    print(f"  provider: {plan.provider}")
+    print(f"  target_language: {plan.target_language}")
+    print(f"  contract_version: {plan.contract_version}")
+    print(f"  datasets_prepared: {dataset_count}")
+    print(f"  message_occurrences: {plan.total_message_occurrences}")
+    print(f"  unique_messages: {plan.unique_message_count}")
+    print(f"  translation_cache_hits: {plan.cache_hit_count}")
+    print(f"  translation_cache_misses: {plan.cache_miss_count}")
+    print(f"  cache_miss_characters: {plan.cache_miss_character_count}")
+    print("  language_detection_requests: " f"{plan.language_detection_request_count}")
+    print(
+        "  translation_requests_before_detection: "
+        f"{plan.translation_request_min_count}..{plan.translation_request_max_count}"
+    )
+    print(
+        "  potential_provider_item_limit_messages: "
+        f"{plan.potential_item_limit_count}"
+    )
+    print(
+        "  note: exact translation calls are known only after language detection; "
+        "already-English cache misses require no translation call."
+    )
+
+
+def _run_translation_detect_command(config_path, dataset_id=None):
+    """Run cloud language detection only and report exact translation workload."""
+    config = validate_config(config_path)
+
+    from src.text.translation import (
+        TranslationOptions,
+        detect_texts_with_cache,
+        write_translation_detection_issue_audit,
+    )
+
+    options = TranslationOptions.from_mapping(config.get("translation", {}))
+    if not options.enabled:
+        print(
+            "Translation is disabled for this configuration; no cloud work is planned."
+        )
+        return
+
+    all_texts, dataset_count = _prepare_translation_candidate_texts(
+        config, dataset_id=dataset_id
+    )
+    plan = detect_texts_with_cache(all_texts, options=options)
+    audit_path = None
+    if plan.issues:
+        suffix = str(dataset_id) if dataset_id else "all"
+        audit_path = write_translation_detection_issue_audit(
+            plan,
+            Path(config["output_base_path"])
+            / "_preflight"
+            / f"translation_detection_issues_{suffix}.jsonl",
+        )
+    print(
+        "Translation detection preflight (language detection only; no translation calls made):"
+    )
+    print(f"  provider: {plan.provider}")
+    print(f"  target_language: {plan.target_language}")
+    print(f"  contract_version: {plan.contract_version}")
+    print(f"  datasets_prepared: {dataset_count}")
+    print(f"  message_occurrences: {plan.total_message_occurrences}")
+    print(f"  unique_messages: {plan.unique_message_count}")
+    print(f"  existing_translation_cache_hits: {plan.translation_cache_hit_count}")
+    print(f"  language_detection_cache_hits: {plan.detection_cache_hit_count}")
+    print(f"  newly_detected_messages: {plan.newly_detected_count}")
+    print(
+        "  language_detection_requests_made: "
+        f"{plan.language_detection_request_count}"
+    )
+    print(f"  target_language_messages: {plan.target_language_count}")
+    print(f"  messages_requiring_translation: {plan.translation_candidate_count}")
+    print(
+        "  characters_requiring_translation: "
+        f"{plan.translation_candidate_character_count}"
+    )
+    print(f"  exact_translation_requests: {plan.exact_translation_request_count}")
+    print(
+        "  unsupported_translation_messages: " f"{plan.unsupported_translation_count}"
+    )
+    if plan.provider == "azure":
+        print(
+            "  azure_auto_detect_fallback_messages: "
+            f"{plan.azure_auto_detect_fallback_count}"
+        )
+        print(
+            "  azure_auto_detect_fallback_requests: "
+            f"{plan.azure_auto_detect_fallback_request_count}"
+        )
+    print(
+        "  potential_provider_item_limit_messages: "
+        f"{plan.potential_item_limit_count}"
+    )
+    print("  detected_languages:")
+    for language, count in plan.language_counts.items():
+        print(f"    {language}: {count}")
+    if audit_path is not None:
+        print(f"  detection_issue_audit: {audit_path}")
+    blocking_issue_count = sum(1 for issue in plan.issues if issue.blocks_full_run)
+    if plan.provider == "azure" and plan.azure_auto_detect_fallback_count:
+        print(
+            "  note: Azure /detect-unsupported messages will be retried during the full "
+            "run via /translate source-language auto-detection (no 'from' parameter)."
+        )
+    if blocking_issue_count:
+        print(
+            "  warning: the full translation run will fail until blocking detection/item-"
+            "limit issues in the audit file are resolved."
+        )
+    print(
+        "  note: detections were cached and will be reused by the subsequent full run; "
+        "no translation endpoint was called."
+    )
+
+
 def _run_social_pipeline_command(
     command, config_path, dataset_id=None, debug=False, theme_provider=None
 ):
@@ -744,6 +1033,7 @@ def _run_social_pipeline_command(
                 month=params["month"],
                 year=params["year"],
                 lda_config=config.get("lda", {}),
+                translation_config=config.get("translation", {}),
             )
         except TopicInputError as exc:
             print(f"Error loading topic inputs: {exc}", file=sys.stderr)
@@ -810,6 +1100,7 @@ def _run_social_pipeline_command(
     runner(
         df=df,
         lda_config=config.get("lda", {}),
+        translation_config=config.get("translation", {}),
         **params,
     )
     print("Pipeline finished successfully!")

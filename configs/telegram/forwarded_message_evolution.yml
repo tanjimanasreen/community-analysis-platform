@@ -27,6 +27,28 @@ theme_provider:
   cache_path: .cache/theme_cache.sqlite3
   cache_failure_policy: bypass
 
+translation:
+  # Translate each unique message to English once before LDA; persisted cache
+  # prevents repeat Azure calls on equivalent or downstream-invalidated runs.
+  enabled: true
+  provider: azure
+  target_language: en
+  contract_version: v1
+  cache_path: .cache/translation_cache.sqlite3
+  timeout_seconds: 30
+  # Pause before the very first API chunk. Azure's sliding-window rate limiter
+  # can be triggered by rapid preceding work (e.g. 10 network/community cache
+  # hits completing in ~20 s). A 2 s cooldown lets the window reset.
+  initial_delay_seconds: 2.0
+  # Pause between successive Azure API batch requests to avoid burst-rate 429s.
+  # Azure's sliding-window rate limiter throttles rapid bursts even within quota.
+  # 0.5 s is safe for both F0 (free) and S1 (standard) tiers.
+  inter_chunk_delay_seconds: 0.5
+  # Retry each request up to this many times on 429 or transient errors.
+  # Each retry honours the Retry-After header; falls back to exponential backoff.
+  # 8 retries cover up to ~3 min of persistent throttling (1+2+4+8+16+32+60+60).
+  max_retries: 8
+
 longitudinal_datasets:
   - month: "01"
     input_path: ${DATA_ROOT}/telegram/forwarded_message/2019/january_2019.csv
@@ -52,5 +74,6 @@ longitudinal_datasets:
 orchestration:
   # Keep month-level work serial because each month already uses LdaMulticore.
   month_workers: 1
-  cache_expiration_days: 30
+  # Reuse validated stage artifacts across equivalent runs.
+  artifact_reuse: true
   max_workers: 4

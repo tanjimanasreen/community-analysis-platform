@@ -79,6 +79,7 @@ _TOPIC_PATHS = {
     "lda_scores": "scores",
     "matched_communities_topics": "matched",
     "partial_matched_communities_topics": "partial_matched",
+    "translation_provenance": "translations",
 }
 
 _PUBLIC_SCHEMA_ALIASES = {
@@ -101,6 +102,7 @@ _PUBLIC_SCHEMA_ALIASES = {
     "lda_scores": "lda_scores",
     "matched_communities_topics": "matched_lda",
     "partial_matched_communities_topics": "partial_matched_lda",
+    "translation_provenance": "translation_provenance",
     "community_transitions": "community_transition",
     "community_paths": "community_path",
     "community_path_membership": "community_path_membership",
@@ -626,7 +628,11 @@ def _artifact_stage(key: str) -> str:
         }
     ):
         return "theme"
-    if key in _TOPIC_PATHS or key == "theme_manifest":
+    if (
+        key in _TOPIC_PATHS
+        or key == "theme_manifest"
+        or key.startswith("translation_provenance_")
+    ):
         return "topic"
     return "network_community"
 

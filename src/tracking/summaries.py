@@ -62,6 +62,8 @@ def topic_metrics(
         if ref is not None
     )
     refs.extend(bundle.theme_inputs)
+    if bundle.translation_provenance is not None:
+        refs.append(bundle.translation_provenance)
     metrics = {
         **artifact_totals(refs),
         "theme_input_artifact_count": float(len(bundle.theme_inputs)),

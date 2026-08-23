@@ -93,6 +93,19 @@ path containment, checksum, byte size, row count, media type, schema version,
 and known tabular schemas before reading. The artifact layer does not calculate
 metrics or rerun analysis.
 
+Equivalent orchestrated runs may reuse validated internal stage artifacts from:
+
+```text
+<output_base_path>/.stage_cache/v1/<stage>/<stage_cache_key>/
+```
+
+The stage cache is content-addressed from relevant inputs, configuration, code/runtime
+fingerprints, and explicit stage contract versions; run IDs and output paths are not
+part of computational identity. Cache hits are restored into the new run directory
+before downstream validation, so every completed run remains self-contained. The
+internal cache is not a dashboard/API/report discovery surface and corrupt or
+incomplete entries are treated as misses.
+
 ## Graph Store Boundary
 
 Database-specific code is isolated behind `GraphRepository` in
@@ -243,8 +256,12 @@ Default production local services:
   vectors and Community Evolution thematic-similarity vectors are content-addressed,
   persisted as immutable float32 Parquet run artifacts, and registered in the
   canonical manifest.
-- Batch semantic clustering uses first-party `sklearn.cluster.HDBSCAN`; Memgraph
-  remains graph storage and is not used as a vector store.
+- Monthly semantic clustering uses first-party `sklearn.cluster.HDBSCAN`.
+  Cross-month canonicalization contract `4.0` reuses the already-produced vector
+  of each monthly cluster's deterministic semantic medoid, L2-normalizes it, and
+  uses `sklearn.cluster.AgglomerativeClustering` with cosine complete linkage at
+  similarity `0.65`. Memgraph remains graph storage and is not used as a vector
+  store.
 
 ## Configuration
 
@@ -264,3 +281,9 @@ All values currently hard-coded in scripts must become configuration:
 - LDA parameters
 - GPT model and rate limit settings
 - theme similarity model
+
+## Multilingual Topic-Preparation Boundary
+
+Plan 075 adds an optional text-preparation boundary immediately before topic preprocessing. Original network/community message artifacts remain the empirical source of truth. When `translation.enabled=true`, unique source messages are language-detected and translated to English through a provider abstraction (`azure` by default, `aws` optional), with results persisted in a per-message content-addressed cache. Only translated in-memory copies feed the existing thesis text preprocessor and unchanged unigram/bigram LDA implementation.
+
+Translation identity is provider/version aware and participates in the Plan 074 topic-stage cache. A valid topic-stage hit bypasses translation entirely; on a topic-stage miss, per-message cache hits avoid cloud calls.

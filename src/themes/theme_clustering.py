@@ -12,17 +12,25 @@ from typing import Any, Callable, Iterable, Mapping, Protocol, Sequence
 import numpy as np
 import pandas as pd
 import sklearn
+from sklearn.cluster import AgglomerativeClustering
 from sklearn.metrics.pairwise import cosine_similarity
 
 from src.themes.theme_inputs import _parse_list
 
 MONTHLY_CLUSTER_CONTRACT_VERSION = "2.1"
-CANONICALIZATION_CONTRACT_VERSION = "2.1"
+CANONICALIZATION_CONTRACT_VERSION = "4.0"
 DEFAULT_CLUSTERING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 DEFAULT_MIN_CLUSTER_SIZE = 2
 DEFAULT_CLUSTERING_METRIC = "euclidean"
 HDBSCAN_IMPLEMENTATION = "sklearn.cluster.HDBSCAN"
 HDBSCAN_VERSION = sklearn.__version__
+CANONICALIZATION_REPRESENTATION = "monthly_semantic_representative_l2_normalized"
+CANONICALIZATION_GROUPING_METHOD = "agglomerative"
+CANONICALIZATION_IMPLEMENTATION = "sklearn.cluster.AgglomerativeClustering"
+CANONICALIZATION_METRIC = "cosine"
+CANONICALIZATION_LINKAGE = "complete"
+CANONICALIZATION_SIMILARITY_THRESHOLD = 0.65
+CANONICALIZATION_DISTANCE_THRESHOLD = 1.0 - CANONICALIZATION_SIMILARITY_THRESHOLD
 
 logger = logging.getLogger(__name__)
 
@@ -126,8 +134,9 @@ class CanonicalFamily:
     monthly_cluster_ids: tuple[str, ...]
     monthly_representatives: tuple[str, ...]
     periods: tuple[str, ...]
-    hdbscan_label: int
-    singleton_noise: bool
+    stage_b_cluster_label: int
+    hdbscan_label: int | None
+    singleton_canonical_theme: bool
 
 
 def build_clustered_theme_artifacts(
@@ -164,6 +173,7 @@ def build_clustered_theme_artifacts(
     excluded_ambiguous_general: dict[str, int] = {}
     denominator_pairs: dict[str, set[str]] = {}
     monthly_clusters: dict[str, list[MonthlyCluster]] = {}
+    monthly_cluster_representations: dict[str, np.ndarray] = {}
     membership_probabilities: dict[str, np.ndarray] = {}
     monthly_labels: dict[str, np.ndarray] = {}
 
@@ -203,6 +213,13 @@ def build_clustered_theme_artifacts(
             labels,
             probabilities,
         )
+        monthly_cluster_representations.update(
+            _normalized_representative_embeddings(
+                monthly_clusters[period],
+                observations=observations,
+                embeddings=embeddings,
+            )
+        )
 
     all_monthly_clusters = [
         cluster
@@ -211,10 +228,7 @@ def build_clustered_theme_artifacts(
     ]
     families, family_by_cluster = _canonicalize_monthly_clusters(
         all_monthly_clusters,
-        embedder=embedder,
-        min_cluster_size=canonical_min,
-        metric=metric,
-        clusterer_factory=clusterer_factory,
+        normalized_representative_embeddings=monthly_cluster_representations,
     )
 
     monthly_summary_frames: dict[str, pd.DataFrame] = {}
@@ -433,42 +447,129 @@ def _monthly_clusters(
     return clusters
 
 
+def _normalized_representative_embeddings(
+    clusters: Sequence[MonthlyCluster],
+    *,
+    observations: Sequence[ThemeObservation],
+    embeddings: np.ndarray,
+) -> dict[str, np.ndarray]:
+    """Resolve each monthly semantic medoid to its existing normalized vector.
+
+    Stage B must reuse a vector already produced for monthly clustering. It does
+    not re-embed representative labels and does not average heterogeneous
+    constituent vectors.
+    """
+    result: dict[str, np.ndarray] = {}
+    for cluster in clusters:
+        representative_indices = [
+            index
+            for index in cluster.observation_indices
+            if observations[index].label == cluster.representative_theme
+        ]
+        if not representative_indices:
+            raise ValueError(
+                "monthly cluster "
+                f"{cluster.cluster_id!r} representative "
+                f"{cluster.representative_theme!r} is missing from its constituent "
+                "observations"
+            )
+
+        representative_vectors = np.asarray(
+            embeddings[representative_indices], dtype=np.float64
+        )
+        vector = representative_vectors[0]
+        if not np.allclose(representative_vectors, vector, rtol=1e-7, atol=1e-7):
+            raise ValueError(
+                "monthly cluster "
+                f"{cluster.cluster_id!r} representative "
+                f"{cluster.representative_theme!r} maps to inconsistent recorded "
+                "embeddings"
+            )
+
+        norm = float(np.linalg.norm(vector))
+        if not math.isfinite(norm) or norm <= 0.0:
+            raise ValueError(
+                "cannot L2-normalize zero/non-finite representative embedding for "
+                f"monthly cluster {cluster.cluster_id!r}"
+            )
+        result[cluster.cluster_id] = vector / norm
+    return result
+
+
+def _validate_canonical_representation_matrix(
+    embeddings: np.ndarray, *, expected_rows: int
+) -> None:
+    if embeddings.ndim != 2 or embeddings.shape[0] != expected_rows:
+        raise ValueError(
+            "Stage-B representation matrix has invalid shape "
+            f"{embeddings.shape}; expected ({expected_rows}, dimensions)"
+        )
+    if embeddings.shape[1] == 0 or not np.isfinite(embeddings).all():
+        raise ValueError("Stage-B representation matrix must be finite and non-empty")
+    norms = np.linalg.norm(embeddings, axis=1)
+    if not np.allclose(norms, 1.0, rtol=1e-7, atol=1e-7):
+        raise ValueError(
+            "Stage-B monthly representative embeddings must be L2-normalized"
+        )
+
+
 def _canonicalize_monthly_clusters(
     clusters: Sequence[MonthlyCluster],
     *,
-    embedder: EmbeddingModel,
-    min_cluster_size: int,
-    metric: str,
-    clusterer_factory: Callable[..., Any] | None,
+    normalized_representative_embeddings: Mapping[str, np.ndarray],
 ) -> tuple[list[CanonicalFamily], dict[str, CanonicalFamily]]:
     if not clusters:
         return [], {}
 
-    labels = [cluster.representative_theme for cluster in clusters]
-    embeddings = _validate_embeddings(embedder.encode(labels), len(labels))
-    if len(clusters) < min_cluster_size:
-        hdbscan_labels = np.full(len(clusters), -1, dtype=int)
-    else:
-        hdbscan_labels, _ = _fit_hdbscan(
-            embeddings,
-            min_cluster_size=min_cluster_size,
-            metric=metric,
-            clusterer_factory=clusterer_factory,
+    ordered_clusters = sorted(clusters, key=lambda item: (item.period, item.cluster_id))
+    missing = [
+        cluster.cluster_id
+        for cluster in ordered_clusters
+        if cluster.cluster_id not in normalized_representative_embeddings
+    ]
+    if missing:
+        raise ValueError(
+            "missing normalized representative embedding(s) for monthly cluster(s): "
+            + ", ".join(missing[:10])
         )
 
-    grouped: dict[str, list[int]] = {}
-    for index, hdbscan_label in enumerate(hdbscan_labels):
-        key = (
-            f"cluster:{int(hdbscan_label)}"
-            if int(hdbscan_label) >= 0
-            else f"singleton:{index}"
+    embeddings = np.vstack(
+        [
+            np.asarray(
+                normalized_representative_embeddings[cluster.cluster_id],
+                dtype=np.float64,
+            )
+            for cluster in ordered_clusters
+        ]
+    )
+    _validate_canonical_representation_matrix(
+        embeddings, expected_rows=len(ordered_clusters)
+    )
+
+    if len(ordered_clusters) == 1:
+        stage_b_labels = np.asarray([0], dtype=int)
+    else:
+        clusterer = AgglomerativeClustering(
+            n_clusters=None,
+            metric=CANONICALIZATION_METRIC,
+            linkage=CANONICALIZATION_LINKAGE,
+            distance_threshold=CANONICALIZATION_DISTANCE_THRESHOLD,
+            compute_full_tree=True,
         )
-        grouped.setdefault(key, []).append(index)
+        stage_b_labels = np.asarray(clusterer.fit_predict(embeddings), dtype=int)
+        if stage_b_labels.shape != (len(ordered_clusters),):
+            raise RuntimeError(
+                "Stage-B agglomerative clustering returned malformed labels"
+            )
+
+    grouped: dict[int, list[int]] = {}
+    for index, stage_b_label in enumerate(stage_b_labels):
+        grouped.setdefault(int(stage_b_label), []).append(index)
 
     families: list[CanonicalFamily] = []
     by_cluster: dict[str, CanonicalFamily] = {}
-    for key, indices in sorted(grouped.items()):
-        member_clusters = [clusters[index] for index in indices]
+    for stage_b_label, indices in sorted(grouped.items()):
+        member_clusters = [ordered_clusters[index] for index in indices]
         canonical_label = _semantic_medoid_label(
             [cluster.representative_theme for cluster in member_clusters],
             embeddings[indices],
@@ -493,10 +594,9 @@ def _canonicalize_monthly_clusters(
                 sorted({cluster.representative_theme for cluster in member_clusters})
             ),
             periods=tuple(sorted({cluster.period for cluster in member_clusters})),
-            hdbscan_label=(
-                int(key.split(":", 1)[1]) if key.startswith("cluster:") else -1
-            ),
-            singleton_noise=key.startswith("singleton:"),
+            stage_b_cluster_label=stage_b_label,
+            hdbscan_label=None,
+            singleton_canonical_theme=len(member_clusters) == 1,
         )
         families.append(family)
         for cluster in member_clusters:
@@ -505,6 +605,20 @@ def _canonicalize_monthly_clusters(
         key=lambda item: (item.canonical_label.casefold(), item.canonical_theme_id)
     )
     return families, by_cluster
+
+
+def _canonicalization_provenance() -> dict[str, Any]:
+    return {
+        "canonicalization_representation": CANONICALIZATION_REPRESENTATION,
+        "canonicalization_grouping_method": CANONICALIZATION_GROUPING_METHOD,
+        "canonicalization_implementation": CANONICALIZATION_IMPLEMENTATION,
+        "canonicalization_metric": CANONICALIZATION_METRIC,
+        "canonicalization_linkage": CANONICALIZATION_LINKAGE,
+        "canonicalization_similarity_threshold": (
+            CANONICALIZATION_SIMILARITY_THRESHOLD
+        ),
+        "canonicalization_distance_threshold": CANONICALIZATION_DISTANCE_THRESHOLD,
+    }
 
 
 def _monthly_summary_frame(
@@ -606,6 +720,7 @@ def _monthly_summary_frame(
                 "clustering_min_cluster_size": min_cluster_size,
                 "canonicalization_min_cluster_size": canonicalization_min_cluster_size,
                 "clustering_metric": metric,
+                **_canonicalization_provenance(),
                 "monthly_cluster_contract_version": MONTHLY_CLUSTER_CONTRACT_VERSION,
                 "canonicalization_contract_version": CANONICALIZATION_CONTRACT_VERSION,
                 "source_artifact_sha256": source_artifact_sha256 or "",
@@ -645,6 +760,7 @@ def _monthly_summary_frame(
                 "clustering_min_cluster_size": min_cluster_size,
                 "canonicalization_min_cluster_size": canonicalization_min_cluster_size,
                 "clustering_metric": metric,
+                **_canonicalization_provenance(),
                 "monthly_cluster_contract_version": MONTHLY_CLUSTER_CONTRACT_VERSION,
                 "canonicalization_contract_version": CANONICALIZATION_CONTRACT_VERSION,
                 "source_artifact_sha256": source_artifact_sha256 or "",
@@ -718,6 +834,7 @@ def _observation_frame(
                 "clustering_min_cluster_size": min_cluster_size,
                 "canonicalization_min_cluster_size": canonicalization_min_cluster_size,
                 "clustering_metric": metric,
+                **_canonicalization_provenance(),
                 "source_artifact_sha256": source_artifact_sha256 or "",
                 "monthly_cluster_contract_version": MONTHLY_CLUSTER_CONTRACT_VERSION,
                 "canonicalization_contract_version": CANONICALIZATION_CONTRACT_VERSION,
@@ -755,8 +872,9 @@ def _families_frame(
             ),
             "periods": json.dumps(list(family.periods), ensure_ascii=False),
             "months_present": len(family.periods),
+            "stage_b_cluster_label": family.stage_b_cluster_label,
             "stage_b_hdbscan_label": family.hdbscan_label,
-            "singleton_canonical_theme": family.singleton_noise,
+            "singleton_canonical_theme": family.singleton_canonical_theme,
             "embedding_provider": embedding_provider,
             "embedding_model": clustering_model,
             "embedding_model_revision": embedding_model_revision,
@@ -768,6 +886,7 @@ def _families_frame(
             "clustering_min_cluster_size": min_cluster_size,
             "canonicalization_min_cluster_size": canonicalization_min_cluster_size,
             "clustering_metric": metric,
+            **_canonicalization_provenance(),
             "source_artifact_sha256s": source_hashes,
             "monthly_cluster_contract_version": MONTHLY_CLUSTER_CONTRACT_VERSION,
             "canonicalization_contract_version": CANONICALIZATION_CONTRACT_VERSION,
@@ -1082,6 +1201,13 @@ CLUSTER_SUMMARY_COLUMNS = [
     "clustering_min_cluster_size",
     "canonicalization_min_cluster_size",
     "clustering_metric",
+    "canonicalization_representation",
+    "canonicalization_grouping_method",
+    "canonicalization_implementation",
+    "canonicalization_metric",
+    "canonicalization_linkage",
+    "canonicalization_similarity_threshold",
+    "canonicalization_distance_threshold",
     "monthly_cluster_contract_version",
     "canonicalization_contract_version",
     "source_artifact_sha256",
@@ -1113,6 +1239,13 @@ CLUSTER_OBSERVATION_COLUMNS = [
     "clustering_min_cluster_size",
     "canonicalization_min_cluster_size",
     "clustering_metric",
+    "canonicalization_representation",
+    "canonicalization_grouping_method",
+    "canonicalization_implementation",
+    "canonicalization_metric",
+    "canonicalization_linkage",
+    "canonicalization_similarity_threshold",
+    "canonicalization_distance_threshold",
     "source_artifact_sha256",
     "monthly_cluster_contract_version",
     "canonicalization_contract_version",
@@ -1125,6 +1258,7 @@ CANONICAL_FAMILY_COLUMNS = [
     "monthly_representatives",
     "periods",
     "months_present",
+    "stage_b_cluster_label",
     "stage_b_hdbscan_label",
     "singleton_canonical_theme",
     "embedding_provider",
@@ -1138,6 +1272,13 @@ CANONICAL_FAMILY_COLUMNS = [
     "clustering_min_cluster_size",
     "canonicalization_min_cluster_size",
     "clustering_metric",
+    "canonicalization_representation",
+    "canonicalization_grouping_method",
+    "canonicalization_implementation",
+    "canonicalization_metric",
+    "canonicalization_linkage",
+    "canonicalization_similarity_threshold",
+    "canonicalization_distance_threshold",
     "source_artifact_sha256s",
     "monthly_cluster_contract_version",
     "canonicalization_contract_version",

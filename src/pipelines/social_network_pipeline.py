@@ -639,6 +639,7 @@ def run_topic_phase(
     content_type: str,
     output_dir: str,
     lda_config: dict[str, Any] | None = None,
+    translation_config: dict[str, Any] | None = None,
 ):
     from src.topics.lda import get_bigram_lda, get_unigram_lda
     from src.topics.text_preprocessor import message_preprocess
@@ -652,6 +653,23 @@ def run_topic_phase(
         len(abs_community_messages),
         len(per_community_messages),
     )
+
+    translation_settings = dict(translation_config or {})
+    if bool(translation_settings.get("enabled", False)):
+        from src.text.translation import prepare_translated_topic_messages
+
+        translation_result = prepare_translated_topic_messages(
+            abs_community_messages,
+            per_community_messages,
+            translation_config=translation_settings,
+            output_dir=output_dir,
+            data_type=data_type,
+            content_type=content_type,
+            year=year,
+            month=month,
+        )
+        abs_community_messages = translation_result.absolute_community_messages
+        per_community_messages = translation_result.weighted_community_messages
 
     preprocessing_started = time.perf_counter()
     if not abs_community_messages.empty:
@@ -875,6 +893,7 @@ def run_topic_phase_from_saved_inputs(
     month: str,
     year: str,
     lda_config: dict[str, Any] | None = None,
+    translation_config: dict[str, Any] | None = None,
 ):
     from src.topics.topic_inputs import load_topic_inputs
 
@@ -896,6 +915,7 @@ def run_topic_phase_from_saved_inputs(
         content_type=content_type,
         output_dir=output_dir,
         lda_config=lda_config,
+        translation_config=translation_config,
     )
 
 
@@ -920,6 +940,7 @@ def run_full_pipeline(
     louvain_resolution: float = 1.0,
     louvain_seed: int = 123,
     lda_config: dict[str, Any] | None = None,
+    translation_config: dict[str, Any] | None = None,
 ):
     """Orchestrates the entire thesis pipeline."""
     # 1. Network
@@ -976,6 +997,7 @@ def run_full_pipeline(
             month=month,
             year=year,
             lda_config=lda_config,
+            translation_config=translation_config,
         )
 
     logger.info("full_pipeline_completed")

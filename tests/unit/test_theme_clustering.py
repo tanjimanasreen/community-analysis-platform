@@ -6,6 +6,15 @@ import numpy as np
 import pandas as pd
 
 from src.themes.theme_clustering import (
+    CANONICALIZATION_DISTANCE_THRESHOLD,
+    CANONICALIZATION_GROUPING_METHOD,
+    CANONICALIZATION_LINKAGE,
+    CANONICALIZATION_METRIC,
+    CANONICALIZATION_REPRESENTATION,
+    CANONICALIZATION_SIMILARITY_THRESHOLD,
+    MonthlyCluster,
+    _canonicalize_monthly_clusters,
+    _normalized_representative_embeddings,
     build_clustered_theme_artifacts,
     extract_general_theme_observations,
 )
@@ -171,8 +180,8 @@ def test_two_stage_clustering_aggregates_distinct_matched_pairs_and_keywords():
         }
     )
     factory = QueueClustererFactory(
-        [[0, 0, -1], [0, 0, -1], [0, 0]],
-        [[0.9, 0.8, 0.0], [0.95, 0.85, 0.0], [1.0, 1.0]],
+        [[0, 0, -1], [0, 0, -1]],
+        [[0.9, 0.8, 0.0], [0.95, 0.85, 0.0]],
     )
 
     summaries, evidence, families = build_clustered_theme_artifacts(
@@ -205,6 +214,20 @@ def test_two_stage_clustering_aggregates_distinct_matched_pairs_and_keywords():
     assert january.iloc[0]["clustering_min_cluster_size"] == 2
     assert january.iloc[0]["canonicalization_min_cluster_size"] == 2
     assert january.iloc[0]["clustering_metric"] == "euclidean"
+    assert january.iloc[0]["canonicalization_representation"] == (
+        CANONICALIZATION_REPRESENTATION
+    )
+    assert january.iloc[0]["canonicalization_grouping_method"] == (
+        CANONICALIZATION_GROUPING_METHOD
+    )
+    assert january.iloc[0]["canonicalization_metric"] == CANONICALIZATION_METRIC
+    assert january.iloc[0]["canonicalization_linkage"] == CANONICALIZATION_LINKAGE
+    assert january.iloc[0]["canonicalization_similarity_threshold"] == (
+        CANONICALIZATION_SIMILARITY_THRESHOLD
+    )
+    assert january.iloc[0]["canonicalization_distance_threshold"] == (
+        CANONICALIZATION_DISTANCE_THRESHOLD
+    )
     assert january.iloc[0]["source_artifact_sha256"] == "abc"
     assert json.loads(january.iloc[0]["prominent_keywords"])[:2] == [
         "trump",
@@ -217,17 +240,15 @@ def test_two_stage_clustering_aggregates_distinct_matched_pairs_and_keywords():
     assert january_evidence.iloc[0]["source_artifact_sha256"] == "abc"
     assert len(families) == 1
     assert families.iloc[0]["months_present"] == 2
+    assert pd.isna(families.iloc[0]["stage_b_hdbscan_label"])
+    assert int(families.iloc[0]["stage_b_cluster_label"]) >= 0
     assert json.loads(families.iloc[0]["source_artifact_sha256s"]) == ["abc", "def"]
+    assert embedder.calls == [
+        ["US Immigration Policy", "Trump Immigration Policy", "Sports Update"],
+        ["US Immigration Policy", "Immigration Legal Challenges", "Music News"],
+    ]
 
     assert factory.calls == [
-        {
-            "min_cluster_size": 2,
-            "min_samples": 3,
-            "metric": "euclidean",
-            "cluster_selection_method": "eom",
-            "allow_single_cluster": False,
-            "copy": True,
-        },
         {
             "min_cluster_size": 2,
             "min_samples": 3,
@@ -270,7 +291,7 @@ def test_stage_b_noise_becomes_singleton_canonical_themes():
             "Theme B variant": [0.1, 0.9],
         }
     )
-    factory = QueueClustererFactory([[0, 0], [0, 0], [-1, -1]])
+    factory = QueueClustererFactory([[0, 0], [0, 0]])
 
     summaries, _, families = build_clustered_theme_artifacts(
         monthly,
@@ -287,6 +308,167 @@ def test_stage_b_noise_becomes_singleton_canonical_themes():
         != summaries["2017-02"].iloc[0]["canonical_theme_id"]
     )
     assert set(families["embedding_provider"]) == {"mock"}
+    assert families["stage_b_hdbscan_label"].isna().all()
+
+
+def test_stage_b_reuses_normalized_monthly_representative_embedding_not_centroid():
+    from src.themes.theme_clustering import ThemeObservation
+
+    cluster = MonthlyCluster(
+        period="2017-01",
+        cluster_id="mc_test",
+        hdbscan_label=0,
+        representative_theme="Theme A",
+        observation_indices=(0, 1, 2),
+        mean_membership_probability=1.0,
+    )
+    observations = [
+        ThemeObservation("2017-01", "p0", "1", "11", "Theme A", (), 0),
+        ThemeObservation("2017-01", "p1", "2", "12", "Theme A", (), 1),
+        ThemeObservation("2017-01", "p2", "3", "13", "Theme B", (), 2),
+    ]
+    embeddings = np.asarray(
+        [
+            [2.0, 0.0],
+            [2.0, 0.0],
+            [0.0, 4.0],
+        ],
+        dtype=np.float32,
+    )
+
+    representative = _normalized_representative_embeddings(
+        [cluster], observations=observations, embeddings=embeddings
+    )[cluster.cluster_id]
+
+    np.testing.assert_allclose(representative, [1.0, 0.0])
+    np.testing.assert_allclose(np.linalg.norm(representative), 1.0)
+    centroid = embeddings.mean(axis=0)
+    centroid = centroid / np.linalg.norm(centroid)
+    assert not np.allclose(representative, centroid)
+
+
+def test_stage_b_representative_embedding_fails_if_medoid_is_not_in_constituents():
+    from src.themes.theme_clustering import ThemeObservation
+
+    cluster = MonthlyCluster(
+        period="2017-01",
+        cluster_id="mc_test",
+        hdbscan_label=0,
+        representative_theme="Missing Theme",
+        observation_indices=(0, 1),
+        mean_membership_probability=1.0,
+    )
+    observations = [
+        ThemeObservation("2017-01", "p0", "1", "11", "Theme A", (), 0),
+        ThemeObservation("2017-01", "p1", "2", "12", "Theme B", (), 1),
+    ]
+
+    with np.testing.assert_raises_regex(
+        ValueError, "representative 'Missing Theme'.*missing from its constituent"
+    ):
+        _normalized_representative_embeddings(
+            [cluster],
+            observations=observations,
+            embeddings=np.asarray([[1.0, 0.0], [0.0, 1.0]], dtype=np.float32),
+        )
+
+
+def test_stage_b_representative_embedding_rejects_inconsistent_duplicate_vectors():
+    from src.themes.theme_clustering import ThemeObservation
+
+    cluster = MonthlyCluster(
+        period="2017-01",
+        cluster_id="mc_test",
+        hdbscan_label=0,
+        representative_theme="Theme A",
+        observation_indices=(0, 1),
+        mean_membership_probability=1.0,
+    )
+    observations = [
+        ThemeObservation("2017-01", "p0", "1", "11", "Theme A", (), 0),
+        ThemeObservation("2017-01", "p1", "2", "12", "Theme A", (), 1),
+    ]
+
+    with np.testing.assert_raises_regex(
+        ValueError, "representative 'Theme A'.*inconsistent recorded embeddings"
+    ):
+        _normalized_representative_embeddings(
+            [cluster],
+            observations=observations,
+            embeddings=np.asarray([[1.0, 0.0], [0.9, 0.1]], dtype=np.float32),
+        )
+
+
+def test_complete_linkage_threshold_prevents_bridge_chain_merging():
+    clusters = [
+        MonthlyCluster(
+            period=f"2017-0{index + 1}",
+            cluster_id=f"mc_{index}",
+            hdbscan_label=0,
+            representative_theme=label,
+            observation_indices=(0, 1),
+            mean_membership_probability=1.0,
+        )
+        for index, label in enumerate(("Theme A", "Theme B", "Theme C"))
+    ]
+    # A↔B and B↔C are each above 0.65 cosine similarity, but A↔C is not.
+    angles = np.deg2rad([0.0, 40.0, 80.0])
+    centroids = {
+        cluster.cluster_id: np.asarray([np.cos(angle), np.sin(angle)])
+        for cluster, angle in zip(clusters, angles)
+    }
+
+    families, _ = _canonicalize_monthly_clusters(
+        clusters,
+        normalized_representative_embeddings=centroids,
+    )
+
+    assert sorted(len(family.monthly_cluster_ids) for family in families) == [1, 2]
+    multi_member = next(
+        family for family in families if not family.singleton_canonical_theme
+    )
+    assert set(multi_member.monthly_cluster_ids) in (
+        {"mc_0", "mc_1"},
+        {"mc_1", "mc_2"},
+    )
+    assert all(family.hdbscan_label is None for family in families)
+
+
+def test_stage_b_canonical_ids_are_stable_when_input_cluster_order_changes():
+    clusters = [
+        MonthlyCluster(
+            period=f"2017-0{index + 1}",
+            cluster_id=f"mc_{index}",
+            hdbscan_label=0,
+            representative_theme=label,
+            observation_indices=(0, 1),
+            mean_membership_probability=1.0,
+        )
+        for index, label in enumerate(("Theme A", "Theme B", "Theme C"))
+    ]
+    centroids = {
+        "mc_0": np.asarray([1.0, 0.0]),
+        "mc_1": np.asarray([0.99, 0.1410673598]),
+        "mc_2": np.asarray([0.0, 1.0]),
+    }
+    centroids = {key: value / np.linalg.norm(value) for key, value in centroids.items()}
+
+    first, _ = _canonicalize_monthly_clusters(
+        clusters,
+        normalized_representative_embeddings=centroids,
+    )
+    second, _ = _canonicalize_monthly_clusters(
+        list(reversed(clusters)),
+        normalized_representative_embeddings=centroids,
+    )
+
+    first_membership = {
+        family.canonical_theme_id: family.monthly_cluster_ids for family in first
+    }
+    second_membership = {
+        family.canonical_theme_id: family.monthly_cluster_ids for family in second
+    }
+    assert first_membership == second_membership
 
 
 def test_all_noise_month_keeps_denominator_and_noise_diagnostics():
@@ -507,7 +689,7 @@ def test_ambiguous_dot_joined_general_theme_is_excluded_and_diagnosed():
     assert summary["excluded_records_ambiguous_general_theme_serialization"] == 1
     assert summary["canonical_theme_label"] == ""
     assert summary["monthly_cluster_contract_version"] == "2.1"
-    assert summary["canonicalization_contract_version"] == "2.1"
+    assert summary["canonicalization_contract_version"] == "4.0"
     assert evidence["2017-03"].empty
     assert families.empty
 
