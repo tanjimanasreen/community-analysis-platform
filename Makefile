@@ -2,7 +2,7 @@
 	db-up db-down db-check tei-up tei-down tei-check validate-config ingest-sample run-network-sample \
 	run-topic-sample run-theme-sample evaluate-sample run-pipeline-test \
 	run-pipeline-sample run-dashboard-sample run-longitudinal-sample \
-	run-evolution-pipeline-test pipeline-preflight translation-preflight translation-detect canonical-theme-benchmark run-evolution-pipeline verify-output-contract \
+	run-evolution-pipeline-test pipeline-preflight translation-preflight translation-detect canonical-theme-benchmark monthly-theme-cluster-benchmark run-evolution-pipeline verify-output-contract \
 	verify-evolution-output-contract verify-longitudinal-output-contract api-smoke-test run-api demo demo-api \
 	demo-frontend frontend-install frontend-build frontend-lint frontend-typecheck \
 	frontend-test frontend-coverage frontend-e2e frontend-check dashboard-fixture \
@@ -16,6 +16,7 @@ SAMPLE_THEME_OUTPUT ?= local_output/tests/community-analysis-theme-sample
 SAMPLE_INTERACTIONS ?= local_output/tests/community-analysis-sample-interactions.parquet
 SAMPLE_REPORT ?= local_output/tests/community-analysis-artifact-index.md
 CANONICAL_BENCHMARK_OUT ?= local_output/benchmarks/canonical-theme
+MONTHLY_CLUSTER_BENCHMARK_OUT ?= local_output/benchmarks/monthly-theme-clustering
 
 TEST_EVOLUTION_CONFIG ?= tests/configs/test_evolution.yml
 export EVOLUTION_OUTPUT ?= local_output/tests/community-analysis-evolution-test
@@ -55,6 +56,7 @@ help:
 	@echo "  translation-preflight - Prepare/reuse network outputs and report cached translation workload without cloud translation calls"
 	@echo "  translation-detect   - Call language detection only, cache results, and report exact translation request workload"
 	@echo "  canonical-theme-benchmark - Benchmark Stage-B canonicalization from saved theme artifacts without changing production outputs"
+	@echo "  monthly-theme-cluster-benchmark - Benchmark Stage-A monthly HDBSCAN from saved clean theme artifacts without changing production outputs"
 	@echo "  run-evolution-pipeline - Run a real evolution pipeline after preflight (CONFIG=...)"
 	@echo "  verify-output-contract - Validate generated one-month test artifact schemas"
 	@echo "  verify-evolution-output-contract - Validate generated evolution artifact schemas"
@@ -205,6 +207,13 @@ canonical-theme-benchmark:
 		exit 1; \
 	fi
 	$(PYTHON) -m src.cli canonical-theme-benchmark --themes-dir $(THEMES_DIR) --out-dir $(CANONICAL_BENCHMARK_OUT)
+
+monthly-theme-cluster-benchmark:
+	@if [ -z "$(THEMES_DIR)" ]; then \
+		echo "Error: THEMES_DIR is not set. Usage: make monthly-theme-cluster-benchmark THEMES_DIR=<.../data/themes|.../theme_clusters>"; \
+		exit 1; \
+	fi
+	$(PYTHON) -m src.cli monthly-theme-cluster-benchmark --themes-dir $(THEMES_DIR) --out-dir $(MONTHLY_CLUSTER_BENCHMARK_OUT)
 
 run-evolution-pipeline: pipeline-preflight
 	@mkdir -p /tmp/prefect

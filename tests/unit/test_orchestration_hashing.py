@@ -399,6 +399,82 @@ def test_theme_cache_key_changes_with_canonicalization_contract(monkeypatch, tmp
     assert legacy_key != current_key
 
 
+def test_theme_cache_key_changes_with_monthly_clustering_contract(monkeypatch, tmp_path):
+    from src.orchestration import hashing
+    from src.orchestration.models import (
+        ArtifactReference,
+        ThemeInputBundle,
+        ValidatedRunConfiguration,
+    )
+    from src.themes import theme_clustering
+
+    monkeypatch.setattr(hashing, "build_stage_code_fingerprint", lambda _stage: "code")
+    bundle = ThemeInputBundle(
+        monthly_topic_outputs={
+            "06": ArtifactReference(
+                path=str(tmp_path / "topic.parquet"),
+                sha256="a" * 64,
+                media_type="application/octet-stream",
+                asset_key="matched_communities_topics_06",
+            )
+        }
+    )
+    config = ValidatedRunConfiguration(
+        "digest",
+        str(tmp_path),
+        {"data_type": "telegram", "content_type": "forward", "year": "2019"},
+    )
+
+    monkeypatch.setattr(theme_clustering, "MONTHLY_CLUSTER_CONTRACT_VERSION", "2.2")
+    legacy_key = hashing.theme_stage_cache_key(bundle, config)
+    monkeypatch.setattr(theme_clustering, "MONTHLY_CLUSTER_CONTRACT_VERSION", "3.0")
+    current_key = hashing.theme_stage_cache_key(bundle, config)
+
+    assert legacy_key != current_key
+
+
+def test_theme_cache_key_includes_promoted_stage_a_geometry(monkeypatch, tmp_path):
+    from src.orchestration import hashing
+    from src.orchestration.models import (
+        ArtifactReference,
+        ThemeInputBundle,
+        ValidatedRunConfiguration,
+    )
+    from src.themes import theme_clustering
+
+    monkeypatch.setattr(hashing, "build_stage_code_fingerprint", lambda _stage: "code")
+    bundle = ThemeInputBundle(
+        monthly_topic_outputs={
+            "06": ArtifactReference(
+                path=str(tmp_path / "topic.parquet"),
+                sha256="a" * 64,
+                media_type="application/octet-stream",
+                asset_key="matched_communities_topics_06",
+            )
+        }
+    )
+    config = ValidatedRunConfiguration(
+        "digest",
+        str(tmp_path),
+        {"data_type": "telegram", "content_type": "forward", "year": "2019"},
+    )
+
+    monkeypatch.setattr(theme_clustering, "MONTHLY_CLUSTERING_INPUT_NORMALIZED", False)
+    monkeypatch.setattr(theme_clustering, "MONTHLY_CLUSTER_SELECTION_METHOD", "eom")
+    legacy_key = hashing.theme_stage_cache_key(bundle, config)
+    monkeypatch.setattr(theme_clustering, "MONTHLY_CLUSTERING_INPUT_NORMALIZED", True)
+    monkeypatch.setattr(theme_clustering, "MONTHLY_CLUSTER_SELECTION_METHOD", "leaf")
+    promoted_key = hashing.theme_stage_cache_key(bundle, config)
+
+    assert legacy_key != promoted_key
+
+
+def test_theme_stage_cache_version_promotes_with_stage_a_contract():
+    from src.orchestration.hashing import THEME_STAGE_CACHE_VERSION
+
+    assert THEME_STAGE_CACHE_VERSION == "3.0.0"
+
+
 def test_topic_cache_key_changes_when_translation_provider_changes(
     monkeypatch, tmp_path
 ):

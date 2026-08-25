@@ -468,7 +468,7 @@ def _cluster_fixture_rows(spec: RunSpec, *, month: int) -> tuple[list[dict], lis
                     "canonicalization_similarity_threshold": 0.65,
                     "canonicalization_distance_threshold": 0.35,
                     "source_artifact_sha256": "fixture",
-                    "monthly_cluster_contract_version": "2.1",
+                    "monthly_cluster_contract_version": "3.0",
                     "canonicalization_contract_version": "4.0",
                 }
             )
@@ -527,7 +527,7 @@ def _cluster_fixture_rows(spec: RunSpec, *, month: int) -> tuple[list[dict], lis
                 "canonicalization_linkage": "complete",
                 "canonicalization_similarity_threshold": 0.65,
                 "canonicalization_distance_threshold": 0.35,
-                "monthly_cluster_contract_version": "2.1",
+                "monthly_cluster_contract_version": "3.0",
                 "canonicalization_contract_version": "4.0",
                 "source_artifact_sha256": "fixture",
             }
@@ -999,7 +999,7 @@ def _build_run(artifact_root: Path, spec: RunSpec) -> Path:
             "canonicalization_similarity_threshold": 0.65,
             "canonicalization_distance_threshold": 0.35,
             "source_artifact_sha256s": json.dumps(["fixture"]),
-            "monthly_cluster_contract_version": "2.1",
+            "monthly_cluster_contract_version": "3.0",
             "canonicalization_contract_version": "4.0",
         }
         for item in family_rows.values()

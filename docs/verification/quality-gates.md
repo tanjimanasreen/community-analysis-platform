@@ -343,6 +343,31 @@ remain data: the browser may parse JSON but must never evaluate serialized text.
 - Azure `/detect` results with `isTranslationSupported=false` must never be passed to LDA unchanged; the full translation path may retry them through `/translate` source auto-detection, must cache successful fallback output, and must fail explicitly for unresolved/oversized inputs.
 - Detection-only planning must include Azure auto-detect fallback requests in its exact request count and persist a message-level issue audit without calling `/translate`.
 
+## Monthly Theme Stage-A Benchmark Gate
+- Benchmark input must be persisted clean Stage-A evidence plus the run's recorded clustering embedding artifact; no TEI/provider inference or production artifact mutation is allowed.
+- Before any candidate runs, the frozen contract-`2.2` raw-Euclidean/EOM/`min_samples=3` baseline must reproduce persisted period-by-period noise membership and non-noise partition exactly, with membership probabilities matching within rounding tolerance and production-reconstructed monthly cluster IDs/representatives matching persisted evidence; baseline mismatch aborts the benchmark.
+- Pre-Plan-085 monthly clustering contracts must be rejected so serialization-corrupted evidence cannot be used as a promotion baseline.
+- The main grid must keep `min_cluster_size=2` fixed and vary only raw/unit-Euclidean/cosine geometry, EOM/leaf selection, and sklearn-inclusive `min_samples` 3/2. The `allow_single_cluster=true` control is diagnostic-only and must be marked as such.
+- Output must preserve duplicate observation multiplicity and include period-level noise/concentration, embedding-neighbour geometry, cluster-level cosine cohesion, semantic-medoid cohesion, fragmentation, full observation membership, and exact recorded-embedding fingerprints/group sizes.
+- Within one period, an exact recorded embedding assigned to more than one non-noise cluster is a promotion-gate failure and must be counted at period and corpus level. A duplicate embedding split only across noise versus one non-noise cluster is a separate boundary diagnostic and does not by itself fail the non-noise consistency gate.
+- Candidate Stage-A clusters must be audited through the unchanged production Stage-B representative + cosine complete-linkage `0.65` contract; this is an impact diagnostic, not a Stage-B benchmark/default change.
+- No automatic winner is permitted. Production Stage-A changes require manual semantic review and clean cross-platform evidence rather than a Telegram-only score.
+
+## Production Monthly Theme Stage-A Gate
+- Production monthly clustering contract `3.0` must keep the recorded clustering embedding artifact raw/unnormalized while creating a separate in-memory L2-normalized matrix for HDBSCAN.
+- Production HDBSCAN must use Euclidean distance, `cluster_selection_method="leaf"`, default `min_cluster_size=2`, sklearn-inclusive default `min_samples=3`, and `allow_single_cluster=false`.
+- Stage-A summary/evidence/family artifacts must persist `clustering_input_normalized`, effective `hdbscan_min_samples`, `hdbscan_cluster_selection_method`, and `hdbscan_allow_single_cluster` without changing `embedding_normalized=false` for the recorded artifact.
+- Production Stage-A labels/probabilities must match the Plan-086 `unit_euclidean_leaf_ms3` candidate for the same raw matrix.
+- Zero/non-finite vectors must fail before normalization/HDBSCAN rather than producing undefined geometry.
+- Theme-stage cache contract `3.0.0` must prevent reuse of contract-`2.2` Stage-A artifacts and include the promoted normalization/selection policy in cache identity.
+- Stage-B canonicalization remains contract `4.0`; no Stage-A promotion may change the representative + cosine complete-linkage `0.65` method.
+
+Validation:
+
+```bash
+python -m pytest -q tests/unit/test_monthly_cluster_benchmark.py tests/unit/test_theme_clustering.py
+```
+
 ## Canonical Theme Stage-B Benchmark Gate
 - Benchmark input must come from persisted non-noise monthly-cluster evidence plus the run's recorded clustering embedding artifact; no TEI/provider inference is allowed.
 - The baseline benchmark variant must reproduce the current Stage-B HDBSCAN partition for the same embedding matrix.
@@ -364,10 +389,18 @@ python -m pytest -q tests/unit/test_canonical_theme_benchmark.py tests/unit/test
 
 ## Production Canonical Theme Stage-B Gate
 - Production canonicalization contract `4.0` must reuse the already-produced embedding of each monthly cluster's deterministic semantic medoid/representative and L2-normalize that vector; production Stage B must not average constituent embeddings.
-- Stage B must use cosine-distance agglomerative clustering with complete linkage and similarity threshold `0.65` (`distance_threshold=0.35`); monthly HDBSCAN must remain unchanged.
+- Stage B must use cosine-distance agglomerative clustering with complete linkage and similarity threshold `0.65` (`distance_threshold=0.35`); Stage B must not alter the independently versioned monthly Stage-A contract.
 - Complete-linkage regression coverage must demonstrate that bridge/chaining points cannot force a canonical family whose furthest pair falls below the threshold.
 - Stage-B size-one groups must remain valid singleton canonical themes. `stage_b_hdbscan_label` must be null for contract `4.0`, while a generic Stage-B cluster label and full grouping provenance are persisted.
 - Stage B must not issue a second embedding request for monthly representative labels. A representative missing from its own constituent observations, or mapping to inconsistent recorded vectors, must fail explicitly rather than re-embed or fall back to a centroid.
 - Canonical labels must remain existing monthly representatives selected by deterministic semantic medoid over the normalized monthly representative vectors.
 - The production partition must match the approved Plan-083 representative + complete-linkage cosine-0.65 benchmark candidate when both receive the same normalized representative matrix.
 - Theme-stage cache identity must change across canonicalization contract revisions so contract-3.0 artifacts cannot be restored as contract-4.0 outputs.
+
+## General Theme Serialization Gate
+- `general_theme_names` must never be split on commas merely because it is a scalar string; comma-bearing production labels must remain atomic observations.
+- Native list/tuple and JSON/Python serialized list forms must preserve commas inside individual items.
+- Exact legacy dot-joined reconstruction must compare the raw saved scalar with `".".join(general_theme_gpt.keys())` before any generic list fallback can alter the value, and recovered labels must retain their own mapped LDA keyword evidence.
+- Missing `general_theme_names` must not be rescued from `general_theme_gpt`; ambiguous dot-joined values with absent/mismatched mappings must remain excluded and diagnosed, while abbreviation punctuation such as `U.S. Immigration Policy` remains valid.
+- Plan-085 serialization contract `2.2` and theme-stage cache version `2.3.0` invalidated pre-repair Stage-A artifacts. Plan 087 supersedes production monthly clustering with contract `3.0` and theme-stage cache version `3.0.0`; the cache key must continue to include the monthly clustering contract.
+- Plan 085 itself does not change HDBSCAN parameters, Stage-B canonicalization contract `4.0`, IF/WIF metrics, Louvain, LDA, translation, provider behavior, or output categories. The later Plan-087 Stage-A promotion is independently versioned and tested.

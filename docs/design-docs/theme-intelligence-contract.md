@@ -259,10 +259,17 @@ authoritative evidence and are never overwritten.
 
 - The only clustering label source is `general_theme_names`; missing general
   labels are reported as exclusions and never replaced by IF/WIF labels.
+- `general_theme_names` is not a comma-delimited field. Commas inside a generated
+  theme label are semantic text and must remain inside that label. Native list/
+  tuple values and JSON/Python serialized list values are parsed as structured
+  lists; an ordinary scalar string remains one saved label unless the exact
+  legacy dot-joined reconstruction rule below applies.
 - When the theme generator has serialized multiple saved general labels as its
   dot-joined `general_theme_names` value, the corresponding `general_theme_gpt`
-  mapping is used only to reconstruct those same labels and retain each label's
-  mapped LDA keyword evidence. `general_theme_gpt` never supplies labels when
+  mapping is consulted against the raw saved scalar before generic list parsing.
+  Its keys are used only when `".".join(mapping.keys())` round-trips exactly to
+  the saved value after display normalization, retaining each label's mapped LDA
+  keyword evidence. `general_theme_gpt` never supplies labels when
   `general_theme_names` is missing.
 - Theme list-like evidence is normalized at the shared input boundary; Python
   tuples are treated as ordered sequences rather than one stringified keyword.
@@ -275,12 +282,16 @@ authoritative evidence and are never overwritten.
   `excluded_records_ambiguous_general_theme_serialization`. Legitimate punctuation
   such as `U.S. Immigration Policy` is not blindly split.
 - Theme observations are embedded through the clustering TEI profile using
-  `sentence-transformers/all-MiniLM-L6-v2`. The clustering client requests
-  unnormalized embeddings so Euclidean HDBSCAN matches the notebook-style
-  geometry; the existing similarity TEI client retains normalized embeddings.
+  `sentence-transformers/all-MiniLM-L6-v2`. The clustering client continues to
+  request and persist raw/unnormalized float32 embeddings. Production Stage A
+  creates an in-memory float64 L2-normalized copy solely for monthly HDBSCAN;
+  semantic-medoid and Stage-B representative calculations continue to use the
+  recorded raw vectors. The existing similarity TEI client retains its separate
+  normalized embedding profile.
 - Monthly observations are clustered with scikit-learn's first-party
-  `sklearn.cluster.HDBSCAN` (`min_cluster_size=2`, Euclidean distance,
-  `cluster_selection_method="eom"`, `allow_single_cluster=false`, no UMAP).
+  `sklearn.cluster.HDBSCAN` over the L2-normalized copy (`min_cluster_size=2`,
+  Euclidean distance, `cluster_selection_method="leaf"`,
+  `allow_single_cluster=false`, no UMAP).
   `min_samples` is set to `min_cluster_size + 1` because scikit-learn counts the
   point itself whereas the legacy scikit-contrib implementation did not; this
   preserves the prior effective density threshold during the implementation
@@ -312,9 +323,41 @@ authoritative evidence and are never overwritten.
   versions, and source hashes are persisted in additive artifacts. Canonical-family
   artifacts expose a generic `stage_b_cluster_label`; the legacy
   `stage_b_hdbscan_label` column remains present but is null under this contract.
-- The monthly clustering contract remains `2.1`; the approved production
-  cross-month canonicalization contract is `4.0`. Monthly HDBSCAN parameters are
-  unchanged.
+- The monthly clustering contract is `3.0`. Plan 085 contract `2.2` repaired the
+  admitted observation interpretation; Plan 087 then promotes the cross-platform
+  Plan-086 `unit_euclidean_leaf_ms3` candidate by L2-normalizing only the in-memory
+  Stage-A clustering matrix and switching HDBSCAN selection from EOM to leaf. The
+  approved production cross-month canonicalization contract remains `4.0`.
+
+### Stage-A monthly clustering robustness benchmark
+
+- `src/themes/monthly_cluster_benchmark.py` is a read-only diagnostic boundary over
+  persisted clean Stage-A evidence and the exact recorded clustering vectors. It never
+  calls TEI, OpenAI, translation providers, LDA, network analysis, or the production
+  pipeline.
+- The benchmark is intentionally frozen to clean contract-`2.2` evidence and first
+  reconstructs that historical raw-Euclidean/EOM/`min_samples=3` production partition
+  period-by-period. It aborts unless noise membership, non-noise partition, persisted
+  probabilities, stable cluster IDs, and representatives match. Contract-`3.0`
+  production artifacts are not reinterpreted as the Plan-086 baseline.
+- The controlled promotion grid keeps `min_cluster_size=2` fixed and crosses raw
+  Euclidean, L2-normalized Euclidean, and cosine geometry with EOM/leaf selection and
+  sklearn-inclusive `min_samples` values 3/2. A separate
+  `allow_single_cluster=true` production-geometry variant is diagnostic-only.
+- Candidate quality is audited with occurrence-preserving cluster/noise/concentration
+  metrics plus independent cosine cohesion, semantic-medoid representative-to-member
+  cohesion, nearest-neighbour geometry, fragmentation, and full observation membership.
+  Exact recorded-vector fingerprints are persisted in benchmark membership output. Within
+  one period, observations with an identical recorded embedding must not be assigned to
+  more than one non-noise cluster for a candidate to pass the promotion consistency gate;
+  noise/non-noise boundary ties are reported separately rather than conflated with this
+  failure mode.
+- Every candidate is also passed read-only through the fixed production Stage-B
+  representative + cosine complete-linkage `0.65` contract so downstream concentration
+  and representative-space cohesion are visible without retuning Stage B.
+- The benchmark writes four CSVs (summary, periods, clusters, membership), has no
+  automatic winner, and cannot by itself alter production defaults. A production Stage-A
+  proposal requires manual semantic review and clean cross-platform evidence.
 
 ### Stage-B canonicalization benchmark
 

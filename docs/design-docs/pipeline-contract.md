@@ -244,10 +244,13 @@ After raw general GPT themes are written, runs with `theme.clustering_enabled`
 publish an additive two-stage semantic clustering result before community
 transition/similarity rendering:
 
-1. exact unique `general_theme_names` strings -> clustering TEI embeddings ->
+1. field-specific `general_theme_names` parsing preserves commas inside semantic
+   labels; exact legacy dot-joined multi-theme strings are reconstructed only
+   through an exact `general_theme_gpt` key round-trip -> clustering TEI embeddings ->
    immutable content-addressed `float32` Parquet embedding artifact;
-2. persisted/in-memory vectors expanded back to all theme observations ->
-   scikit-learn HDBSCAN monthly clusters;
+2. persisted raw vectors expanded back to all theme observations -> an in-memory
+   L2-normalized copy -> scikit-learn Euclidean HDBSCAN monthly clusters using
+   `leaf` selection;
 3. each non-noise monthly cluster -> reuse its already-produced deterministic
    semantic-medoid embedding -> L2 normalization -> run-local cosine complete-linkage
    agglomerative canonical families at similarity `0.65`;
@@ -259,7 +262,13 @@ average heterogeneous constituent vectors. Canonical labels remain existing mont
 representatives selected by deterministic semantic medoid over the normalized monthly
 representative vectors. Canonicalization contract `4.0` persists the fixed
 representation/grouping/threshold provenance, a generic Stage-B cluster label, and a
-null legacy Stage-B HDBSCAN label. Monthly HDBSCAN remains contract `2.1` and unchanged.
+null legacy Stage-B HDBSCAN label. Monthly clustering contract `3.0` promotes the
+Plan-086 unit-Euclidean/leaf candidate while preserving the raw recorded embedding
+artifact, default `min_cluster_size=2`, sklearn-inclusive `min_samples=3`, and
+`allow_single_cluster=false`. Stage-B canonicalization remains contract `4.0`.
+Published clustering provenance explicitly records raw embedding normalization
+separately from the normalized Stage-A input plus effective `min_samples`, selection
+method, and single-cluster policy.
 
 The raw `themes_*` artifacts are unchanged. New logical artifact keys are:
 

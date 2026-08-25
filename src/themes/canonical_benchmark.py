@@ -936,6 +936,8 @@ def _fit_benchmark_variant(
                 min_cluster_size=variant.min_cluster_size,
                 metric="euclidean",
                 clusterer_factory=None,
+                cluster_selection_method="eom",
+                allow_single_cluster=False,
             )
             return labels
 

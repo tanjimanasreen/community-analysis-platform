@@ -276,6 +276,28 @@ def main():
         help="Directory for benchmark CSV outputs",
     )
 
+    parser_monthly_cluster_benchmark = subparsers.add_parser(
+        "monthly-theme-cluster-benchmark",
+        help=(
+            "Benchmark Stage-A monthly HDBSCAN variants from persisted clean "
+            "theme evidence and recorded embeddings without rerunning LDA, themes, "
+            "or TEI"
+        ),
+    )
+    parser_monthly_cluster_benchmark.add_argument(
+        "--themes-dir",
+        required=True,
+        help=(
+            "Path to a completed run's published data/themes or run-local "
+            "theme_clusters directory"
+        ),
+    )
+    parser_monthly_cluster_benchmark.add_argument(
+        "--out-dir",
+        required=True,
+        help="Directory for Stage-A benchmark CSV outputs",
+    )
+
     parser_report = subparsers.add_parser(
         "build-report", help="Build a markdown artifact index"
     )
@@ -713,6 +735,9 @@ def main():
     elif args.command == "canonical-theme-benchmark":
         _run_canonical_theme_benchmark_command(args.themes_dir, args.out_dir)
 
+    elif args.command == "monthly-theme-cluster-benchmark":
+        _run_monthly_theme_cluster_benchmark_command(args.themes_dir, args.out_dir)
+
     elif args.command == "pipeline-preflight":
         from src.preflight import PipelinePreflightError, run_pipeline_preflight
 
@@ -871,6 +896,23 @@ def _run_canonical_theme_benchmark_command(themes_dir, out_dir):
     print("Canonical theme Stage-B benchmark (production artifacts unchanged):")
     print(summary.to_string(index=False))
     print(f"Summary: {summary_path}")
+    print(f"Membership: {membership_path}")
+
+
+def _run_monthly_theme_cluster_benchmark_command(themes_dir, out_dir):
+    from src.themes.monthly_cluster_benchmark import write_monthly_clustering_benchmark
+
+    summary_path, periods_path, clusters_path, membership_path = (
+        write_monthly_clustering_benchmark(themes_dir, out_dir)
+    )
+    import pandas as pd
+
+    summary = pd.read_csv(summary_path)
+    print("Monthly theme Stage-A benchmark (production artifacts unchanged):")
+    print(summary.to_string(index=False))
+    print(f"Summary: {summary_path}")
+    print(f"Periods: {periods_path}")
+    print(f"Clusters: {clusters_path}")
     print(f"Membership: {membership_path}")
 
 

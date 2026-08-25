@@ -4,6 +4,7 @@ import json
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from src.themes.theme_clustering import (
     CANONICALIZATION_DISTANCE_THRESHOLD,
@@ -12,12 +13,38 @@ from src.themes.theme_clustering import (
     CANONICALIZATION_METRIC,
     CANONICALIZATION_REPRESENTATION,
     CANONICALIZATION_SIMILARITY_THRESHOLD,
+    MONTHLY_CLUSTER_CONTRACT_VERSION,
+    MONTHLY_CLUSTER_SELECTION_METHOD,
+    MONTHLY_CLUSTERING_INPUT_NORMALIZED,
     MonthlyCluster,
     _canonicalize_monthly_clusters,
+    _l2_normalize_embeddings,
     _normalized_representative_embeddings,
     build_clustered_theme_artifacts,
     extract_general_theme_observations,
 )
+
+
+def test_stage_a_production_geometry_contract_is_unit_euclidean_leaf():
+    raw = np.asarray([[3.0, 4.0], [0.0, 2.0]], dtype=np.float32)
+    raw_before = raw.copy()
+
+    normalized = _l2_normalize_embeddings(raw, context="test embeddings")
+
+    assert MONTHLY_CLUSTER_CONTRACT_VERSION == "3.0"
+    assert MONTHLY_CLUSTERING_INPUT_NORMALIZED is True
+    assert MONTHLY_CLUSTER_SELECTION_METHOD == "leaf"
+    assert normalized.dtype == np.float64
+    assert np.allclose(np.linalg.norm(normalized, axis=1), 1.0)
+    np.testing.assert_array_equal(raw, raw_before)
+
+
+def test_stage_a_normalization_rejects_zero_vectors():
+    with pytest.raises(ValueError, match="zero/non-finite vectors"):
+        _l2_normalize_embeddings(
+            np.asarray([[1.0, 0.0], [0.0, 0.0]], dtype=np.float32),
+            context="test embeddings",
+        )
 
 
 class MappingEmbedder:
@@ -36,6 +63,7 @@ class QueueClustererFactory:
         self.labels_by_call = list(labels_by_call)
         self.probabilities_by_call = list(probabilities_by_call or [])
         self.calls = []
+        self.fit_inputs = []
 
     def __call__(self, **kwargs):
         self.calls.append(kwargs)
@@ -49,6 +77,7 @@ class QueueClustererFactory:
         class Clusterer:
             def fit(inner_self, embeddings):
                 assert len(embeddings) == len(labels)
+                self.fit_inputs.append(np.asarray(embeddings, dtype=float).copy())
                 inner_self.labels_ = np.asarray(labels)
                 inner_self.probabilities_ = np.asarray(probabilities, dtype=np.float32)
                 return inner_self
@@ -121,6 +150,152 @@ def test_general_theme_gpt_reconstructs_dot_joined_general_labels_and_keyword_ev
     ]
     assert observations[0].keywords == ("immigration", "court")
     assert observations[1].keywords == ("protest", "retweet")
+
+
+def test_general_theme_gpt_reconstructs_comma_bearing_labels_before_generic_list_parsing():
+    frame = pd.DataFrame(
+        [
+            _row(
+                1,
+                11,
+                (
+                    "Media content production, metadata, and episodic structure."
+                    "Online social network and recruitment dynamics"
+                ),
+                ["fallback", "keywords"],
+                general_mapping={
+                    "Media content production, metadata, and episodic structure": [
+                        "media",
+                        "metadata",
+                    ],
+                    "Online social network and recruitment dynamics": [
+                        "social",
+                        "network",
+                    ],
+                },
+            )
+        ]
+    )
+
+    observations, excluded, pairs = extract_general_theme_observations(
+        frame, period="2019-06"
+    )
+
+    assert excluded == 0
+    assert pairs == {"if:1|wif:11"}
+    assert [item.label for item in observations] == [
+        "Media content production, metadata, and episodic structure",
+        "Online social network and recruitment dynamics",
+    ]
+    assert observations[0].keywords == ("media", "metadata")
+    assert observations[1].keywords == ("social", "network")
+    assert "metadata" not in {item.label for item in observations}
+
+
+def test_single_comma_bearing_general_theme_remains_atomic():
+    frame = pd.DataFrame(
+        [
+            _row(
+                1,
+                11,
+                "Departure, farewell, and temporal markers",
+                ["departure", "farewell"],
+                general_mapping={
+                    "Departure, farewell, and temporal markers": [
+                        "departure",
+                        "farewell",
+                    ]
+                },
+            )
+        ]
+    )
+
+    observations, excluded, pairs = extract_general_theme_observations(
+        frame, period="2019-06"
+    )
+
+    assert excluded == 0
+    assert pairs == {"if:1|wif:11"}
+    assert [item.label for item in observations] == [
+        "Departure, farewell, and temporal markers"
+    ]
+    assert observations[0].keywords == ("departure", "farewell")
+
+
+def test_scalar_general_theme_without_mapping_is_not_comma_delimited():
+    frame = pd.DataFrame(
+        [
+            _row(
+                1,
+                11,
+                "Names, identities, and social networks in regional context",
+                ["names", "identity"],
+                general_mapping=None,
+            )
+        ]
+    )
+
+    observations, excluded, pairs = extract_general_theme_observations(
+        frame, period="2019-06"
+    )
+
+    assert excluded == 0
+    assert pairs == {"if:1|wif:11"}
+    assert [item.label for item in observations] == [
+        "Names, identities, and social networks in regional context"
+    ]
+
+
+def test_structured_general_theme_list_preserves_commas_inside_items():
+    frame = pd.DataFrame(
+        [
+            _row(
+                1,
+                11,
+                [
+                    "Cultural events, tourism, and hospitality contexts",
+                    "Online social interaction",
+                ],
+                ["fallback"],
+                general_mapping={
+                    "Cultural events, tourism, and hospitality contexts": [
+                        "culture",
+                        "tourism",
+                    ],
+                    "Online social interaction": ["social"],
+                },
+            )
+        ]
+    )
+
+    observations, excluded, _ = extract_general_theme_observations(
+        frame, period="2019-06"
+    )
+
+    assert excluded == 0
+    assert [item.label for item in observations] == [
+        "Cultural events, tourism, and hospitality contexts",
+        "Online social interaction",
+    ]
+
+
+def test_serialized_general_theme_lists_preserve_commas_inside_items():
+    values = [
+        '["Theme A, with comma", "Theme B"]',
+        "['Theme A, with comma', 'Theme B']",
+    ]
+
+    for value in values:
+        frame = pd.DataFrame([_row(1, 11, value, ["fallback"])])
+        observations, excluded, _ = extract_general_theme_observations(
+            frame, period="2019-06"
+        )
+
+        assert excluded == 0
+        assert [item.label for item in observations] == [
+            "Theme A, with comma",
+            "Theme B",
+        ]
 
 
 def test_general_theme_mapping_does_not_supply_labels_when_names_are_missing():
@@ -210,7 +385,11 @@ def test_two_stage_clustering_aggregates_distinct_matched_pairs_and_keywords():
     assert january.iloc[0]["embedding_contract_version"] == ""
     assert january.iloc[0]["embedding_dtype"] == "float32"
     assert not bool(january.iloc[0]["embedding_normalized"])
+    assert bool(january.iloc[0]["clustering_input_normalized"])
     assert january.iloc[0]["hdbscan_implementation"] == "sklearn.cluster.HDBSCAN"
+    assert january.iloc[0]["hdbscan_min_samples"] == 3
+    assert january.iloc[0]["hdbscan_cluster_selection_method"] == "leaf"
+    assert not bool(january.iloc[0]["hdbscan_allow_single_cluster"])
     assert january.iloc[0]["clustering_min_cluster_size"] == 2
     assert january.iloc[0]["canonicalization_min_cluster_size"] == 2
     assert january.iloc[0]["clustering_metric"] == "euclidean"
@@ -238,8 +417,12 @@ def test_two_stage_clustering_aggregates_distinct_matched_pairs_and_keywords():
     assert january_evidence["is_monthly_noise"].tolist() == [False, False, True]
     assert january_evidence.iloc[2]["canonical_theme_id"] is None
     assert january_evidence.iloc[0]["source_artifact_sha256"] == "abc"
+    assert bool(january_evidence.iloc[0]["clustering_input_normalized"])
+    assert january_evidence.iloc[0]["hdbscan_cluster_selection_method"] == "leaf"
     assert len(families) == 1
     assert families.iloc[0]["months_present"] == 2
+    assert bool(families.iloc[0]["clustering_input_normalized"])
+    assert families.iloc[0]["hdbscan_cluster_selection_method"] == "leaf"
     assert pd.isna(families.iloc[0]["stage_b_hdbscan_label"])
     assert int(families.iloc[0]["stage_b_cluster_label"]) >= 0
     assert json.loads(families.iloc[0]["source_artifact_sha256s"]) == ["abc", "def"]
@@ -253,7 +436,7 @@ def test_two_stage_clustering_aggregates_distinct_matched_pairs_and_keywords():
             "min_cluster_size": 2,
             "min_samples": 3,
             "metric": "euclidean",
-            "cluster_selection_method": "eom",
+            "cluster_selection_method": "leaf",
             "allow_single_cluster": False,
             "copy": True,
         },
@@ -261,11 +444,15 @@ def test_two_stage_clustering_aggregates_distinct_matched_pairs_and_keywords():
             "min_cluster_size": 2,
             "min_samples": 3,
             "metric": "euclidean",
-            "cluster_selection_method": "eom",
+            "cluster_selection_method": "leaf",
             "allow_single_cluster": False,
             "copy": True,
         },
     ]
+    assert all(
+        np.allclose(np.linalg.norm(matrix, axis=1), 1.0)
+        for matrix in factory.fit_inputs
+    )
 
 
 def test_stage_b_noise_becomes_singleton_canonical_themes():
@@ -688,7 +875,10 @@ def test_ambiguous_dot_joined_general_theme_is_excluded_and_diagnosed():
     assert summary["excluded_records_missing_general_theme"] == 0
     assert summary["excluded_records_ambiguous_general_theme_serialization"] == 1
     assert summary["canonical_theme_label"] == ""
-    assert summary["monthly_cluster_contract_version"] == "2.1"
+    assert (
+        summary["monthly_cluster_contract_version"]
+        == MONTHLY_CLUSTER_CONTRACT_VERSION
+    )
     assert summary["canonicalization_contract_version"] == "4.0"
     assert evidence["2017-03"].empty
     assert families.empty

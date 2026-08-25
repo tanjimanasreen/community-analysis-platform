@@ -20,7 +20,7 @@ from src.themes.benchmark.contracts import (
 
 NETWORK_STAGE_CACHE_VERSION = "2.0.0"
 TOPIC_STAGE_CACHE_VERSION = "3.0.0"
-THEME_STAGE_CACHE_VERSION = "2.2.0"
+THEME_STAGE_CACHE_VERSION = "3.0.0"
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -392,6 +392,10 @@ def theme_stage_cache_key(
         CANONICALIZATION_METRIC,
         CANONICALIZATION_REPRESENTATION,
         CANONICALIZATION_SIMILARITY_THRESHOLD,
+        MONTHLY_CLUSTER_ALLOW_SINGLE_CLUSTER,
+        MONTHLY_CLUSTER_CONTRACT_VERSION,
+        MONTHLY_CLUSTER_SELECTION_METHOD,
+        MONTHLY_CLUSTERING_INPUT_NORMALIZED,
     )
 
     hashes = [
@@ -423,9 +427,14 @@ def theme_stage_cache_key(
         ),
         "clustering_model_revision": theme.get("clustering_model_revision"),
         "clustering_min_cluster_size": theme.get("clustering_min_cluster_size", 2),
+        "clustering_input_normalized": MONTHLY_CLUSTERING_INPUT_NORMALIZED,
+        "hdbscan_min_samples": int(theme.get("clustering_min_cluster_size", 2)) + 1,
+        "hdbscan_cluster_selection_method": MONTHLY_CLUSTER_SELECTION_METHOD,
+        "hdbscan_allow_single_cluster": MONTHLY_CLUSTER_ALLOW_SINGLE_CLUSTER,
         "canonicalization_min_cluster_size": theme.get(
             "canonicalization_min_cluster_size", 2
         ),
+        "monthly_cluster_contract_version": MONTHLY_CLUSTER_CONTRACT_VERSION,
         "canonicalization_contract_version": CANONICALIZATION_CONTRACT_VERSION,
         "canonicalization_representation": CANONICALIZATION_REPRESENTATION,
         "canonicalization_grouping_method": CANONICALIZATION_GROUPING_METHOD,

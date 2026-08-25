@@ -17,11 +17,14 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 from src.themes.theme_inputs import _parse_list
 
-MONTHLY_CLUSTER_CONTRACT_VERSION = "2.1"
+MONTHLY_CLUSTER_CONTRACT_VERSION = "3.0"
 CANONICALIZATION_CONTRACT_VERSION = "4.0"
 DEFAULT_CLUSTERING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 DEFAULT_MIN_CLUSTER_SIZE = 2
 DEFAULT_CLUSTERING_METRIC = "euclidean"
+MONTHLY_CLUSTERING_INPUT_NORMALIZED = True
+MONTHLY_CLUSTER_SELECTION_METHOD = "leaf"
+MONTHLY_CLUSTER_ALLOW_SINGLE_CLUSTER = False
 HDBSCAN_IMPLEMENTATION = "sklearn.cluster.HDBSCAN"
 HDBSCAN_VERSION = sklearn.__version__
 CANONICALIZATION_REPRESENTATION = "monthly_semantic_representative_l2_normalized"
@@ -198,11 +201,17 @@ def build_clustered_theme_artifacts(
         embeddings = _validate_embeddings(
             embedder.encode([obs.label for obs in observations]), len(observations)
         )
-        labels, probabilities = _fit_hdbscan(
+        clustering_embeddings = _l2_normalize_embeddings(
             embeddings,
+            context="monthly Stage-A clustering embeddings",
+        )
+        labels, probabilities = _fit_hdbscan(
+            clustering_embeddings,
             min_cluster_size=min_cluster_size,
             metric=metric,
             clusterer_factory=clusterer_factory,
+            cluster_selection_method=MONTHLY_CLUSTER_SELECTION_METHOD,
+            allow_single_cluster=MONTHLY_CLUSTER_ALLOW_SINGLE_CLUSTER,
         )
         membership_probabilities[period] = probabilities
         monthly_labels[period] = labels
@@ -368,7 +377,11 @@ def _fit_hdbscan(
     min_cluster_size: int,
     metric: str,
     clusterer_factory: Callable[..., Any] | None,
+    cluster_selection_method: str = "eom",
+    allow_single_cluster: bool = False,
 ) -> tuple[np.ndarray, np.ndarray]:
+    # Keep historical helper defaults explicit for read-only benchmark callers.
+    # Production Stage A passes the contract-3.0 selection/single-cluster policy.
     count = embeddings.shape[0]
     if count < min_cluster_size:
         return np.full(count, -1, dtype=int), np.zeros(count, dtype=float)
@@ -387,8 +400,8 @@ def _fit_hdbscan(
         # effective density threshold during the controlled implementation migration.
         "min_samples": translated_min_samples,
         "metric": metric,
-        "cluster_selection_method": "eom",
-        "allow_single_cluster": False,
+        "cluster_selection_method": cluster_selection_method,
+        "allow_single_cluster": allow_single_cluster,
         "copy": True,
     }
     if clusterer_factory is None:
@@ -621,6 +634,18 @@ def _canonicalization_provenance() -> dict[str, Any]:
     }
 
 
+def _monthly_clustering_provenance(
+    *, min_cluster_size: int, metric: str
+) -> dict[str, Any]:
+    return {
+        "clustering_input_normalized": MONTHLY_CLUSTERING_INPUT_NORMALIZED,
+        "hdbscan_min_samples": min_cluster_size + 1,
+        "hdbscan_cluster_selection_method": MONTHLY_CLUSTER_SELECTION_METHOD,
+        "hdbscan_allow_single_cluster": MONTHLY_CLUSTER_ALLOW_SINGLE_CLUSTER,
+        "clustering_metric": metric,
+    }
+
+
 def _monthly_summary_frame(
     *,
     period: str,
@@ -719,7 +744,9 @@ def _monthly_summary_frame(
                 "hdbscan_version": HDBSCAN_VERSION,
                 "clustering_min_cluster_size": min_cluster_size,
                 "canonicalization_min_cluster_size": canonicalization_min_cluster_size,
-                "clustering_metric": metric,
+                **_monthly_clustering_provenance(
+                    min_cluster_size=min_cluster_size, metric=metric
+                ),
                 **_canonicalization_provenance(),
                 "monthly_cluster_contract_version": MONTHLY_CLUSTER_CONTRACT_VERSION,
                 "canonicalization_contract_version": CANONICALIZATION_CONTRACT_VERSION,
@@ -759,7 +786,9 @@ def _monthly_summary_frame(
                 "hdbscan_version": HDBSCAN_VERSION,
                 "clustering_min_cluster_size": min_cluster_size,
                 "canonicalization_min_cluster_size": canonicalization_min_cluster_size,
-                "clustering_metric": metric,
+                **_monthly_clustering_provenance(
+                    min_cluster_size=min_cluster_size, metric=metric
+                ),
                 **_canonicalization_provenance(),
                 "monthly_cluster_contract_version": MONTHLY_CLUSTER_CONTRACT_VERSION,
                 "canonicalization_contract_version": CANONICALIZATION_CONTRACT_VERSION,
@@ -833,7 +862,9 @@ def _observation_frame(
                 "hdbscan_version": HDBSCAN_VERSION,
                 "clustering_min_cluster_size": min_cluster_size,
                 "canonicalization_min_cluster_size": canonicalization_min_cluster_size,
-                "clustering_metric": metric,
+                **_monthly_clustering_provenance(
+                    min_cluster_size=min_cluster_size, metric=metric
+                ),
                 **_canonicalization_provenance(),
                 "source_artifact_sha256": source_artifact_sha256 or "",
                 "monthly_cluster_contract_version": MONTHLY_CLUSTER_CONTRACT_VERSION,
@@ -885,7 +916,9 @@ def _families_frame(
             "hdbscan_version": HDBSCAN_VERSION,
             "clustering_min_cluster_size": min_cluster_size,
             "canonicalization_min_cluster_size": canonicalization_min_cluster_size,
-            "clustering_metric": metric,
+            **_monthly_clustering_provenance(
+                min_cluster_size=min_cluster_size, metric=metric
+            ),
             **_canonicalization_provenance(),
             "source_artifact_sha256s": source_hashes,
             "monthly_cluster_contract_version": MONTHLY_CLUSTER_CONTRACT_VERSION,
@@ -990,8 +1023,9 @@ def _general_theme_entries(
         return [], _MISSING_GENERAL_THEME
 
     mapping = _general_theme_mapping(record.get("general_theme_gpt"))
-    if len(names) == 1:
-        saved_name = _display_text(names[0])
+    raw_scalar_name = _general_theme_scalar_text(raw_names)
+    if raw_scalar_name is not None:
+        saved_name = _display_text(raw_scalar_name)
         if mapping:
             mapping_names = list(mapping)
             flattened = ".".join(mapping_names)
@@ -1062,6 +1096,13 @@ def _general_theme_mapping(value: Any) -> dict[str, Any]:
 
 
 def _general_theme_names(value: Any) -> list[str]:
+    """Parse saved general-theme labels without treating commas as delimiters.
+
+    ``general_theme_names`` is produced from semantic labels, and commas are valid
+    label text. Structured list representations remain supported, but an ordinary
+    scalar string is one saved label (or one legacy dot-joined serialization that
+    is reconciled separately against ``general_theme_gpt``).
+    """
     if value is None:
         return []
     try:
@@ -1069,11 +1110,37 @@ def _general_theme_names(value: Any) -> list[str]:
             return []
     except (TypeError, ValueError):
         pass
-    parsed = _parse_list(value)
-    if isinstance(parsed, list):
-        values: Iterable[Any] = parsed
+
+    values: Iterable[Any]
+    if isinstance(value, list):
+        values = value
+    elif isinstance(value, tuple):
+        values = value
+    elif hasattr(value, "tolist") and not isinstance(value, str):
+        converted = value.tolist()
+        values = converted if isinstance(converted, list) else [converted]
+    elif isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return []
+        parsed: Any = None
+        parsed_successfully = False
+        for parser in (json.loads, ast.literal_eval):
+            try:
+                parsed = parser(text)
+                parsed_successfully = True
+                break
+            except (ValueError, SyntaxError, json.JSONDecodeError):
+                continue
+        if parsed_successfully and isinstance(parsed, (list, tuple)):
+            values = parsed
+        elif parsed_successfully:
+            values = [parsed]
+        else:
+            values = [text]
     else:
-        values = [parsed]
+        values = [value]
+
     result: list[str] = []
     seen: set[str] = set()
     for item in values:
@@ -1082,6 +1149,25 @@ def _general_theme_names(value: Any) -> list[str]:
             seen.add(label)
             result.append(label)
     return result
+
+
+def _general_theme_scalar_text(value: Any) -> str | None:
+    """Return scalar saved text, or ``None`` when the value is list-structured."""
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text:
+        return None
+
+    for parser in (json.loads, ast.literal_eval):
+        try:
+            parsed = parser(text)
+        except (ValueError, SyntaxError, json.JSONDecodeError):
+            continue
+        if isinstance(parsed, (list, tuple)):
+            return None
+        return _display_text(parsed) or None
+    return _display_text(text)
 
 
 def _keywords(value: Any) -> list[str]:
@@ -1146,6 +1232,27 @@ def _validate_embeddings(values: Any, expected_rows: int) -> np.ndarray:
     return matrix
 
 
+def _l2_normalize_embeddings(
+    embeddings: np.ndarray,
+    *,
+    context: str,
+) -> np.ndarray:
+    """Return an in-memory float64 unit-vector copy for Stage-A clustering.
+
+    The recorded embedding artifact remains the raw float32 provider output. This
+    helper changes only the geometry passed to HDBSCAN and deliberately leaves
+    semantic-medoid and Stage-B representative calculations on the recorded
+    vectors.
+    """
+    matrix = np.asarray(embeddings, dtype=np.float64)
+    if matrix.ndim != 2 or matrix.shape[1] == 0 or not np.isfinite(matrix).all():
+        raise ValueError(f"{context} are not a finite 2D embedding matrix")
+    norms = np.linalg.norm(matrix, axis=1, keepdims=True)
+    if not np.isfinite(norms).all() or np.any(norms <= 0.0):
+        raise ValueError(f"{context} contain zero/non-finite vectors")
+    return matrix / norms
+
+
 def _periods(monthly: Mapping[str, pd.DataFrame], year: str | int) -> dict[str, str]:
     result: dict[str, str] = {}
     month_names = {
@@ -1196,8 +1303,12 @@ CLUSTER_SUMMARY_COLUMNS = [
     "embedding_contract_version",
     "embedding_dtype",
     "embedding_normalized",
+    "clustering_input_normalized",
     "hdbscan_implementation",
     "hdbscan_version",
+    "hdbscan_min_samples",
+    "hdbscan_cluster_selection_method",
+    "hdbscan_allow_single_cluster",
     "clustering_min_cluster_size",
     "canonicalization_min_cluster_size",
     "clustering_metric",
@@ -1234,8 +1345,12 @@ CLUSTER_OBSERVATION_COLUMNS = [
     "embedding_contract_version",
     "embedding_dtype",
     "embedding_normalized",
+    "clustering_input_normalized",
     "hdbscan_implementation",
     "hdbscan_version",
+    "hdbscan_min_samples",
+    "hdbscan_cluster_selection_method",
+    "hdbscan_allow_single_cluster",
     "clustering_min_cluster_size",
     "canonicalization_min_cluster_size",
     "clustering_metric",
@@ -1267,8 +1382,12 @@ CANONICAL_FAMILY_COLUMNS = [
     "embedding_contract_version",
     "embedding_dtype",
     "embedding_normalized",
+    "clustering_input_normalized",
     "hdbscan_implementation",
     "hdbscan_version",
+    "hdbscan_min_samples",
+    "hdbscan_cluster_selection_method",
+    "hdbscan_allow_single_cluster",
     "clustering_min_cluster_size",
     "canonicalization_min_cluster_size",
     "clustering_metric",

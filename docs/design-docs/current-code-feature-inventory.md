@@ -284,5 +284,27 @@ inputs remain CSV. Generated tabular categories are:
 
 - Plan 084 promotes the Plan-083 `representative_normalized_agglomerative_complete_cosine_s65` candidate into production canonicalization contract `4.0`, superseding Plan 082's centroid representation.
 - Production Stage B reuses the already-produced embedding of each non-noise monthly cluster's deterministic semantic medoid/representative, L2-normalizes it, and groups representatives with cosine complete-linkage agglomerative clustering at similarity `0.65` / distance `0.35`. Constituent embeddings are not averaged and no representative label is re-embedded.
-- Monthly HDBSCAN remains unchanged. Stage-B size-one agglomerative groups are retained as singleton canonical themes; the legacy `stage_b_hdbscan_label` artifact column is nullable and a generic `stage_b_cluster_label` is persisted.
+- Stage B does not modify monthly Stage-A clustering. Stage-B size-one agglomerative groups are retained as singleton canonical themes; the legacy `stage_b_hdbscan_label` artifact column is nullable and a generic `stage_b_cluster_label` is persisted. Current monthly Stage A is independently versioned by Plan 087.
 - Canonical labels remain deterministic existing monthly representatives chosen by semantic medoid over the normalized monthly representative vectors. No GPT relabeling or manual standardization is introduced.
+
+## General Theme Serialization Integrity
+
+- Plan 085 repairs the Stage-A `general_theme_names` interpretation boundary without changing theme generation or clustering algorithms.
+- `general_theme_names` is not treated as comma-delimited text: commas inside generated labels remain part of the semantic label.
+- Native/serialized list forms remain supported. For the historical scalar dot-joined multi-theme form, `general_theme_gpt` keys may reconstruct individual labels only when their dot-join round-trips exactly to the raw saved value; missing names are never supplied from the mapping and ambiguous mismatches remain excluded/diagnosed.
+- Plan 085 introduced monthly clustering contract `2.2` for the corrected admitted observation population without changing HDBSCAN itself. Plan 087 later supersedes the production Stage-A clustering contract with `3.0`; Stage-B canonicalization remains contract `4.0` with representative-vector cosine complete linkage at similarity `0.65`.
+
+## Production Monthly Theme Stage A
+
+- Plan 087 promotes the cross-platform Plan-086 `unit_euclidean_leaf_ms3` candidate
+  into monthly clustering contract `3.0`.
+- The clustering TEI profile still records raw, unnormalized float32
+  `all-MiniLM-L6-v2` vectors. Production creates an in-memory float64 L2-normalized
+  copy for HDBSCAN only; recorded artifacts, semantic-medoid selection, and Stage-B
+  representative reuse remain on the original vectors.
+- Production HDBSCAN keeps Euclidean distance, `min_cluster_size=2`, the preserved
+  sklearn-inclusive `min_samples=3` default, and `allow_single_cluster=false`, while
+  changing cluster selection from EOM to `leaf`.
+- Stage-A artifacts persist explicit normalization/min-samples/selection/single-cluster
+  provenance. Theme-stage cache contract `3.0.0` prevents reuse of pre-promotion
+  monthly-clustering artifacts. Stage-B canonicalization remains contract `4.0`.
