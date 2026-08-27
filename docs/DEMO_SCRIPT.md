@@ -108,7 +108,8 @@ npm run test:e2e:update
 - Graph thresholds remain `min_total_post=10` and `min_shared_post=5`.
 - Louvain remains `resolution=1`, `seed=123`.
 - LDA remains 15 topics, random state 100, 100 iterations, chunksize 20,
-  80 passes, and automatic alpha/eta.
+  80 passes, `alpha='symmetric'` (fixed prior — `LdaMulticore` does not
+  support `alpha='auto'`), and `eta='auto'`.
 - Theme labels remain downstream of saved LDA keywords.
 
 ## 7. Cleanup

@@ -35,16 +35,15 @@ pipeline behavior:
 7. `docs/design-docs/metric-contract.md`
 8. `docs/design-docs/pipeline-contract.md`
 9. `docs/design-docs/theme-intelligence-contract.md`
-10. `docs/verification/quality-gates.md`
-11. `docs/verification/test-matrix.md`
-12. the relevant active execution plan
+10. `docs/design-docs/output-artifact-contract.md`
+11. `docs/verification/quality-gates.md`
+12. `docs/verification/test-matrix.md`
+13. the relevant active execution plan
 
-Then implement plans in this order:
-
-1. `docs/exec-plans/active/001-baseline-and-foundation.md`
-2. `docs/exec-plans/active/002-database-and-ingestion.md`
-3. `docs/exec-plans/active/003-network-community-topic-pipeline.md`
-4. `docs/exec-plans/active/004-theme-intelligence.md`
+The foundational plans (001–004) are complete. New work continues in
+`docs/exec-plans/active/` with plan numbers 030+. Before starting new
+development, identify the highest-numbered active plan for the area you are
+working in and read its status.
 
 ## Important Rule
 

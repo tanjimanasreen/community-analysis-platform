@@ -1,8 +1,8 @@
 # Architecture
 
-## Current Architecture
+## Thesis-Era Script Architecture (Historical Provenance)
 
-The current project is a script-based thesis prototype:
+The original thesis prototype ran as three sequential scripts:
 
 ```text
 Neo4j database
@@ -14,64 +14,143 @@ Neo4j database
   -> GPT themes, transitions, diagrams, similarity heatmaps
 ```
 
-Supporting logic lives in `utils/`.
+Supporting logic lived in `utils/`. These scripts are **historical provenance**
+and are not the production entry point.
 
-## Target Architecture
+## Current Architecture (Production)
 
-The production version should keep the same behavior but move it into a layered Python package:
+The production system is a layered `src/` Python package orchestrated by Prefect,
+served by a FastAPI read-only API, and visualized by a Vite/React dashboard:
+
+```text
+configs/             — per-run YAML configurations (Telegram, Twitter, evolution)
+src/
+  cli.py             — unified CLI entry point (all pipeline + benchmark commands)
+  preflight.py       — pre-run dependency/credential/TEI validation
+  config/            — configuration loading, validation, and settings
+  graph_store/       — GraphRepository abstraction; Memgraph implementation
+  ingestion/         — network data extractor, schema, Memgraph loader
+  network/           — follower-followee edges, graph construction, centrality
+  communities/       — Louvain detection, message extraction, similarity
+  topics/            — text preprocessing, LDA, topic inputs, topic matching
+  themes/            — theme generation, HDBSCAN/AgglomerativeClustering clustering,
+                       TEI embeddings, community paths, transitions, heatmaps
+  text/              — multilingual translation pipeline (Azure/AWS)
+  providers/         — LLM provider abstraction (OpenAI, Gemini, Mistral, LLM7, Nvidia, mock)
+  orchestration/     — Prefect flows, tasks, cross-run stage cache, run hashing
+  artifacts/         — immutable run manifest lifecycle models
+  api/               — FastAPI read-only artifact API (routers, services, schemas)
+  reporting/         — output artifact contract verifier, artifact index
+  tracking/          — MLflow experiment tracking (optional)
+  visualization/     — Sankey, membership-change, and theme-similarity chart rendering
+  logging_config.py  — structured logging (text/JSON)
+
+frontend/            — Vite/React read-only dashboard
+  src/api/           — typed API client layer (consumes /api/v1 only)
+  src/pages/         — dashboard route pages
+
+tests/
+  unit/              — offline unit tests (92+ files)
+  integration/       — integration tests (Docker/Memgraph optional)
+  fixtures/          — sample relationship CSVs, theme LDA fixtures
+  configs/           — test run YAML configs
+
+data/raw/            — external relationship CSV exports (CSV at ingestion boundary)
+runs/<run_id>/       — immutable canonical run bundles (Parquet + manifest.json)
+.stage_cache/        — content-addressed cross-run stage artifact cache
+```
+
+## Implemented Module Structure
+
+The production package layout (fully implemented):
 
 ```text
 src/
-  config/
-  artifacts/
-  data_io/
-  graph_store/
-  ingestion/
-  network/
-  communities/
-  topics/
-  themes/
-  visualization/
-  reporting/
-  cli.py
+  cli.py             — unified CLI entry point
+  preflight.py       — pre-run preflight validation
+  logging_config.py  — structured logging
+  config/            — configuration loading, validation, settings
+  graph_store/       — GraphRepository abstraction + Memgraph implementation
+  ingestion/         — network_data_extractor, schema, memgraph_loader
+  network/           — follower_followee, graphs, centrality
+  communities/       — louvain, messages, similarity, interactions
+  topics/            — text_preprocessor, lda, topic_inputs, topic_matching
+  themes/            — theme_generation, theme_clustering, tei_client,
+                       community_paths, community_transition, embedding_store,
+                       theme_similarity, membership_changes, sankey_paths,
+                       heatmaps, data_loader, transitions
+  text/              — translation (Azure/AWS multilingual pipeline)
+  providers/         — base, factory, routing, openai, gemini, mistral,
+                       llm7, nvidia, ollama, mock, cached, cache_backends
+  orchestration/     — composition_flow, foundation_flow, pipeline_flow,
+                       tasks, hashing, stage_cache, models, artifact_validation,
+                       retry_policy, settings
+  artifacts/         — run_manifest, models
+  api/               — FastAPI app, routers, services, schemas, errors
+  reporting/         — output_contract, artifact_index
+  tracking/          — mlflow_tracker, noop_tracker, contracts, sanitization,
+                       summaries, factory
+  visualization/     — community_transition, membership_changes, theme_similarity
 
 tests/
-  unit/
-  integration/
-  fixtures/
+  unit/              — 92+ offline unit test files
+  integration/       — integration tests (require Docker)
+  fixtures/          — sample CSVs and LDA fixtures
+  configs/           — test YAML configurations
 ```
 
-## Current-To-Target Mapping
+## Thesis-To-Production Mapping
 
-| Current file | Target module |
+| Thesis file | Production module(s) |
 |---|---|
-| `neo4j_data_fetcher.py` | `src/graph_store/neo4j_exporter.py`, `src/graph_store/memgraph_client.py` |
+| `neo4j_data_fetcher.py` | `src/graph_store/neo4j_exporter.py`, `src/graph_store/memgraph_repository.py` |
 | `social-network-analysis.py` | `src/pipelines/social_network_pipeline.py` |
 | `theme-analysis.py` | `src/pipelines/theme_pipeline.py` |
 | `utils/network_data_extractor.py` | `src/ingestion/network_data_extractor.py`, `src/network/follower_followee.py` |
 | `utils/network_graph.py` | `src/network/graphs.py`, `src/network/centrality.py` |
-| `utils/community_generator.py` | `src/communities/louvain.py`, `src/communities/messages.py`, `src/communities/stats.py` |
+| `utils/community_generator.py` | `src/communities/louvain.py`, `src/communities/messages.py`, `src/communities/interactions.py` |
 | `utils/similarity_detector.py` | `src/communities/similarity.py` |
 | `utils/text_preprocessor.py` | `src/topics/text_preprocessor.py` |
 | `utils/lda_analysis.py` | `src/topics/lda.py`, `src/topics/topic_matching.py` |
-| `utils/lang_detector.py` | `src/text/language_detection.py` |
+| `utils/lang_detector.py` | `src/text/translation.py` (detection integrated) |
 | `utils/lang_translator.py` | `src/text/translation.py` |
+| _(new)_ | `src/themes/theme_clustering.py` — HDBSCAN Stage-A + cosine Stage-B |
+| _(new)_ | `src/themes/tei_client.py` — TEI embedding service client |
+| _(new)_ | `src/themes/embedding_store.py` — content-addressed float32 Parquet embeddings |
+| _(new)_ | `src/themes/community_paths.py` — DFS evolution paths + member mobility |
+| _(new)_ | `src/providers/` — full LLM provider abstraction |
+| _(new)_ | `src/orchestration/` — Prefect flows, tasks, cross-run stage cache |
+| _(new)_ | `src/artifacts/run_manifest.py` — immutable run bundle lifecycle |
+| _(new)_ | `src/api/` — FastAPI read-only artifact API |
+| _(new)_ | `src/tracking/` — optional MLflow experiment tracking |
+| _(new)_ | `src/preflight.py` — pre-run validation |
+| _(new)_ | `frontend/` — Vite/React read-only dashboard |
 
 ## Dependency Direction
 
 Allowed dependency direction:
 
 ```text
-config -> data_io -> graph_store -> ingestion -> network -> communities -> topics -> themes -> visualization -> reporting -> cli
+config -> graph_store -> ingestion -> network -> communities -> topics -> themes
+       -> text (translation, optional upstream of topics)
+       -> providers (upstream of themes)
+       -> orchestration (wraps pipelines; uses hashing/cache/artifacts)
+       -> artifacts (run manifest; used by orchestration + api)
+       -> api (read-only; consumes artifact bundles only)
+       -> tracking (optional; wraps orchestration tasks)
+       -> visualization -> reporting -> cli
 ```
 
 Rules:
 
 - Metric logic must not depend on graph database clients.
 - LDA logic must not call OpenAI.
-- Theme generation may call OpenAI only through a provider abstraction.
+- Theme generation may call OpenAI only through the provider abstraction in `src/providers/`.
 - Visualization functions should consume saved dataframes or typed records, not rerun pipeline logic.
 - CLI commands should orchestrate modules, not contain analysis logic.
+- The API layer (`src/api/`) must not import or execute `src/communities/`, `src/topics/`, `src/themes/` (analysis), `src/providers/`, TEI clients, or visualization renderers.
+- Dashboard/API handlers must never compute or persist embeddings.
+
 
 ## Run Artifact Boundary
 

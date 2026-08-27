@@ -1,6 +1,8 @@
 # AGENTS.md
 
-This repository contains an existing thesis codebase for social network/community analysis and theme analysis. Your job is to modernize it without losing any implemented thesis behavior.
+This repository contains the production rebuild of a thesis codebase for social
+network/community analysis and theme analysis. The original thesis scripts are
+historical provenance. The live system is the `src/` Python package.
 
 Use this file as the entry point. It is a map, not the full manual.
 
@@ -17,30 +19,51 @@ Before changing code, read these files in order:
 7. `docs/design-docs/metric-contract.md`
 8. `docs/design-docs/pipeline-contract.md`
 9. `docs/design-docs/theme-intelligence-contract.md`
-10. `docs/verification/quality-gates.md`
-11. `docs/verification/test-matrix.md`
-12. The relevant active plan in `docs/exec-plans/active/`
+10. `docs/design-docs/output-artifact-contract.md`
+11. `docs/verification/quality-gates.md`
+12. `docs/verification/test-matrix.md`
+13. The relevant active plan in `docs/exec-plans/active/`
 
 ## Current Codebase
 
-The existing thesis implementation is centered around:
+The production system lives entirely in the `src/` Python package. The original
+thesis scripts (`neo4j_data_fetcher.py`, `social-network-analysis.py`,
+`theme-analysis.py`, and `utils/`) are **historical provenance only** —
+they document the original thesis behavior but are not executed by the
+production pipeline. All production behavior is re-implemented in `src/`.
 
-- `neo4j_data_fetcher.py`: manually configured Neo4j query/export script.
-- `social-network-analysis.py`: end-to-end network, community, LDA, and community-comparison pipeline.
-- `theme-analysis.py`: GPT theme generation, month-to-month community transition analysis, Sankey diagrams, membership-change diagrams, and theme similarity heatmaps.
-- `utils/network_data_extractor.py`: creator/spreader extraction, Neo4j datetime conversion, user dataframe creation, follower-followee edge construction, and `shared_post`/`weighted_post` metric calculation.
-- `utils/network_graph.py`: NetworkX graph construction and centrality helpers.
-- `utils/community_generator.py`: Louvain community detection, prominent community filtering, community message extraction, and community message statistics.
-- `utils/similarity_detector.py`: exact and partial community matching using Jaccard similarity.
-- `utils/lda_analysis.py`: unigram/bigram LDA, perplexity/coherence, dominant topic assignment, and matched-topic export.
-- `utils/text_preprocessor.py`: text cleaning, emoji removal, HTML cleaning, Unicode normalization, stopword filtering.
-- `utils/lang_detector.py` and `utils/lang_translator.py`: English detection and Google translation helpers.
+The `src/` package layout:
+
+| Module | Purpose |
+|---|---|
+| `src/cli.py` | CLI entry point for all pipeline commands |
+| `src/config/` | Configuration loading, validation, and settings |
+| `src/graph_store/` | `GraphRepository` abstraction; Memgraph implementation |
+| `src/ingestion/` | Network data extractor, schema constants, Memgraph loader |
+| `src/network/` | Follower-followee edges, graph construction, centrality |
+| `src/communities/` | Louvain detection, message extraction, similarity |
+| `src/topics/` | Text preprocessing, LDA, topic inputs, topic matching |
+| `src/themes/` | Theme generation, clustering, TEI embedding, transition, paths, heatmaps |
+| `src/text/` | Multilingual translation pipeline (Azure/AWS provider abstraction) |
+| `src/providers/` | LLM provider abstraction (OpenAI, Gemini, Mistral, LLM7, Nvidia, mock) |
+| `src/orchestration/` | Prefect flows, tasks, stage cache, run hashing |
+| `src/artifacts/` | Run manifest lifecycle models |
+| `src/api/` | FastAPI read-only artifact API |
+| `src/reporting/` | Output artifact contract validator, artifact index |
+| `src/tracking/` | MLflow experiment tracking (optional) |
+| `src/visualization/` | Sankey, membership-change, and theme-similarity charts |
+| `src/preflight.py` | Pre-run dependency/credential/TEI preflight checks |
+| `src/logging_config.py` | Structured logging (text/JSON) |
+
+The `frontend/` directory contains the Vite/React read-only dashboard that
+consumes the FastAPI `/api/v1` endpoints exclusively.
 
 ## Mission
 
-Turn the thesis scripts into a production-ready, reproducible, locally runnable project while preserving all implemented features.
+The thesis scripts have been turned into a production-ready, reproducible,
+locally runnable project. All original thesis analytical behavior is preserved.
 
-The final system must support:
+The system supports:
 
 - Neo4j export migration path into a local graph database workflow.
 - Telegram and Twitter-style relationship datasets.
@@ -59,7 +82,16 @@ The final system must support:
 - Month-to-month community transition analysis.
 - Sankey community transition visualization.
 - Membership-change visualization.
-- SentenceTransformer theme similarity heatmaps.
+- SentenceTransformer/TEI theme similarity heatmaps.
+- Monthly HDBSCAN theme clustering (Stage A, contract 3.0).
+- Cross-month cosine complete-linkage canonical theme families (Stage B, contract 4.0).
+- Prefect orchestration with content-addressed cross-run stage artifact cache.
+- Immutable run manifests with checksum/schema/row-count verification.
+- Read-only FastAPI artifact API discoverable through run manifests.
+- Vite/React dashboard consuming only `/api/v1`.
+- Optional MLflow experiment tracking.
+- Optional multilingual translation (Azure/AWS) before LDA preprocessing.
+- Pipeline preflight validation before expensive evolution runs.
 
 ## Non-Negotiable Constraints
 
@@ -72,21 +104,38 @@ The final system must support:
 - Do not remove Telegram support while making Twitter/reply workflows configurable.
 - Do not replace thesis outputs with only LLM-generated themes. GPT themes are downstream of LDA keywords.
 - Do not call OpenAI APIs in tests.
+- Do not change `shared_post`, `weighted_post`, graph thresholds, Louvain defaults, LDA defaults, monthly Stage-A clustering contract, Stage-B canonicalization contract, output categories, public schemas, or the LDA-before-theme analytical order without an approved execution plan and behavior-preservation tests.
+- The FastAPI layer must not run ingestion, NetworkX, Louvain, LDA, provider, TEI, or visualization-generation code in request paths.
+- Dashboard/API handlers must not compute or persist embeddings.
 
-## Default Modernization Direction
+## Completed Foundation
 
-- Replace hard-coded Neo4j connectivity with configuration.
-- Use Memgraph Community Edition as the default local graph database target for the production rebuild.
-- Keep compatibility with exported CSV relationship files from the existing Neo4j workflow.
-- Convert scripts into importable modules and CLI commands.
-- Add tests around current behavior before refactoring internals.
+The following modernization goals from the original HARNESS have been achieved:
 
-## Development Loop
+- Neo4j hard-coded credentials replaced by `GRAPH_DB_*` environment contract.
+- All paths configurable; no hard-coded external drive paths.
+- `src/` package with importable modules and `src/cli.py` CLI commands.
+- Tests around all core behavior before any refactoring.
+- Memgraph Community Edition as the default local graph database.
+- CSV compatibility for existing Neo4j workflow exports preserved.
+- Prefect orchestration with ephemeral local execution (no server required).
+- Immutable run manifests with atomic lifecycle management.
+- Read-only FastAPI artifact API over verified manifests.
+- Read-only Vite/React dashboard consuming only `/api/v1`.
+- Monthly HDBSCAN theme clustering + cross-month cosine canonicalization.
+- Content-addressed cross-run stage artifact cache (network, topic, theme stages).
+- Optional MLflow tracking for prompt/schema versions and provider metrics.
+- Optional multilingual translation pipeline (Azure default, AWS optional).
+- Pipeline preflight for real evolution runs.
+- TEI embedding service infrastructure (two revision-pinned profiles).
 
-For every task:
+## Current Development Direction
 
-1. Read the active execution plan.
-2. Inspect current code before editing.
+New work continues in `docs/exec-plans/active/` with plan numbers 030+.
+Before starting any new task:
+
+1. Read the relevant active execution plan.
+2. Inspect current source before editing.
 3. Preserve behavior with tests or fixture outputs.
 4. Make the smallest coherent change.
 5. Run relevant validation.
@@ -98,20 +147,64 @@ For every task:
 Use these commands when available:
 
 ```bash
+# Core quality
 make format
 make lint
 make test
+
+# Database (optional — requires Docker)
 make db-up
 make db-check
+
+# TEI embedding services (optional — requires Docker + GPU)
+make tei-up
+make tei-check
+make tei-down
+
+# Offline sample pipeline
 make ingest-sample
 make run-network-sample
 make run-topic-sample
 make run-theme-sample
 make run-pipeline-sample
 make build-report
+
+# Evolution pipeline
+make run-evolution-pipeline-test
+make verify-output-contract
+make verify-evolution-output-contract
+make pipeline-preflight CONFIG=configs/twitter/reply_evolution.yml
+make run-evolution-pipeline CONFIG=configs/twitter/reply_evolution.yml
+
+# Translation planning (cloud-free)
+make translation-preflight CONFIG=configs/telegram/forwarded_message_evolution.yml
+make translation-detect CONFIG=configs/telegram/forwarded_message_evolution.yml
+
+# Theme clustering benchmarks (read-only, no production change)
+make canonical-theme-benchmark THEMES_DIR=<path>
+make monthly-theme-cluster-benchmark THEMES_DIR=<path>
+
+# API and dashboard
+make api-smoke-test
+make run-api API_ARTIFACT_ROOT=<path>
+make dashboard-fixture
+make run-frontend
+
+# Frontend quality
+make frontend-install
+make frontend-build
+make frontend-lint
+make frontend-typecheck
+make frontend-test
+make frontend-coverage
+make frontend-e2e
+make frontend-check
+
+# Full demo
+make demo
 ```
 
-If a command does not exist yet, create it in the relevant execution plan.
+If a Make target does not exist yet, create it in the relevant execution plan.
 
 ## Escalate Before
 
@@ -123,3 +216,6 @@ Ask the human before:
 - Replacing Memgraph with a different database.
 - Introducing paid cloud dependencies.
 - Making OpenAI/GPT calls mandatory for the full local sample pipeline.
+- Changing the Stage-A monthly clustering contract version.
+- Changing the Stage-B canonicalization contract version.
+- Changing TEI model IDs or Hugging Face revision pins.
