@@ -1,0 +1,12 @@
+# CDK local assets and virtual environment
+.venv/
+cdk.out/
+.env
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/

@@ -6,7 +6,8 @@
 	verify-evolution-output-contract verify-longitudinal-output-contract api-smoke-test run-api demo demo-api \
 	demo-frontend frontend-install frontend-build frontend-lint frontend-typecheck \
 	frontend-test frontend-coverage frontend-e2e frontend-check dashboard-fixture \
-	run-frontend clean-generated clean-cache build-report benchmark-performance
+	run-frontend clean-generated clean-cache build-report benchmark-performance \
+	infra-install infra-test infra-synth infra-list
 
 PYTHON ?= .venv/bin/python
 UV ?= uv
@@ -79,6 +80,10 @@ help:
 	@echo "  clean-cache          - Remove Python/test/Vite caches and egg-info"
 	@echo "  build-report         - Build a markdown artifact index for sample outputs"
 	@echo "  benchmark-performance - Compare legacy and indexed message aggregation"
+	@echo "  infra-install        - Create infra/.venv and install CDK dependencies"
+	@echo "  infra-test           - Run pytest on CDK infrastructure tests"
+	@echo "  infra-synth          - Synthesize CDK CloudFormation templates (STAGE=dev|prod)"
+	@echo "  infra-list           - List CDK stacks (STAGE=dev|prod)"
 
 bootstrap:
 	$(UV) sync --frozen --extra orchestration
@@ -277,3 +282,20 @@ build-report:
 
 benchmark-performance:
 	$(PYTHON) -m scripts.benchmark_community_messages
+
+INFRA_STAGE ?= dev
+
+infra-install:
+	python3.11 -m venv infra/.venv
+	infra/.venv/bin/pip install --upgrade pip
+	infra/.venv/bin/pip install -r infra/requirements-dev.txt
+
+infra-test:
+	PYTHONPATH=infra infra/.venv/bin/pytest infra/tests
+
+infra-synth:
+	cd infra && cdk synth -c stage=$(INFRA_STAGE)
+
+infra-list:
+	cd infra && cdk list -c stage=$(INFRA_STAGE)
+
