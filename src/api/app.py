@@ -32,6 +32,8 @@ from src.api.services.run_catalog import RunCatalog
 from src.api.services.topic_service import TopicService
 from src.api.services.theme_trend_service import ThemeTrendService
 from src.api.services.theme_cluster_service import ThemeClusterService
+from src.api.storage.base import ArtifactStorage
+from src.api.storage.factory import create_artifact_storage
 
 API_PREFIX = "/api/v1"
 API_SCHEMA_VERSION = "1.0"
@@ -43,18 +45,32 @@ def create_app(
     *,
     artifact_root: str | Path | None = None,
     settings: ApiSettings | None = None,
+    storage: ArtifactStorage | None = None,
 ) -> FastAPI:
     """Create a read-only API over canonical run-scoped artifacts."""
     from src.logging_config import setup_logging
 
     setup_logging()
     resolved = settings or ApiSettings.from_env(artifact_root)
+    artifact_storage = (
+        storage
+        or resolved.storage
+        or create_artifact_storage(
+            backend_type=resolved.storage_backend,
+            artifact_root=resolved.artifact_root,
+            s3_bucket=resolved.s3_bucket,
+            s3_prefix=resolved.s3_prefix,
+            s3_region=resolved.s3_region,
+        )
+    )
     catalog = RunCatalog(
-        resolved.artifact_root,
+        storage=artifact_storage,
         refresh_seconds=resolved.catalog_refresh_seconds,
     )
     reader = ArtifactReader(
-        catalog, parquet_cache_max_bytes=resolved.parquet_cache_max_bytes
+        catalog,
+        parquet_cache_max_bytes=resolved.parquet_cache_max_bytes,
+        storage=artifact_storage,
     )
     topic_service = TopicService(reader)
     theme_trend_service = ThemeTrendService(reader)
@@ -170,7 +186,7 @@ def create_app(
         tags=["health"],
     )
     def readiness():
-        artifact_root_ready = resolved.artifact_root.is_dir()
+        artifact_root_ready = artifact_storage.is_ready()
         discovered_runs = len(catalog.list_manifests()) if artifact_root_ready else 0
         payload = ReadinessResponse(
             status="ready" if artifact_root_ready else "not_ready",

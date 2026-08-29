@@ -288,8 +288,16 @@ def load_run_manifest(path_or_root: str | Path) -> RunManifest:
 def validate_run_manifest(
     manifest_or_path: RunManifest | str | Path,
     run_root: str | Path | None = None,
+    *,
+    storage: Any = None,
 ) -> RunManifest:
     """Validate lifecycle invariants and every referenced canonical artifact."""
+    if storage is not None:
+        return _validate_run_manifest_storage(
+            storage,
+            str(run_root or ""),
+            manifest_or_path,
+        )
     if isinstance(manifest_or_path, RunManifest):
         manifest = manifest_or_path
         if run_root is None:
@@ -649,15 +657,159 @@ def _artifact_schema_version(key: str, path: Path) -> str:
     return "1"
 
 
-def validate_artifact_record(run_root: str | Path, record: ArtifactRecord) -> Path:
+def validate_artifact_record(
+    run_root: str | Path,
+    record: ArtifactRecord,
+    *,
+    storage: Any = None,
+) -> Path:
     """Validate one manifest-listed artifact and return its resolved path.
 
     This narrow public helper lets read-only consumers verify only the requested
     artifact instead of re-hashing every artifact in the run.
     """
+    if storage is not None:
+        _validate_artifact_record_storage(
+            storage, str(run_root or ""), record
+        )
+        rel_dir = str(run_root or "").replace("\\", "/").strip("/")
+        clean = record.path.replace("\\", "/").strip("/")
+        return Path(f"{rel_dir}/{clean}" if rel_dir else clean)
     root = Path(run_root).resolve()
     _validate_artifact_record(root, record)
     return (root / record.path).resolve(strict=True)
+
+
+def _validate_run_manifest_storage(
+    storage: Any,
+    run_rel_dir: str,
+    manifest_or_path: RunManifest | str | Path,
+) -> RunManifest:
+    rel_dir = str(run_rel_dir or "").replace("\\", "/").strip("/")
+    if isinstance(manifest_or_path, RunManifest):
+        manifest = manifest_or_path
+    else:
+        manifest_path = f"{rel_dir}/{MANIFEST_FILE}" if rel_dir else MANIFEST_FILE
+        payload = json.loads(storage.read_text(manifest_path))
+        manifest = RunManifest.from_dict(payload)
+
+    if rel_dir:
+        dir_name = rel_dir.split("/")[-1]
+        if dir_name != manifest.run_id:
+            raise ValueError("run manifest identifier does not match its directory")
+
+    started_at = manifest.pipeline.get("started_at")
+    if not started_at:
+        raise ValueError("run manifests require started_at")
+    completed_at = manifest.pipeline.get("completed_at")
+    if manifest.status is RunStatus.RUNNING and completed_at:
+        raise ValueError("running manifests must not have completed_at")
+    if manifest.status in {RunStatus.COMPLETED, RunStatus.FAILED} and not completed_at:
+        raise ValueError("terminal manifests require completed_at")
+    if manifest.status is RunStatus.COMPLETED and not manifest.artifacts:
+        raise ValueError("completed manifests require at least one artifact")
+
+    config_rel = (
+        f"{rel_dir}/{RESOLVED_CONFIG_FILE}" if rel_dir else RESOLVED_CONFIG_FILE
+    )
+    datasets_rel = f"{rel_dir}/{DATASETS_FILE}" if rel_dir else DATASETS_FILE
+    for req in (config_rel, datasets_rel):
+        if not storage.exists(req):
+            raise ValueError(f"run metadata file is missing: {req}")
+
+    for record in manifest.artifacts:
+        _validate_artifact_record_storage(storage, rel_dir, record)
+    return manifest
+
+
+def _validate_artifact_record_storage(
+    storage: Any,
+    run_rel_dir: str,
+    record: ArtifactRecord,
+) -> None:
+    clean = str(record.path).replace("\\", "/").strip()
+    if clean.startswith("/") or ".." in clean.split("/"):
+        raise ValueError(f"artifact path escapes the run root: {record.path}")
+
+    full_rel = f"{run_rel_dir}/{clean}" if run_rel_dir else clean
+    if not storage.exists(full_rel):
+        raise ValueError(f"artifact is not a regular file: {record.path}")
+
+    expected_prefix = {
+        ArtifactCategory.INTERMEDIATE: "_intermediate",
+        ArtifactCategory.DATA: "data",
+        ArtifactCategory.REPORT: "reports",
+    }[record.category]
+    parts = clean.split("/")
+    if parts[0] != expected_prefix:
+        raise ValueError(f"artifact category/path mismatch: {record.key}")
+
+    ext = Path(clean).suffix.lower()
+    allowed_media_types = _EXPECTED_MEDIA_TYPES.get(ext)
+    if allowed_media_types is None:
+        raise ValueError(f"artifact extension is not supported: {record.path}")
+    if record.media_type not in allowed_media_types:
+        raise ValueError(f"artifact media type mismatch: {record.key}")
+
+    # Checksum verification with streaming SHA-256
+    hasher = hashlib.sha256()
+    for chunk in storage.iter_bytes(full_rel, chunk_size=65536):
+        hasher.update(chunk)
+    actual_hash = hasher.hexdigest()
+    if actual_hash != record.sha256:
+        raise ValueError(f"artifact checksum mismatch: {record.key}")
+
+    meta = storage.get_metadata(full_rel)
+    if record.byte_size is not None and meta.size != record.byte_size:
+        raise ValueError(f"artifact byte size mismatch: {record.key}")
+
+    if ext == ".parquet":
+        pf = storage.open_parquet(full_rel)
+        rows = pf.metadata.num_rows
+        columns = list(pf.schema_arrow.names)
+        if record.rows is not None and rows != record.rows:
+            raise ValueError(f"artifact row count mismatch: {record.key}")
+        required = _required_columns(
+            record.key,
+            storage=storage,
+            run_rel_dir=run_rel_dir,
+        )
+        missing = [col for col in required if col not in columns]
+        if missing:
+            raise ValueError(
+                f"artifact schema mismatch for {record.key}; missing columns: {missing}"
+            )
+    elif ext == ".csv":
+        import io
+
+        text = storage.read_text(full_rel, encoding="utf-8-sig")
+        reader = csv.reader(io.StringIO(text))
+        try:
+            columns = next(reader)
+        except StopIteration:
+            columns = []
+        rows = sum(1 for _ in reader)
+        if record.rows is not None and rows != record.rows:
+            raise ValueError(f"artifact row count mismatch: {record.key}")
+        required = _required_columns(
+            record.key,
+            storage=storage,
+            run_rel_dir=run_rel_dir,
+        )
+        missing = [col for col in required if col not in columns]
+        if missing:
+            raise ValueError(
+                f"artifact schema mismatch for {record.key}; missing columns: {missing}"
+            )
+    elif ext == ".json":
+        payload = json.loads(storage.read_text(full_rel))
+        if not isinstance(payload, Mapping):
+            raise ValueError(f"JSON artifact must contain an object: {record.key}")
+        base_key = _base_artifact_key(record.key)
+        if base_key in {"topic_manifest", "theme_manifest", "provider_run_summary"}:
+            actual = str(payload.get("schema_version", ""))
+            if actual != record.schema_version:
+                raise ValueError(f"artifact schema version mismatch: {record.key}")
 
 
 def _validate_artifact_record(root: Path, record: ArtifactRecord) -> None:
@@ -719,7 +871,13 @@ def _validate_artifact_record(root: Path, record: ArtifactRecord) -> None:
                 raise ValueError(f"artifact schema version mismatch: {record.key}")
 
 
-def _required_columns(key: str, *, run_root: Path | None = None) -> list[str]:
+def _required_columns(
+    key: str,
+    *,
+    run_root: Path | None = None,
+    storage: Any = None,
+    run_rel_dir: str = "",
+) -> list[str]:
     base_key = _base_artifact_key(key)
 
     if base_key in {"topic_absolute_messages", "topic_weighted_messages"}:
@@ -754,14 +912,27 @@ def _required_columns(key: str, *, run_root: Path | None = None) -> list[str]:
     from src.reporting.output_contract import get_required_columns_by_artifact
 
     config: Mapping[str, Any] | None = None
-    if alias == "network_data" and run_root is not None:
-        config_path = run_root / RESOLVED_CONFIG_FILE
-        payload = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
-        if not isinstance(payload, Mapping):
-            raise ValueError(
-                f"resolved run config must contain an object: {config_path}"
+    if alias == "network_data":
+        if storage is not None:
+            config_rel = (
+                f"{run_rel_dir}/{RESOLVED_CONFIG_FILE}"
+                if run_rel_dir
+                else RESOLVED_CONFIG_FILE
             )
-        config = payload
+            payload = yaml.safe_load(storage.read_text(config_rel)) or {}
+            if not isinstance(payload, Mapping):
+                raise ValueError(
+                    f"resolved run config must contain an object: {config_rel}"
+                )
+            config = payload
+        elif run_root is not None:
+            config_path = Path(run_root) / RESOLVED_CONFIG_FILE
+            payload = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+            if not isinstance(payload, Mapping):
+                raise ValueError(
+                    f"resolved run config must contain an object: {config_path}"
+                )
+            config = payload
     return list(get_required_columns_by_artifact(config).get(alias, []))
 
 

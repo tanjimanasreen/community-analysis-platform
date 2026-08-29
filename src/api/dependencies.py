@@ -14,11 +14,17 @@ from src.api.services.run_catalog import RunCatalog
 from src.api.services.topic_service import TopicService
 from src.api.services.theme_trend_service import ThemeTrendService
 from src.api.services.theme_cluster_service import ThemeClusterService
+from src.api.storage.base import ArtifactStorage
 
 
 @dataclass(frozen=True)
 class ApiSettings:
-    artifact_root: Path
+    artifact_root: Path | str
+    storage_backend: str = "local"
+    s3_bucket: str | None = None
+    s3_prefix: str = ""
+    s3_region: str | None = None
+    storage: ArtifactStorage | None = None
     max_graph_nodes: int = 1000
     max_graph_edges: int = 5000
     catalog_refresh_seconds: float = 1.0
@@ -40,6 +46,18 @@ class ApiSettings:
 
         env_settings = get_api_settings()
         root = artifact_root or env_settings.artifact_root or "local_output"
+        raw_root_str = str(root).strip()
+
+        storage_backend = env_settings.storage_backend
+        s3_bucket = env_settings.s3_bucket
+        s3_prefix = env_settings.s3_prefix
+        s3_region = env_settings.s3_region
+
+        if raw_root_str.startswith("s3://"):
+            storage_backend = "s3"
+            resolved_root: Path | str = raw_root_str
+        else:
+            resolved_root = Path(root).expanduser()
 
         raw_origins = env_settings.cors_origins or ""
         origins: tuple[str, ...] = (
@@ -59,7 +77,11 @@ class ApiSettings:
             else ("127.0.0.1", "localhost", "testserver")
         )
         return cls(
-            artifact_root=Path(root).expanduser(),
+            artifact_root=resolved_root,
+            storage_backend=storage_backend,
+            s3_bucket=s3_bucket,
+            s3_prefix=s3_prefix,
+            s3_region=s3_region,
             max_graph_nodes=env_settings.max_graph_nodes,
             max_graph_edges=env_settings.max_graph_edges,
             catalog_refresh_seconds=env_settings.catalog_refresh_seconds,

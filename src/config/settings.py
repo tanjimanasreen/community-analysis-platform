@@ -175,6 +175,33 @@ class APISettings(BaseSettings):
     max_graph_edges: int = 5000
     catalog_refresh_seconds: float = 1.0
     parquet_cache_max_bytes: int = 16 * 1024 * 1024
+    storage_backend: str = Field(
+        default="local",
+        validation_alias=AliasChoices(
+            "COMMUNITY_ANALYSIS_STORAGE_BACKEND",
+            "COMMUNITY_ANALYSIS_API_STORAGE_BACKEND",
+        ),
+    )
+    s3_bucket: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "COMMUNITY_ANALYSIS_S3_BUCKET", "COMMUNITY_ANALYSIS_API_S3_BUCKET"
+        ),
+    )
+    s3_prefix: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "COMMUNITY_ANALYSIS_S3_PREFIX", "COMMUNITY_ANALYSIS_API_S3_PREFIX"
+        ),
+    )
+    s3_region: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "COMMUNITY_ANALYSIS_S3_REGION",
+            "COMMUNITY_ANALYSIS_API_S3_REGION",
+            "AWS_REGION",
+        ),
+    )
     allowed_hosts: str = ""
     root_path: str = ""
     docs_enabled: bool = True

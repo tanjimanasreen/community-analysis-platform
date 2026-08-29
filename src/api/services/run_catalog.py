@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import time
@@ -8,8 +9,10 @@ from pathlib import Path
 from typing import Iterable
 
 from src.api.errors import InvalidManifestError, RunNotFoundError
+from src.api.storage.base import ArtifactStorage
+from src.api.storage.factory import create_artifact_storage
 from src.artifacts.models import RunManifest, RunStatus
-from src.artifacts.run_manifest import load_run_manifest, validate_run_manifest
+from src.artifacts.run_manifest import validate_run_manifest
 
 _SAFE_RUN_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 
@@ -26,12 +29,31 @@ class RunFilter:
 class RunCatalog:
     """Discovers run manifests without eagerly reading analytical artifacts."""
 
-    def __init__(self, artifact_root: str | Path, *, refresh_seconds: float = 1.0):
-        self.artifact_root = Path(artifact_root).expanduser().resolve()
+    def __init__(
+        self,
+        artifact_root: str | Path | ArtifactStorage | None = None,
+        *,
+        refresh_seconds: float = 1.0,
+        storage: ArtifactStorage | None = None,
+    ):
+        if storage is not None:
+            self.storage: ArtifactStorage = storage
+        elif isinstance(artifact_root, ArtifactStorage):
+            self.storage = artifact_root
+        else:
+            self.storage = create_artifact_storage(
+                artifact_root=artifact_root or "local_output"
+            )
+
+        if self.storage.backend_type == "local":
+            self.artifact_root = Path(self.storage.root_uri)
+        else:
+            self.artifact_root = Path(str(artifact_root or "."))
+
         self.refresh_seconds = max(0.0, float(refresh_seconds))
         self._cache_deadline = 0.0
         self._cache: tuple[RunManifest, ...] = ()
-        self._path_cache: dict[str, Path] = {}
+        self._path_cache: dict[str, str] = {}  # run_id -> relative manifest path
         self._duplicate_run_ids: set[str] = set()
 
     def invalidate(self) -> None:
@@ -46,7 +68,7 @@ class RunCatalog:
             manifests = [item for item in manifests if _matches(item, filters)]
         return manifests
 
-    def get_run_root(self, run_id: str) -> Path:
+    def get_run_rel_dir(self, run_id: str) -> str:
         normalized = str(run_id).strip()
         if _SAFE_RUN_ID.fullmatch(normalized) is None:
             raise RunNotFoundError(normalized or run_id)
@@ -60,18 +82,39 @@ class RunCatalog:
         if normalized not in self._path_cache:
             raise RunNotFoundError(normalized)
 
-        root = self._path_cache[normalized]
-        if not root.is_dir():
-            raise RunNotFoundError(normalized)
-        return root
+        rel_path = self._path_cache[normalized]
+        parts = rel_path.replace("\\", "/").split("/")
+        return "/".join(parts[:-1])
+
+    def get_run_root(self, run_id: str) -> Path:
+        rel_dir = self.get_run_rel_dir(run_id)
+        local_path = self.storage.get_local_path(rel_dir)
+        if local_path is None or not local_path.is_dir():
+            if self.storage.backend_type == "local":
+                raise RunNotFoundError(run_id)
+            return Path(rel_dir)
+        return local_path
 
     def get_manifest(self, run_id: str) -> RunManifest:
-        root = self.get_run_root(run_id)
-        path = root / "manifest.json"
-        if not path.is_file():
-            raise RunNotFoundError(run_id)
+        normalized = str(run_id).strip()
+        if _SAFE_RUN_ID.fullmatch(normalized) is None:
+            raise RunNotFoundError(normalized or run_id)
+
+        self._discover()
+        if normalized in self._duplicate_run_ids:
+            raise InvalidManifestError(
+                normalized,
+                "Duplicate run IDs were discovered under the configured artifact root.",
+            )
+        if normalized not in self._path_cache:
+            raise RunNotFoundError(normalized)
+
+        rel_path = self._path_cache[normalized]
+        if not self.storage.exists(rel_path):
+            raise RunNotFoundError(normalized)
         try:
-            manifest = load_run_manifest(path)
+            payload = json.loads(self.storage.read_text(rel_path))
+            manifest = RunManifest.from_dict(payload)
         except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
             raise InvalidManifestError(run_id) from exc
         if manifest.run_id != run_id:
@@ -88,14 +131,22 @@ class RunCatalog:
         file presence, and byte sizes without re-hashing every large artifact.
         Set ``deep=True`` for a full checksum and schema audit.
         """
-        root = self.get_run_root(run_id)
+        rel_dir = self.get_run_rel_dir(run_id)
+        manifest = self.get_manifest(run_id)
         try:
             if deep:
-                return validate_run_manifest(root)
-            manifest = self.get_manifest(run_id)
-            _validate_manifest_files_quick(root, manifest)
+                return validate_run_manifest(
+                    manifest, run_root=rel_dir, storage=self.storage
+                )
+            _validate_manifest_files_quick(self.storage, rel_dir, manifest)
             return manifest
-        except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+        except (
+            OSError,
+            json.JSONDecodeError,
+            KeyError,
+            TypeError,
+            ValueError,
+        ) as exc:
             raise InvalidManifestError(run_id, str(exc)) from exc
 
     def _discover(self) -> tuple[RunManifest, ...]:
@@ -104,53 +155,40 @@ class RunCatalog:
             return self._cache
 
         manifest_by_id: dict[str, RunManifest] = {}
-        path_cache: dict[str, Path] = {}
+        path_cache: dict[str, str] = {}
         duplicate_run_ids: set[str] = set()
 
-        if self.artifact_root.is_dir():
-            # Canonical deployments point directly at an artifact root containing
-            # ``runs/``.  A bounded compatibility search supports the historical
-            # platform/content nesting without recursively walking every large
-            # Parquet/report directory on each catalog refresh.
-            run_roots = [self.artifact_root / "runs"]
-            if self.artifact_root.name == "runs":
-                run_roots.append(self.artifact_root)
-            run_roots.extend(self.artifact_root.glob("*/runs"))
-            run_roots.extend(self.artifact_root.glob("*/*/runs"))
-
-            seen_roots: set[Path] = set()
-            for runs_root in run_roots:
+        if self.storage.is_ready():
+            manifest_paths = self.storage.list_run_manifest_paths()
+            for rel_path in manifest_paths:
+                parts = rel_path.replace("\\", "/").split("/")
+                if len(parts) < 2 or parts[-1] != "manifest.json":
+                    continue
+                run_id = parts[-2]
+                if _SAFE_RUN_ID.fullmatch(run_id) is None:
+                    continue
+                if run_id in duplicate_run_ids:
+                    continue
+                if run_id in path_cache:
+                    duplicate_run_ids.add(run_id)
+                    path_cache.pop(run_id, None)
+                    manifest_by_id.pop(run_id, None)
+                    continue
+                path_cache[run_id] = rel_path
                 try:
-                    resolved_runs_root = runs_root.resolve()
-                except OSError:
+                    text = self.storage.read_text(rel_path)
+                    payload = json.loads(text)
+                    manifest = RunManifest.from_dict(payload)
+                except (
+                    OSError,
+                    json.JSONDecodeError,
+                    KeyError,
+                    TypeError,
+                    ValueError,
+                ):
                     continue
-                if resolved_runs_root in seen_roots or not resolved_runs_root.is_dir():
-                    continue
-                seen_roots.add(resolved_runs_root)
-                for path in resolved_runs_root.glob("*/manifest.json"):
-                    run_id = path.parent.name
-                    if _SAFE_RUN_ID.fullmatch(run_id) is None:
-                        continue
-                    if run_id in duplicate_run_ids:
-                        continue
-                    if run_id in path_cache:
-                        duplicate_run_ids.add(run_id)
-                        path_cache.pop(run_id, None)
-                        manifest_by_id.pop(run_id, None)
-                        continue
-                    path_cache[run_id] = path.parent
-                    try:
-                        manifest = load_run_manifest(path)
-                    except (
-                        OSError,
-                        json.JSONDecodeError,
-                        KeyError,
-                        TypeError,
-                        ValueError,
-                    ):
-                        continue
-                    if manifest.run_id == run_id:
-                        manifest_by_id[run_id] = manifest
+                if manifest.run_id == run_id:
+                    manifest_by_id[run_id] = manifest
 
         manifests = list(manifest_by_id.values())
         manifests.sort(
@@ -163,20 +201,20 @@ class RunCatalog:
         return self._cache
 
 
-def _validate_manifest_files_quick(root: Path, manifest: RunManifest) -> None:
-    resolved_root = root.resolve()
+def _validate_manifest_files_quick(
+    storage: ArtifactStorage, run_rel_dir: str, manifest: RunManifest
+) -> None:
     for record in manifest.artifacts:
-        path = (resolved_root / record.path).resolve(strict=True)
-        try:
-            path.relative_to(resolved_root)
-        except ValueError as exc:
-            raise ValueError(
-                f"artifact path escapes the run root: {record.path}"
-            ) from exc
-        if not path.is_file():
+        clean = str(record.path).replace("\\", "/").strip()
+        if clean.startswith("/") or ".." in clean.split("/"):
+            raise ValueError(f"artifact path escapes the run root: {record.path}")
+        full_rel = f"{run_rel_dir}/{clean}" if run_rel_dir else clean
+        if not storage.exists(full_rel):
             raise ValueError(f"artifact is not a regular file: {record.path}")
-        if record.byte_size is not None and path.stat().st_size != record.byte_size:
-            raise ValueError(f"artifact byte size mismatch: {record.key}")
+        if record.byte_size is not None:
+            meta = storage.get_metadata(full_rel)
+            if meta.size != record.byte_size:
+                raise ValueError(f"artifact byte size mismatch: {record.key}")
 
 
 def _matches(manifest: RunManifest, filters: RunFilter) -> bool:

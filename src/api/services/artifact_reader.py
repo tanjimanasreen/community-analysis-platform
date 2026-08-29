@@ -4,7 +4,7 @@ import ast
 import json
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Iterable, Iterator, Mapping, Sequence
 
 import pandas as pd
 import yaml
@@ -17,6 +17,7 @@ from src.api.errors import (
     RunNotCompletedError,
 )
 from src.api.services.run_catalog import RunCatalog
+from src.api.storage.base import ArtifactStorage
 from src.artifacts.models import ArtifactCategory, ArtifactRecord, RunStatus
 from src.artifacts.run_manifest import validate_artifact_record
 
@@ -29,9 +30,15 @@ class ArtifactReader:
         catalog: RunCatalog,
         *,
         parquet_cache_max_bytes: int = 16 * 1024 * 1024,
+        storage: ArtifactStorage | None = None,
     ):
         self.catalog = catalog
+        self.storage: ArtifactStorage = storage or catalog.storage
         self.parquet_cache_max_bytes = max(0, int(parquet_cache_max_bytes))
+
+    def _rel_path(self, run_id: str, record: ArtifactRecord) -> str:
+        rel_dir = self.catalog.get_run_rel_dir(run_id)
+        return f"{rel_dir}/{record.path}" if rel_dir else record.path
 
     def records(self, run_id: str) -> tuple[ArtifactRecord, ...]:
         return self.catalog.get_manifest(run_id).artifacts
@@ -80,23 +87,64 @@ class ArtifactReader:
             result.append(record)
         return result
 
+    def get_local_path(self, run_id: str, record: ArtifactRecord) -> Path | None:
+        rel_path = self._rel_path(run_id, record)
+        return self.storage.get_local_path(rel_path)
+
     def verified_path(self, run_id: str, record: ArtifactRecord) -> Path:
-        root = self.catalog.get_run_root(run_id)
-        candidate = root / record.path
+        rel_path = self._rel_path(run_id, record)
+        local_path = self.storage.get_local_path(rel_path)
+        if local_path is not None:
+            try:
+                root = self.catalog.get_run_root(run_id)
+                stat = local_path.stat()
+                return _validate_artifact_cached(
+                    str(root),
+                    record,
+                    int(stat.st_size),
+                    int(stat.st_mtime_ns),
+                )
+            except (OSError, json.JSONDecodeError, ValueError) as exc:
+                raise ArtifactValidationError(
+                    run_id=run_id,
+                    artifact_key=record.key,
+                    validation_message=str(exc),
+                ) from exc
+
+        # Remote storage (S3) verification with full canonical record checks
         try:
-            stat = candidate.stat()
-            return _validate_artifact_cached(
-                str(root),
+            rel_dir = self.catalog.get_run_rel_dir(run_id)
+            meta = self.storage.get_metadata(rel_path)
+            return _validate_artifact_cached_storage(
+                self.storage.root_uri,
+                rel_dir,
                 record,
-                int(stat.st_size),
-                int(stat.st_mtime_ns),
+                int(meta.size),
+                int(meta.mtime_ns) if meta.mtime_ns is not None else 0,
+                self.storage,
             )
-        except (OSError, json.JSONDecodeError, ValueError) as exc:
+        except (OSError, ValueError) as exc:
             raise ArtifactValidationError(
                 run_id=run_id,
                 artifact_key=record.key,
                 validation_message=str(exc),
             ) from exc
+
+    def read_bytes(self, run_id: str, record: ArtifactRecord) -> bytes:
+        rel_path = self._rel_path(run_id, record)
+        return self.storage.read_bytes(rel_path)
+
+    def iter_bytes(
+        self, run_id: str, record: ArtifactRecord, chunk_size: int = 65536
+    ) -> Iterator[bytes]:
+        rel_path = self._rel_path(run_id, record)
+        return self.storage.iter_bytes(rel_path, chunk_size=chunk_size)
+
+    def read_text(
+        self, run_id: str, record: ArtifactRecord, encoding: str = "utf-8"
+    ) -> str:
+        rel_path = self._rel_path(run_id, record)
+        return self.storage.read_text(rel_path, encoding=encoding)
 
     def read_parquet(
         self,
@@ -119,25 +167,26 @@ class ArtifactReader:
         columns: list[str] | None = None,
         filters: list[tuple[str, str, Any]] | None = None,
     ) -> pd.DataFrame:
-        path = self.verified_path(run_id, record)
-        if path.suffix.lower() != ".parquet":
+        if not record.path.lower().endswith(".parquet"):
             raise ArtifactValidationError(
                 run_id=run_id,
                 artifact_key=record.key,
                 validation_message="artifact schema mismatch: expected Parquet",
             )
+        rel_path = self._rel_path(run_id, record)
+        self.verified_path(run_id, record)
+
         if (
             columns is None
             and filters is None
             and record.byte_size is not None
             and record.byte_size <= self.parquet_cache_max_bytes
         ):
-            return _read_parquet_cached(str(path), record.sha256).copy(deep=False)
-        if columns is None and filters is None:
-            return pd.read_parquet(path)
-        # Column projection and Parquet predicate pushdown prevent graph API
-        # requests from loading unrelated analytical columns into memory.
-        return pd.read_parquet(path, columns=columns, filters=filters)
+            return _read_parquet_cached(
+                self.storage.root_uri, rel_path, record.sha256, self.storage
+            ).copy(deep=False)
+
+        return self.storage.read_parquet(rel_path, columns=columns, filters=filters)
 
     def read_parquet_record_slice(
         self,
@@ -151,51 +200,17 @@ class ArtifactReader:
         """Read only the requested Parquet row range using row-group slicing."""
         if offset < 0 or limit < 0:
             raise ValueError("offset and limit must be non-negative")
-        path = self.verified_path(run_id, record)
-        if path.suffix.lower() != ".parquet":
+        if not record.path.lower().endswith(".parquet"):
             raise ArtifactValidationError(
                 run_id=run_id,
                 artifact_key=record.key,
                 validation_message="artifact schema mismatch: expected Parquet",
             )
-
-        import pyarrow as pa
-        import pyarrow.parquet as pq
-
-        parquet = pq.ParquetFile(path)
-        available_columns = set(parquet.schema_arrow.names)
-        selected_columns = (
-            [column for column in columns if column in available_columns]
-            if columns is not None
-            else None
+        rel_path = self._rel_path(run_id, record)
+        self.verified_path(run_id, record)
+        return self.storage.read_parquet_slice(
+            rel_path, offset=offset, limit=limit, columns=columns
         )
-        if limit == 0 or offset >= parquet.metadata.num_rows:
-            names = selected_columns or parquet.schema_arrow.names
-            return pd.DataFrame(columns=names)
-
-        remaining_offset = offset
-        remaining_limit = limit
-        tables = []
-        for row_group in range(parquet.num_row_groups):
-            group_rows = parquet.metadata.row_group(row_group).num_rows
-            if remaining_offset >= group_rows:
-                remaining_offset -= group_rows
-                continue
-            table = parquet.read_row_group(row_group, columns=selected_columns)
-            if remaining_offset:
-                table = table.slice(remaining_offset)
-                remaining_offset = 0
-            if table.num_rows > remaining_limit:
-                table = table.slice(0, remaining_limit)
-            tables.append(table)
-            remaining_limit -= table.num_rows
-            if remaining_limit <= 0:
-                break
-
-        if not tables:
-            names = selected_columns or parquet.schema_arrow.names
-            return pd.DataFrame(columns=names)
-        return pa.concat_tables(tables, promote=True).to_pandas()
 
     def read_parquet_records_page(
         self,
@@ -240,21 +255,22 @@ class ArtifactReader:
         if record.rows is not None:
             self.verified_path(run_id, record)
             return int(record.rows)
-        path = self.verified_path(run_id, record)
-        import pyarrow.parquet as pq
-
-        return int(pq.ParquetFile(path).metadata.num_rows)
+        rel_path = self._rel_path(run_id, record)
+        self.verified_path(run_id, record)
+        parquet = self.storage.open_parquet(rel_path)
+        return int(parquet.metadata.num_rows)
 
     def read_json(self, run_id: str, artifact_key: str) -> dict[str, Any]:
         record = self.get_record(run_id, artifact_key)
-        path = self.verified_path(run_id, record)
-        if path.suffix.lower() != ".json":
+        rel_path = self._rel_path(run_id, record)
+        self.verified_path(run_id, record)
+        if not record.path.lower().endswith(".json"):
             raise ArtifactValidationError(
                 run_id=run_id,
                 artifact_key=record.key,
                 validation_message="artifact schema mismatch: expected JSON",
             )
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload = json.loads(self.storage.read_text(rel_path))
         if not isinstance(payload, Mapping):
             raise ArtifactValidationError(
                 run_id=run_id,
@@ -264,10 +280,12 @@ class ArtifactReader:
         return dict(payload)
 
     def read_safe_config(self, run_id: str) -> dict[str, Any]:
-        root = self.catalog.get_run_root(run_id)
-        path = root / "resolved_config.yaml"
+        rel_dir = self.catalog.get_run_rel_dir(run_id)
+        rel_path = (
+            f"{rel_dir}/resolved_config.yaml" if rel_dir else "resolved_config.yaml"
+        )
         try:
-            payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+            payload = yaml.safe_load(self.storage.read_text(rel_path)) or {}
         except (OSError, yaml.YAMLError) as exc:
             raise InvalidManifestError(
                 run_id, "The resolved run configuration is invalid."
@@ -301,20 +319,38 @@ def _validate_artifact_cached(
     byte_size: int,
     modified_ns: int,
 ) -> Path:
-    # Size and mtime are part of the key so an altered file is re-validated.
     del byte_size, modified_ns
     return validate_artifact_record(root, record)
 
 
+@lru_cache(maxsize=512)
+def _validate_artifact_cached_storage(
+    root_uri: str,
+    rel_dir: str,
+    record: ArtifactRecord,
+    byte_size: int,
+    modified_ns: int,
+    storage: ArtifactStorage,
+) -> Path:
+    del root_uri, byte_size, modified_ns
+    return validate_artifact_record(rel_dir, record, storage=storage)
+
+
 @lru_cache(maxsize=32)
-def _read_parquet_cached(path: str, sha256: str) -> pd.DataFrame:
-    del sha256  # Included in the cache key so changed artifacts are never reused.
-    return pd.read_parquet(path)
+def _read_parquet_cached(
+    root_uri: str,
+    rel_path: str,
+    sha256: str,
+    storage: ArtifactStorage,
+) -> pd.DataFrame:
+    del root_uri, sha256
+    return storage.read_parquet(rel_path)
 
 
 def clear_csv_cache() -> None:
     _read_parquet_cached.cache_clear()
     _validate_artifact_cached.cache_clear()
+    _validate_artifact_cached_storage.cache_clear()
 
 
 def normalize_value(value: Any) -> Any:
