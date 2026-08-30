@@ -5,6 +5,7 @@ import os
 import aws_cdk as cdk
 from community_analysis_infra.baseline_stack import CommunityAnalysisBaselineStack
 from community_analysis_infra.config import get_stage_config
+from community_analysis_infra.registry_stack import RegistryStack
 from community_analysis_infra.storage_stack import StorageStack
 
 app = cdk.App()
@@ -37,6 +38,19 @@ StorageStack(
         region=stage_config.region,
     ),
     description=f"Storage infrastructure for {stage_config.project_name} ({stage_config.stage_name})",
+)
+
+# Registry stack containing private ECR repository for API container images
+registry_stack_name = stage_config.format_stack_name("registry")
+RegistryStack(
+    app,
+    registry_stack_name,
+    stage_config=stage_config,
+    env=cdk.Environment(
+        account=stage_config.account,
+        region=stage_config.region,
+    ),
+    description=f"Container registry infrastructure for {stage_config.project_name} ({stage_config.stage_name})",
 )
 
 # Apply deterministic standard tags across all constructs in the App

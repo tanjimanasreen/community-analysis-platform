@@ -24,11 +24,16 @@ infra/
 ├── .gitignore                 # CDK ignored files (.venv, cdk.out, caches)
 ├── community_analysis_infra/  # Constructs, stacks, and configuration
 │   ├── __init__.py
-│   └── config.py              # Multi-stage configuration model
+│   ├── baseline_stack.py      # Baseline infrastructure verification stack
+│   ├── config.py              # Multi-stage configuration model
+│   ├── registry_stack.py      # ECR API container registry stack
+│   └── storage_stack.py       # S3 analytical data & artifact storage stack
 └── tests/                     # Infrastructure unit tests
     ├── __init__.py
+    ├── test_app.py
     ├── test_config.py
-    └── test_app.py
+    ├── test_registry_stack.py
+    └── test_storage_stack.py
 ```
 
 ## Quickstart

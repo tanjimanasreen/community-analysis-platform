@@ -1,4 +1,5 @@
 .venv/
+infra/.venv/
 __pycache__/
 *.pyc
 *.pyo
@@ -12,15 +13,25 @@ venv.bak/
 
 # Environment files
 .env
-.env.local
+.env.*
+!.env.example
 
-# Build files
+# Build & CDK files
 build/
 dist/
 *.egg-info/
 .eggs/
+cdk.out/
+infra/cdk.out/
 
-# IDE files
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/coverage/
+frontend/playwright-report/
+frontend/test-results/
+
+# IDE & Editor files
 .vscode/
 .idea/
 
@@ -28,11 +39,20 @@ dist/
 .git/
 .gitignore
 
-# MLflow tracking
+# MLflow & Test/Stage Caches
 .mlflow/
 mlruns/
+.stage_cache/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+scratch/
 
-# Data
+# Local Data & Outputs
 data/
 outputs/
+local_output/
+runs/
 /tmp/

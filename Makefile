@@ -7,7 +7,8 @@
 	demo-frontend frontend-install frontend-build frontend-lint frontend-typecheck \
 	frontend-test frontend-coverage frontend-e2e frontend-check dashboard-fixture \
 	run-frontend clean-generated clean-cache build-report benchmark-performance \
-	infra-install infra-test infra-synth infra-list
+	infra-install infra-test infra-synth infra-list \
+	api-image-build api-image-smoke
 
 PYTHON ?= .venv/bin/python
 UV ?= uv
@@ -84,6 +85,8 @@ help:
 	@echo "  infra-test           - Run pytest on CDK infrastructure tests"
 	@echo "  infra-synth          - Synthesize CDK CloudFormation templates (STAGE=dev|prod)"
 	@echo "  infra-list           - List CDK stacks (STAGE=dev|prod)"
+	@echo "  api-image-build      - Build API Docker container image for linux/arm64"
+	@echo "  api-image-smoke      - Build and run local smoke test on API container"
 
 bootstrap:
 	$(UV) sync --frozen --extra orchestration
@@ -299,3 +302,17 @@ infra-synth:
 infra-list:
 	cd infra && cdk list -c stage=$(INFRA_STAGE)
 
+API_IMAGE_TAG ?= community-analysis-api:dev
+API_IMAGE_PLATFORM ?= linux/arm64
+
+api-image-build:
+	docker build --platform $(API_IMAGE_PLATFORM) -t $(API_IMAGE_TAG) -f Dockerfile.api .
+
+api-image-smoke: api-image-build
+	@echo "Running local container smoke tests on $(API_IMAGE_TAG)..."
+	@CONTAINER_ID=$$(docker run -d -p 8000:8000 $(API_IMAGE_TAG)) && \
+	trap 'docker stop $$CONTAINER_ID >/dev/null 2>&1 && docker rm $$CONTAINER_ID >/dev/null 2>&1' EXIT && \
+	sleep 3 && \
+	curl -fs http://127.0.0.1:8000/api/v1/health >/dev/null && \
+	curl -fs http://127.0.0.1:8000/api/v1/ready >/dev/null && \
+	echo "Container smoke test passed."
