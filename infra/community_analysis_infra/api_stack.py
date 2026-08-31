@@ -121,6 +121,7 @@ class ApiStack(cdk.Stack):
                 "COMMUNITY_ANALYSIS_STORAGE_BACKEND": "s3",
                 "COMMUNITY_ANALYSIS_S3_BUCKET": bucket.bucket_name,
                 "COMMUNITY_ANALYSIS_S3_REGION": self.region or cdk.Aws.REGION,
+                "COMMUNITY_ANALYSIS_API_ALLOWED_HOSTS": "*",
                 "AWS_LWA_PORT": "8000",
                 "AWS_LWA_READINESS_CHECK_PATH": "/api/v1/health",
                 "AWS_LWA_READINESS_CHECK_HEALTHY_STATUS": "200-399",
@@ -133,13 +134,6 @@ class ApiStack(cdk.Stack):
         bucket.grant_read(self.execution_role)
 
         # 6. API Gateway HTTP API (v2) with Cognito JWT Authorizer
-        self.http_api = apigw2.HttpApi(
-            self,
-            "HttpApi",
-            api_name=f"{stage_config.project_name}-{stage_config.stage_name}-api",
-            description=f"HTTP API serving community-analysis read-only artifacts ({stage_config.stage_name})",
-        )
-
         self.authorizer = apigw2_auth.HttpJwtAuthorizer(
             "CognitoAuthorizer",
             jwt_issuer=self.user_pool.user_pool_provider_url,
@@ -151,19 +145,21 @@ class ApiStack(cdk.Stack):
             handler=self.lambda_function,
         )
 
-        # Public process health route
+        self.http_api = apigw2.HttpApi(
+            self,
+            "HttpApi",
+            api_name=f"{stage_config.project_name}-{stage_config.stage_name}-api",
+            description=f"HTTP API serving community-analysis read-only artifacts ({stage_config.stage_name})",
+            default_integration=integration,
+            default_authorizer=self.authorizer,
+        )
+
+        # Public process health route overrides default authorizer
         self.http_api.add_routes(
             path="/api/v1/health",
             methods=[apigw2.HttpMethod.GET],
             integration=integration,
-        )
-
-        # Authenticated default route for all analytical endpoints
-        self.http_api.add_routes(
-            path="/",
-            methods=[apigw2.HttpMethod.ANY],
-            integration=integration,
-            authorizer=self.authorizer,
+            authorizer=apigw2.HttpNoneAuthorizer(),
         )
 
         # 7. CloudFormation Outputs

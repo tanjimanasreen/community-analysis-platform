@@ -110,6 +110,7 @@ def test_lambda_function_properties(dev_api_template: Template) -> None:
                     "COMMUNITY_ANALYSIS_STORAGE_BACKEND": "s3",
                     "COMMUNITY_ANALYSIS_S3_BUCKET": Match.any_value(),
                     "COMMUNITY_ANALYSIS_S3_REGION": Match.any_value(),
+                    "COMMUNITY_ANALYSIS_API_ALLOWED_HOSTS": "*",
                     "AWS_LWA_PORT": "8000",
                     "AWS_LWA_READINESS_CHECK_PATH": "/api/v1/health",
                     "AWS_LWA_READINESS_CHECK_HEALTHY_STATUS": "200-399",
@@ -192,7 +193,7 @@ def test_api_gateway_routes(dev_api_template: Template) -> None:
     dev_api_template.has_resource_properties(
         "AWS::ApiGatewayV2::Route",
         {
-            "RouteKey": "ANY /",
+            "RouteKey": "$default",
             "AuthorizationType": "JWT",
         },
     )
