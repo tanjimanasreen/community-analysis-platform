@@ -27,6 +27,9 @@ ENV PYTHONUNBUFFERED=1 \
     LOG_LEVEL=INFO \
     COMMUNITY_ANALYSIS_ARTIFACT_ROOT=/artifacts \
     COMMUNITY_ANALYSIS_API_DOCS_ENABLED=false
+COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:1.0.1 \
+    /lambda-adapter \
+    /opt/extensions/lambda-adapter
 RUN groupadd --gid 10001 community \
     && useradd --uid 10001 --gid community --create-home community \
     && mkdir -p /artifacts \

@@ -8,6 +8,7 @@
 	frontend-test frontend-coverage frontend-e2e frontend-check dashboard-fixture \
 	run-frontend clean-generated clean-cache build-report benchmark-performance \
 	infra-install infra-test infra-synth infra-list \
+	infra-diff-api infra-deploy-api \
 	api-image-build api-image-smoke
 
 PYTHON ?= .venv/bin/python
@@ -83,8 +84,10 @@ help:
 	@echo "  benchmark-performance - Compare legacy and indexed message aggregation"
 	@echo "  infra-install        - Create infra/.venv and install CDK dependencies"
 	@echo "  infra-test           - Run pytest on CDK infrastructure tests"
-	@echo "  infra-synth          - Synthesize CDK CloudFormation templates (STAGE=dev|prod)"
-	@echo "  infra-list           - List CDK stacks (STAGE=dev|prod)"
+	@echo "  infra-synth          - Synthesize CDK CloudFormation templates (STAGE=dev|prod, IMAGE_TAG=...)"
+	@echo "  infra-list           - List CDK stacks (STAGE=dev|prod, IMAGE_TAG=...)"
+	@echo "  infra-diff-api       - Diff CDK ApiStack (STAGE=dev|prod, IMAGE_TAG=...)"
+	@echo "  infra-deploy-api     - Deploy CDK ApiStack (STAGE=dev|prod, IMAGE_TAG=...)"
 	@echo "  api-image-build      - Build API Docker container image for linux/arm64"
 	@echo "  api-image-smoke      - Build and run local smoke test on API container"
 
@@ -296,11 +299,19 @@ infra-install:
 infra-test:
 	PYTHONPATH=infra infra/.venv/bin/pytest infra/tests
 
+IMAGE_TAG ?= d278a7ad
+
 infra-synth:
-	cd infra && cdk synth -c stage=$(INFRA_STAGE)
+	cd infra && cdk synth -c stage=$(INFRA_STAGE) -c image_tag=$(IMAGE_TAG)
 
 infra-list:
-	cd infra && cdk list -c stage=$(INFRA_STAGE)
+	cd infra && cdk list -c stage=$(INFRA_STAGE) -c image_tag=$(IMAGE_TAG)
+
+infra-diff-api:
+	cd infra && cdk diff community-analysis-$(INFRA_STAGE)-api -c stage=$(INFRA_STAGE) -c image_tag=$(IMAGE_TAG)
+
+infra-deploy-api:
+	cd infra && cdk deploy community-analysis-$(INFRA_STAGE)-api -c stage=$(INFRA_STAGE) -c image_tag=$(IMAGE_TAG) --require-approval never
 
 API_IMAGE_TAG ?= community-analysis-api:dev
 API_IMAGE_PLATFORM ?= linux/arm64

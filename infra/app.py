@@ -3,6 +3,7 @@
 
 import os
 import aws_cdk as cdk
+from community_analysis_infra.api_stack import ApiStack
 from community_analysis_infra.baseline_stack import CommunityAnalysisBaselineStack
 from community_analysis_infra.config import get_stage_config
 from community_analysis_infra.registry_stack import RegistryStack
@@ -29,7 +30,7 @@ CommunityAnalysisBaselineStack(
 
 # Storage stack containing analytical data and artifact S3 bucket
 storage_stack_name = stage_config.format_stack_name("storage")
-StorageStack(
+storage_stack = StorageStack(
     app,
     storage_stack_name,
     stage_config=stage_config,
@@ -42,7 +43,7 @@ StorageStack(
 
 # Registry stack containing private ECR repository for API container images
 registry_stack_name = stage_config.format_stack_name("registry")
-RegistryStack(
+registry_stack = RegistryStack(
     app,
     registry_stack_name,
     stage_config=stage_config,
@@ -51,6 +52,30 @@ RegistryStack(
         region=stage_config.region,
     ),
     description=f"Container registry infrastructure for {stage_config.project_name} ({stage_config.stage_name})",
+)
+
+# Resolve explicit image_tag for ApiStack (-c image_tag=... or IMAGE_TAG=...)
+raw_image_tag = app.node.try_get_context("image_tag") or os.environ.get("IMAGE_TAG")
+if not raw_image_tag or not str(raw_image_tag).strip():
+    raise ValueError(
+        "image_tag is required. Pass via CDK context: -c image_tag=<GIT_SHA> or environment: IMAGE_TAG=<GIT_SHA>"
+    )
+image_tag = str(raw_image_tag).strip()
+
+# API stack containing authenticated Lambda container and API Gateway HTTP API
+api_stack_name = stage_config.format_stack_name("api")
+ApiStack(
+    app,
+    api_stack_name,
+    stage_config=stage_config,
+    bucket=storage_stack.bucket,
+    repository=registry_stack.repository,
+    image_tag=image_tag,
+    env=cdk.Environment(
+        account=stage_config.account,
+        region=stage_config.region,
+    ),
+    description=f"Authenticated API serving infrastructure for {stage_config.project_name} ({stage_config.stage_name})",
 )
 
 # Apply deterministic standard tags across all constructs in the App
