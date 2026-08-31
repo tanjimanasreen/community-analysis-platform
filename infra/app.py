@@ -5,6 +5,7 @@ import os
 import aws_cdk as cdk
 from community_analysis_infra.api_stack import ApiStack
 from community_analysis_infra.baseline_stack import CommunityAnalysisBaselineStack
+from community_analysis_infra.batch_stack import BatchStack
 from community_analysis_infra.config import get_stage_config
 from community_analysis_infra.frontend_stack import FrontendStack
 from community_analysis_infra.registry_stack import RegistryStack
@@ -95,6 +96,26 @@ FrontendStack(
     ),
     description=f"Frontend hosting, CloudFront CDN, and browser auth infrastructure for {stage_config.project_name} ({stage_config.stage_name})",
 )
+
+# Resolve optional batch_image_tag for BatchStack (-c batch_image_tag=... or BATCH_IMAGE_TAG=...)
+raw_batch_image_tag = app.node.try_get_context("batch_image_tag") or os.environ.get(
+    "BATCH_IMAGE_TAG"
+)
+if raw_batch_image_tag and str(raw_batch_image_tag).strip():
+    batch_image_tag = str(raw_batch_image_tag).strip()
+    batch_stack_name = stage_config.format_stack_name("batch")
+    BatchStack(
+        app,
+        batch_stack_name,
+        stage_config=stage_config,
+        bucket=storage_stack.bucket,
+        batch_image_tag=batch_image_tag,
+        env=cdk.Environment(
+            account=stage_config.account,
+            region=stage_config.region,
+        ),
+        description=f"AWS Batch analytical compute infrastructure for {stage_config.project_name} ({stage_config.stage_name})",
+    )
 
 # Apply deterministic standard tags across all constructs in the App
 for key, value in stage_config.tags.items():

@@ -301,15 +301,15 @@ infra-test:
 
 infra-synth:
 ifndef IMAGE_TAG
-	$(error IMAGE_TAG is required (e.g. make infra-synth INFRA_STAGE=$(INFRA_STAGE) IMAGE_TAG=<GIT_SHA>))
+	$(error IMAGE_TAG is required (e.g. make infra-synth INFRA_STAGE=$(INFRA_STAGE) IMAGE_TAG=<GIT_SHA> [BATCH_IMAGE_TAG=<BATCH_TAG>]))
 endif
-	cd infra && cdk synth -c stage=$(INFRA_STAGE) -c image_tag=$(IMAGE_TAG)
+	cd infra && cdk synth -c stage=$(INFRA_STAGE) -c image_tag=$(IMAGE_TAG) $(if $(BATCH_IMAGE_TAG),-c batch_image_tag=$(BATCH_IMAGE_TAG))
 
 infra-list:
 ifndef IMAGE_TAG
-	$(error IMAGE_TAG is required (e.g. make infra-list INFRA_STAGE=$(INFRA_STAGE) IMAGE_TAG=<GIT_SHA>))
+	$(error IMAGE_TAG is required (e.g. make infra-list INFRA_STAGE=$(INFRA_STAGE) IMAGE_TAG=<GIT_SHA> [BATCH_IMAGE_TAG=<BATCH_TAG>]))
 endif
-	cd infra && cdk list -c stage=$(INFRA_STAGE) -c image_tag=$(IMAGE_TAG)
+	cd infra && cdk list -c stage=$(INFRA_STAGE) -c image_tag=$(IMAGE_TAG) $(if $(BATCH_IMAGE_TAG),-c batch_image_tag=$(BATCH_IMAGE_TAG))
 
 infra-diff-api:
 ifndef IMAGE_TAG
@@ -335,17 +335,70 @@ ifndef IMAGE_TAG
 endif
 	cd infra && cdk deploy community-analysis-$(INFRA_STAGE)-frontend -c stage=$(INFRA_STAGE) -c image_tag=$(IMAGE_TAG) --require-approval never
 
-API_IMAGE_TAG ?= community-analysis-api:dev
+infra-diff-batch:
+ifndef IMAGE_TAG
+	$(error IMAGE_TAG is required (e.g. make infra-diff-batch INFRA_STAGE=$(INFRA_STAGE) IMAGE_TAG=<GIT_SHA> BATCH_IMAGE_TAG=<BATCH_TAG>))
+endif
+ifndef BATCH_IMAGE_TAG
+	$(error BATCH_IMAGE_TAG is required (e.g. make infra-diff-batch INFRA_STAGE=$(INFRA_STAGE) IMAGE_TAG=<GIT_SHA> BATCH_IMAGE_TAG=<BATCH_TAG>))
+endif
+	cd infra && cdk diff community-analysis-$(INFRA_STAGE)-batch -c stage=$(INFRA_STAGE) -c image_tag=$(IMAGE_TAG) -c batch_image_tag=$(BATCH_IMAGE_TAG)
+
+infra-deploy-batch:
+ifndef IMAGE_TAG
+	$(error IMAGE_TAG is required (e.g. make infra-deploy-batch INFRA_STAGE=$(INFRA_STAGE) IMAGE_TAG=<GIT_SHA> BATCH_IMAGE_TAG=<BATCH_TAG>))
+endif
+ifndef BATCH_IMAGE_TAG
+	$(error BATCH_IMAGE_TAG is required (e.g. make infra-deploy-batch INFRA_STAGE=$(INFRA_STAGE) IMAGE_TAG=<GIT_SHA> BATCH_IMAGE_TAG=<BATCH_TAG>))
+endif
+	cd infra && cdk deploy community-analysis-$(INFRA_STAGE)-batch -c stage=$(INFRA_STAGE) -c image_tag=$(IMAGE_TAG) -c batch_image_tag=$(BATCH_IMAGE_TAG) --require-approval never
+
+API_LOCAL_IMAGE ?= community-analysis-api:dev
+API_IMAGE_TAG ?= $(API_LOCAL_IMAGE)
 API_IMAGE_PLATFORM ?= linux/arm64
 
 api-image-build:
-	docker build --platform $(API_IMAGE_PLATFORM) -t $(API_IMAGE_TAG) -f Dockerfile.api .
+	docker build --platform $(API_IMAGE_PLATFORM) -t $(API_LOCAL_IMAGE) -f Dockerfile.api .
 
 api-image-smoke: api-image-build
-	@echo "Running local container smoke tests on $(API_IMAGE_TAG)..."
-	@CONTAINER_ID=$$(docker run -d -p 8000:8000 $(API_IMAGE_TAG)) && \
+	@echo "Running local container smoke tests on $(API_LOCAL_IMAGE)..."
+	@CONTAINER_ID=$$(docker run -d -p 8000:8000 $(API_LOCAL_IMAGE)) && \
 	trap 'docker stop $$CONTAINER_ID >/dev/null 2>&1 && docker rm $$CONTAINER_ID >/dev/null 2>&1' EXIT && \
 	sleep 3 && \
 	curl -fs http://127.0.0.1:8000/api/v1/health >/dev/null && \
 	curl -fs http://127.0.0.1:8000/api/v1/ready >/dev/null && \
 	echo "Container smoke test passed."
+
+ANALYTICS_LOCAL_IMAGE ?= community-analysis-analytics:dev
+ANALYTICS_IMAGE_PLATFORM ?= linux/arm64
+
+analytics-image-build:
+	docker build --platform $(ANALYTICS_IMAGE_PLATFORM) -t $(ANALYTICS_LOCAL_IMAGE) -f Dockerfile.analytics .
+
+analytics-image-smoke: analytics-image-build
+	@echo "Running local container smoke tests on $(ANALYTICS_LOCAL_IMAGE)..."
+	docker run --rm $(ANALYTICS_LOCAL_IMAGE) --help >/dev/null && echo "Container --help smoke passed."
+	docker run --rm $(ANALYTICS_LOCAL_IMAGE) --dry-run --config tests/configs/test_evolution.yml && echo "Container config validation smoke passed."
+	@echo "Analytics container smoke tests passed."
+
+analytics-image-sample: analytics-image-build
+	@echo "Running real deterministic analytical sample inside $(ANALYTICS_LOCAL_IMAGE)..."
+	docker run --rm -e THEME_PROVIDER=mock $(ANALYTICS_LOCAL_IMAGE) --config tests/configs/test_evolution.yml --skip-s3-download --skip-s3-upload
+	@echo "Analytics container real sample execution passed."
+
+submit-batch-run:
+ifeq ($(filter command line environment%,$(origin INFRA_STAGE)),)
+	$(error INFRA_STAGE is required (e.g. make submit-batch-run INFRA_STAGE=dev CONFIG=tests/configs/test_evolution.yml THEME_PROVIDER=mock))
+endif
+ifndef CONFIG
+	$(error CONFIG is required (e.g. make submit-batch-run INFRA_STAGE=$(INFRA_STAGE) CONFIG=tests/configs/test_evolution.yml THEME_PROVIDER=mock))
+endif
+ifeq ($(filter command line environment%,$(origin THEME_PROVIDER)),)
+	$(error THEME_PROVIDER is required (e.g. make submit-batch-run INFRA_STAGE=$(INFRA_STAGE) CONFIG=$(CONFIG) THEME_PROVIDER=mock))
+endif
+	@echo "Submitting AWS Batch job for $(CONFIG) on stage $(INFRA_STAGE)..."
+	aws batch submit-job \
+		--job-name "community-analysis-$(INFRA_STAGE)-$$(date +%Y%m%d%H%M%S)" \
+		--job-queue "community-analysis-$(INFRA_STAGE)-queue" \
+		--job-definition "community-analysis-$(INFRA_STAGE)-analytics-job" \
+		--container-overrides '{"environment": [{"name": "CONFIG_PATH", "value": "$(CONFIG)"}, {"name": "THEME_PROVIDER", "value": "$(THEME_PROVIDER)"}]}'

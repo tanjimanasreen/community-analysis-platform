@@ -19,6 +19,8 @@ theme:
   year: "2017"
   render_visuals: false
   similarity_model: paraphrase-MiniLM-L6-v2
+  clustering_provider: mock
+  similarity_provider: mock
 
 tracking:
   enabled: true

@@ -26,6 +26,7 @@ infra/
 │   ├── __init__.py
 │   ├── api_stack.py           # Authenticated Lambda & API Gateway stack
 │   ├── baseline_stack.py      # Baseline infrastructure verification stack
+│   ├── batch_stack.py         # AWS Batch analytical compute & ECR stack
 │   ├── config.py              # Multi-stage configuration model
 │   ├── frontend_stack.py      # S3 OAC, CloudFront SPA CDN & Cognito client
 │   ├── registry_stack.py      # ECR API container registry stack
@@ -34,6 +35,7 @@ infra/
     ├── __init__.py
     ├── test_api_stack.py
     ├── test_app.py
+    ├── test_batch_stack.py
     ├── test_config.py
     ├── test_frontend_stack.py
     ├── test_registry_stack.py

@@ -1,0 +1,39 @@
+# syntax=docker/dockerfile:1.7
+FROM ghcr.io/astral-sh/uv:0.10.0 AS uv
+
+FROM python:3.11-slim-bookworm AS builder
+COPY --from=uv /uv /uvx /bin/
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_NO_MANAGED_PYTHON=1 \
+    UV_PROJECT_ENVIRONMENT=/app/.venv \
+    PATH="/app/.venv/bin:$PATH"
+WORKDIR /app
+COPY pyproject.toml uv.lock ./
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev --extra orchestration --extra tracking --no-install-project
+COPY src/ src/
+COPY configs/ configs/
+COPY tests/ tests/
+COPY README.md HARNESS.md ARCHITECTURE.md ./
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev --extra orchestration --extra tracking
+RUN /app/.venv/bin/python -m spacy download en_core_web_sm
+
+FROM python:3.11-slim-bookworm AS runtime
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PATH="/app/.venv/bin:$PATH" \
+    HOME=/home/community \
+    LOG_FORMAT=json \
+    LOG_LEVEL=INFO \
+    DATA_ROOT=/app/workspace/data \
+    OUTPUT_BASE_PATH=/app/workspace/output
+RUN groupadd --gid 10001 community \
+    && useradd --uid 10001 --gid community --create-home community \
+    && mkdir -p /app/workspace /tmp/workspace \
+    && chown -R community:community /app /home/community /tmp/workspace
+WORKDIR /app
+COPY --from=builder --chown=community:community /app /app
+USER community
+ENTRYPOINT ["python", "-m", "src.cloud.batch_runner"]

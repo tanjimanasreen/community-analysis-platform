@@ -87,6 +87,7 @@ src/
                        retry_policy, settings
   artifacts/         — run_manifest, models
   api/               — FastAPI app, routers, services, schemas, errors
+  cloud/             — batch_runner (AWS Batch analytical runner wrapper)
   reporting/         — output_contract, artifact_index
   tracking/          — mlflow_tracker, noop_tracker, contracts, sanitization,
                        summaries, factory
