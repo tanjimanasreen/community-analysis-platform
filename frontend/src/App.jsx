@@ -8,6 +8,7 @@ import EmptyState from './components/states/EmptyState';
 import VerificationFailureState from './components/states/VerificationFailureState';
 import { DashboardProvider } from './app/DashboardProvider';
 import { useDashboardContext } from './hooks/useDashboardContext';
+import { AuthProvider, AuthGate } from './auth';
 
 // Route pages are lazy so chart and graph vendors are not loaded on unrelated routes.
 const Overview = lazy(() => import('./pages/Overview'));
@@ -213,27 +214,31 @@ function DashboardLayout() {
 export default function App() {
   return (
     <BrowserRouter>
-      <DashboardProvider>
-        <Routes>
-          <Route path="/" element={<DashboardLayout />}>
-            <Route index element={<Overview />} />
-            <Route path="communities" element={<CommunitiesPage />} />
-            <Route path="network" element={<LegacyCommunitiesRedirect />} />
-            <Route path="thematic" element={<ThematicAnalysisPage />} />
-            <Route path="evolution" element={<CommunityEvolutionPage />} />
-            <Route path="run-history" element={<EvolutionOverTimePage />} />
-            <Route path="comparative" element={<ComparativeAnalysisPage />} />
-            <Route path="transitions" element={<LegacyTransitionsRedirect />} />
-            <Route path="top-communities" element={<LegacyCommunitiesRedirect />} />
-            <Route path="data-reports" element={<EvidencePage />} />
-            <Route path="evidence" element={<LegacyDataReportsRedirect defaultView="communities" />} />
-            <Route path="data" element={<LegacyDataReportsRedirect defaultView="communities" />} />
-            <Route path="reports" element={<LegacyDataReportsRedirect defaultView="outputs" />} />
-            <Route path="methodology" element={<MethodologyPage />} />
-            <Route path="*" element={<Overview />} />
-          </Route>
-        </Routes>
-      </DashboardProvider>
+      <AuthProvider>
+        <AuthGate>
+          <DashboardProvider>
+            <Routes>
+              <Route path="/" element={<DashboardLayout />}>
+                <Route index element={<Overview />} />
+                <Route path="communities" element={<CommunitiesPage />} />
+                <Route path="network" element={<LegacyCommunitiesRedirect />} />
+                <Route path="thematic" element={<ThematicAnalysisPage />} />
+                <Route path="evolution" element={<CommunityEvolutionPage />} />
+                <Route path="run-history" element={<EvolutionOverTimePage />} />
+                <Route path="comparative" element={<ComparativeAnalysisPage />} />
+                <Route path="transitions" element={<LegacyTransitionsRedirect />} />
+                <Route path="top-communities" element={<LegacyCommunitiesRedirect />} />
+                <Route path="data-reports" element={<EvidencePage />} />
+                <Route path="evidence" element={<LegacyDataReportsRedirect defaultView="communities" />} />
+                <Route path="data" element={<LegacyDataReportsRedirect defaultView="communities" />} />
+                <Route path="reports" element={<LegacyDataReportsRedirect defaultView="outputs" />} />
+                <Route path="methodology" element={<MethodologyPage />} />
+                <Route path="*" element={<Overview />} />
+              </Route>
+            </Routes>
+          </DashboardProvider>
+        </AuthGate>
+      </AuthProvider>
     </BrowserRouter>
   );
 }

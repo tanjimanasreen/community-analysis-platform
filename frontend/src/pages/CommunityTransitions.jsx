@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Download, GitBranch, RefreshCcw, ShieldCheck, Users } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
-import { getArtifactDownloadUrl } from '../api/reports';
+import { downloadRunArtifact } from '../api/reports';
 import { normalizeApiError } from '../api/errors';
 import SimilarityMatrix from '../components/SimilarityMatrix';
 import MetricCard from '../components/MetricCard';
@@ -272,13 +272,14 @@ export default function CommunityTransitionsPage() {
             ) : (
               <div className="flex flex-wrap gap-2">
                 {(data.similarityQuery.data?.artifacts ?? []).map((artifact) => (
-                  <a
+                  <button
                     key={artifact.artifact_key}
-                    href={getArtifactDownloadUrl(data.selectedRunId, artifact.artifact_key)}
-                    className="rounded-lg border border-border px-3 py-2 text-sm font-medium text-primary hover:bg-surface-soft"
+                    type="button"
+                    onClick={() => downloadRunArtifact(data.selectedRunId, artifact.artifact_key)}
+                    className="rounded-lg border border-border px-3 py-2 text-sm font-medium text-primary hover:bg-surface-soft cursor-pointer"
                   >
                     Open {artifact.path}
-                  </a>
+                  </button>
                 ))}
               </div>
             )}

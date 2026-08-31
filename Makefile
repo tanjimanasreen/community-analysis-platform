@@ -323,6 +323,18 @@ ifndef IMAGE_TAG
 endif
 	cd infra && cdk deploy community-analysis-$(INFRA_STAGE)-api -c stage=$(INFRA_STAGE) -c image_tag=$(IMAGE_TAG) --require-approval never
 
+infra-diff-frontend:
+ifndef IMAGE_TAG
+	$(error IMAGE_TAG is required (e.g. make infra-diff-frontend INFRA_STAGE=$(INFRA_STAGE) IMAGE_TAG=<GIT_SHA>))
+endif
+	cd infra && cdk diff community-analysis-$(INFRA_STAGE)-frontend -c stage=$(INFRA_STAGE) -c image_tag=$(IMAGE_TAG)
+
+infra-deploy-frontend:
+ifndef IMAGE_TAG
+	$(error IMAGE_TAG is required (e.g. make infra-deploy-frontend INFRA_STAGE=$(INFRA_STAGE) IMAGE_TAG=<GIT_SHA>))
+endif
+	cd infra && cdk deploy community-analysis-$(INFRA_STAGE)-frontend -c stage=$(INFRA_STAGE) -c image_tag=$(IMAGE_TAG) --require-approval never
+
 API_IMAGE_TAG ?= community-analysis-api:dev
 API_IMAGE_PLATFORM ?= linux/arm64
 

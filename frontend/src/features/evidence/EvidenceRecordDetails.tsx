@@ -1,7 +1,7 @@
 import { Download, ExternalLink, X } from 'lucide-react';
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { getArtifactDownloadUrl } from '../../api/reports';
+import { downloadRunArtifact } from '../../api/reports';
 import ArtifactValue from '../../components/ArtifactValue';
 import type { MetricName } from '../../types/api';
 import { navigationCommunityId, type EvidenceView } from './evidenceModel';
@@ -44,9 +44,7 @@ export default function EvidenceRecordDetails({
   }
 
   const artifactKey = view === 'outputs' && typeof record.key === 'string' ? record.key : null;
-  const artifactDownloadUrl = artifactKey && record.category !== 'intermediate'
-    ? getArtifactDownloadUrl(runId, artifactKey)
-    : null;
+  const isDownloadable = artifactKey && record.category !== 'intermediate';
 
   return (
     <aside className="panel p-5 xl:sticky xl:top-4 xl:self-start xl:max-h-[calc(100dvh-8rem)] xl:overflow-y-auto">
@@ -77,13 +75,14 @@ export default function EvidenceRecordDetails({
       )}
 
       {view === 'outputs' && (
-        artifactDownloadUrl ? (
-          <a
-            href={artifactDownloadUrl}
-            className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-semibold text-text-heading hover:bg-surface-soft"
+        isDownloadable && artifactKey ? (
+          <button
+            type="button"
+            onClick={() => downloadRunArtifact(runId, artifactKey)}
+            className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-semibold text-text-heading hover:bg-surface-soft cursor-pointer"
           >
             <Download size={13} aria-hidden="true" /> Download verified artifact
-          </a>
+          </button>
         ) : (
           <p className="mt-3 rounded-lg border border-border bg-surface-soft/40 p-3 text-xs leading-5 text-muted">
             Intermediate artifacts are retained for provenance but are not downloadable through the read-only API.

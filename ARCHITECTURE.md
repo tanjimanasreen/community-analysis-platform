@@ -366,3 +366,13 @@ All values currently hard-coded in scripts must become configuration:
 Plan 075 adds an optional text-preparation boundary immediately before topic preprocessing. Original network/community message artifacts remain the empirical source of truth. When `translation.enabled=true`, unique source messages are language-detected and translated to English through a provider abstraction (`azure` by default, `aws` optional), with results persisted in a per-message content-addressed cache. Only translated in-memory copies feed the existing thesis text preprocessor and unchanged unigram/bigram LDA implementation.
 
 Translation identity is provider/version aware and participates in the Plan 074 topic-stage cache. A valid topic-stage hit bypasses translation entirely; on a topic-stage miss, per-message cache hits avoid cloud calls.
+
+## Cloud Deployment Architecture (AWS Serverless)
+
+The platform supports containerized serverless deployment on AWS orchestrated via AWS CDK v2:
+
+- **Storage**: Amazon S3 analytical bucket (`StorageStack`) storing Parquet runs and manifests (`COMMUNITY_ANALYSIS_STORAGE_BACKEND=s3`).
+- **Container Registry**: Amazon ECR private repository (`RegistryStack`) hosting immutable API container images with multi-stage build and AWS Lambda Web Adapter.
+- **API Runtime**: AWS Lambda container (`ARM_64`, Python 3.11/FastAPI) fronted by Amazon API Gateway HTTP API v2 (`ApiStack`), secured via Amazon Cognito JWT authorizer on analytical routes (`$default`) and public `GET /api/v1/health`.
+- **Frontend & CDN**: Amazon CloudFront distribution (`FrontendStack`) routing `/*` to private S3 static bucket via Origin Access Control (OAC) with CloudFront Function for extensionless SPA routing, and `/api/*` to API Gateway with caching disabled and `Authorization` forwarding.
+- **Browser Authentication**: Amazon Cognito User Pool App Client with PKCE OAuth authorization code grant and managed login domain.

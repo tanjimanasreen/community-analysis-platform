@@ -6,6 +6,7 @@ import aws_cdk as cdk
 from community_analysis_infra.api_stack import ApiStack
 from community_analysis_infra.baseline_stack import CommunityAnalysisBaselineStack
 from community_analysis_infra.config import get_stage_config
+from community_analysis_infra.frontend_stack import FrontendStack
 from community_analysis_infra.registry_stack import RegistryStack
 from community_analysis_infra.storage_stack import StorageStack
 
@@ -64,7 +65,7 @@ image_tag = str(raw_image_tag).strip()
 
 # API stack containing authenticated Lambda container and API Gateway HTTP API
 api_stack_name = stage_config.format_stack_name("api")
-ApiStack(
+api_stack = ApiStack(
     app,
     api_stack_name,
     stage_config=stage_config,
@@ -76,6 +77,23 @@ ApiStack(
         region=stage_config.region,
     ),
     description=f"Authenticated API serving infrastructure for {stage_config.project_name} ({stage_config.stage_name})",
+)
+
+# Frontend stack containing private S3 bucket, CloudFront distribution, and browser Cognito client
+frontend_stack_name = stage_config.format_stack_name("frontend")
+FrontendStack(
+    app,
+    frontend_stack_name,
+    stage_config=stage_config,
+    http_api=api_stack.http_api,
+    user_pool=api_stack.user_pool,
+    api_app_client=api_stack.app_client,
+    lambda_function=api_stack.lambda_function,
+    env=cdk.Environment(
+        account=stage_config.account,
+        region=stage_config.region,
+    ),
+    description=f"Frontend hosting, CloudFront CDN, and browser auth infrastructure for {stage_config.project_name} ({stage_config.stage_name})",
 )
 
 # Apply deterministic standard tags across all constructs in the App

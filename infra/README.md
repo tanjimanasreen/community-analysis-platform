@@ -27,6 +27,7 @@ infra/
 │   ├── api_stack.py           # Authenticated Lambda & API Gateway stack
 │   ├── baseline_stack.py      # Baseline infrastructure verification stack
 │   ├── config.py              # Multi-stage configuration model
+│   ├── frontend_stack.py      # S3 OAC, CloudFront SPA CDN & Cognito client
 │   ├── registry_stack.py      # ECR API container registry stack
 │   └── storage_stack.py       # S3 analytical data & artifact storage stack
 └── tests/                     # Infrastructure unit tests
@@ -34,6 +35,7 @@ infra/
     ├── test_api_stack.py
     ├── test_app.py
     ├── test_config.py
+    ├── test_frontend_stack.py
     ├── test_registry_stack.py
     └── test_storage_stack.py
 ```

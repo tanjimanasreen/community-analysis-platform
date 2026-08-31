@@ -1,6 +1,6 @@
-import { Database, Download, FileText, Search, ShieldCheck } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { getArtifactDownloadUrl, getReportUrl } from '../../api/reports';
+import { Database, Download, FileText, Search, ShieldCheck } from 'lucide-react';
+import { downloadRunArtifact, openRunReport } from '../../api/reports';
 import ArtifactStatusBadge from '../../components/ArtifactStatusBadge';
 import EmptyState from '../../components/states/EmptyState';
 import type { ArtifactMetadata, VerificationResponse } from '../../types/api';
@@ -57,14 +57,13 @@ export default function RunOutputs({
               status={verification?.ok ? 'verified' : 'warning'}
             />
             {inlineReportAvailable && (
-              <a
-                href={getReportUrl(runId)}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white hover:bg-primary/90"
+              <button
+                type="button"
+                onClick={() => openRunReport(runId)}
+                className="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white hover:bg-primary/90 cursor-pointer"
               >
                 <FileText size={14} aria-hidden="true" /> Open report
-              </a>
+              </button>
             )}
           </div>
         </div>
@@ -144,12 +143,13 @@ export default function RunOutputs({
                           <td className="px-4 py-3 text-text-heading">{formatBytes(artifact.byte_size)}</td>
                           <td className="px-5 py-3 text-right" onClick={(event) => event.stopPropagation()}>
                             {isDownloadableArtifact(artifact) ? (
-                              <a
-                                href={getArtifactDownloadUrl(runId, artifact.key)}
-                                className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-[11px] font-semibold text-primary hover:bg-surface-soft"
+                              <button
+                                type="button"
+                                onClick={() => downloadRunArtifact(runId, artifact.key)}
+                                className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-[11px] font-semibold text-primary hover:bg-surface-soft cursor-pointer"
                               >
                                 <Download size={13} aria-hidden="true" /> Download
-                              </a>
+                              </button>
                             ) : (
                               <span className="text-[11px] text-muted" title="Intermediate artifacts are intentionally unavailable through the download endpoint.">Not downloadable</span>
                             )}
@@ -174,21 +174,21 @@ function groupOutputs(artifacts: ArtifactMetadata[]): OutputGroup[] {
   const data = artifacts.filter((artifact) => artifact.category !== 'report' && artifact.category !== 'intermediate');
   return [
     {
-      id: 'published',
+      id: 'published' as const,
       label: 'Published outputs',
       description: 'Report artifacts already produced by the selected run',
       icon: FileText,
       artifacts: published,
     },
     {
-      id: 'data',
+      id: 'data' as const,
       label: 'Analytical data & metadata',
       description: 'Canonical manifest-listed data supporting downstream analysis',
       icon: Database,
       artifacts: data,
     },
     {
-      id: 'provenance',
+      id: 'provenance' as const,
       label: 'Advanced provenance',
       description: 'Intermediate stage handoffs retained for auditability',
       icon: ShieldCheck,

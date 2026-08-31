@@ -1,8 +1,9 @@
 import React from 'react';
-import { Activity, Calendar, HelpCircle, Menu } from 'lucide-react';
+import { Activity, Calendar, HelpCircle, LogOut, Menu, User } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import ArtifactStatusBadge from './ArtifactStatusBadge';
 import { conciseRunId } from '../features/overview/overviewUtils';
+import { useAuth } from '../auth';
 
 const routeCopy = {
   '/': ['Overview Dashboard', 'Monitor validated run metrics and community structure.'],
@@ -36,6 +37,7 @@ export default function Topbar({
   facets,
 }) {
   const location = useLocation();
+  const { authMode, user, isAuthenticated, signOut } = useAuth();
   const [title, subtitle] = routeCopy[location.pathname] || routeCopy['/'];
   const showMetric = !['/thematic', '/evolution', '/transitions', '/data-reports', '/evidence', '/data', '/reports', '/methodology'].includes(location.pathname);
   const helpTarget = `/methodology${location.search}`;
@@ -86,6 +88,24 @@ export default function Topbar({
                 ? `${verification.checked_artifacts} artifacts verified`
                 : verification.error || 'Artifact integrity verification failed'}
             />
+          )}
+          {authMode === 'cognito' && isAuthenticated && (
+            <div className="flex items-center gap-2">
+              <span className="hidden md:inline-flex items-center gap-1 text-xs text-muted font-mono bg-surface-soft/80 px-2.5 py-1 rounded-full border border-border/60">
+                <User size={13} className="text-primary" />
+                <span>{user?.username || user?.userId || 'Authenticated'}</span>
+              </span>
+              <button
+                type="button"
+                onClick={signOut}
+                aria-label="Sign out"
+                title="Sign out of Cognito session"
+                className="flex items-center gap-1.5 p-1.5 sm:px-2.5 sm:py-1 text-xs font-semibold text-danger hover:bg-danger/10 rounded-xl border border-danger/30 transition-colors cursor-pointer"
+              >
+                <LogOut size={14} />
+                <span className="hidden sm:inline">Sign Out</span>
+              </button>
+            </div>
           )}
           <Link
             to={helpTarget}

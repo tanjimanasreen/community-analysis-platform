@@ -113,4 +113,8 @@ describe('Topbar', () => {
     expect(screen.queryByLabelText('Affinity metric')).not.toBeInTheDocument();
   });
 
+  it('displays user and sign out button when in cognito auth mode', () => {
+    vi.stubEnv('VITE_AUTH_MODE', 'cognito');
+    renderTopbar();
+  });
 });
