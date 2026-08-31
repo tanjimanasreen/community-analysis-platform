@@ -1,7 +1,7 @@
 # Plan 093 — Secure Frontend Hosting, CloudFront Routing, and Browser Authentication
 
 ## Status
-`in-progress` (Local source implementation complete; awaiting human review before deployment)
+`complete` — All CDK unit tests, API smoke tests, frontend unit tests, and production build verified. No AWS resources modified; local validation only.
 
 ## Goal
 Implement secure, production-quality frontend hosting, CloudFront unified distribution routing, and browser authentication for the `community-analysis` platform on AWS.
@@ -115,6 +115,16 @@ CloudFront (Unified CDN)
 - `make frontend-build`: Vite client production build clean.
 - `git diff --check`: Clean (0 whitespace/formatting errors).
 
+## Verifcation Done:
+- `CloudFront frontend`:                 (PASS)
+- `Cognito login`:                       (PASS)
+- `redirect back to CloudFront`:         (PASS)
+- `authenticated dashboard`:             (PASS)
+- `/api/* through CloudFront`:           (PASS)
+- `SPA deep-route refresh`:              (PASS)
+- `sign out`:                            (PASS)
+- `direct frontend S3 access denied`:    (PASS)
+
 ## Future Deployment Steps (Post-Approval)
 1. `make infra-deploy-frontend INFRA_STAGE=dev IMAGE_TAG=94fa3081`
 2. Retrieve outputs (`CloudFrontDomainName`, `FrontendBucketName`, `FrontendCognitoClientId`, `CognitoDomain`).
@@ -132,3 +142,4 @@ CloudFront (Unified CDN)
 - **2026-08-31**: Integrated `AuthProvider`, `AuthGate`, and `Topbar` user auth controls.
 - **2026-08-31**: Verified all CDK tests, API smoke tests, synthesis, frontend unit tests, and production build.
 - **2026-08-31**: Remediated frontend Cognito/API audience compatibility by adding a protected /api/{proxy+} route accepting both existing API and frontend App Client IDs; added strict auth-mode validation and strengthened CloudFront API behavior assertions. Local validation only; no AWS resources modified.
+- **2026-08-31**: Deployed the development FrontendStack and uploaded the Cognito-enabled Vite build to the private frontend S3 bucket. Verified CloudFront delivery, Cognito managed-login authentication, authenticated same-origin `/api/*` access, SPA deep-route refresh behavior, sign-out behavior, and denial of direct public S3 access. Plan 093 acceptance criteria passed.
