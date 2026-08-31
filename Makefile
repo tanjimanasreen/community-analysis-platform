@@ -299,18 +299,28 @@ infra-install:
 infra-test:
 	PYTHONPATH=infra infra/.venv/bin/pytest infra/tests
 
-IMAGE_TAG ?= d278a7ad
-
 infra-synth:
+ifndef IMAGE_TAG
+	$(error IMAGE_TAG is required (e.g. make infra-synth INFRA_STAGE=$(INFRA_STAGE) IMAGE_TAG=<GIT_SHA>))
+endif
 	cd infra && cdk synth -c stage=$(INFRA_STAGE) -c image_tag=$(IMAGE_TAG)
 
 infra-list:
+ifndef IMAGE_TAG
+	$(error IMAGE_TAG is required (e.g. make infra-list INFRA_STAGE=$(INFRA_STAGE) IMAGE_TAG=<GIT_SHA>))
+endif
 	cd infra && cdk list -c stage=$(INFRA_STAGE) -c image_tag=$(IMAGE_TAG)
 
 infra-diff-api:
+ifndef IMAGE_TAG
+	$(error IMAGE_TAG is required (e.g. make infra-diff-api INFRA_STAGE=$(INFRA_STAGE) IMAGE_TAG=<GIT_SHA>))
+endif
 	cd infra && cdk diff community-analysis-$(INFRA_STAGE)-api -c stage=$(INFRA_STAGE) -c image_tag=$(IMAGE_TAG)
 
 infra-deploy-api:
+ifndef IMAGE_TAG
+	$(error IMAGE_TAG is required (e.g. make infra-deploy-api INFRA_STAGE=$(INFRA_STAGE) IMAGE_TAG=<GIT_SHA>))
+endif
 	cd infra && cdk deploy community-analysis-$(INFRA_STAGE)-api -c stage=$(INFRA_STAGE) -c image_tag=$(IMAGE_TAG) --require-approval never
 
 API_IMAGE_TAG ?= community-analysis-api:dev

@@ -1,6 +1,5 @@
 """Unit tests for ApiStack, Lambda runtime, Cognito auth, and API Gateway configuration."""
 
-import json
 import pytest
 import aws_cdk as cdk
 from aws_cdk.assertions import Match, Template
@@ -218,9 +217,23 @@ def test_iam_s3_read_permissions_only(dev_api_template: Template) -> None:
                     s3_actions.add(a)
 
     assert len(s3_actions) > 0, "S3 read actions must be granted"
+
+    # Positively assert required read capabilities
+    has_get_object = any(
+        a in ("s3:GetObject", "s3:GetObject*") or a.startswith("s3:GetObject")
+        for a in s3_actions
+    )
+    has_list_bucket = any(
+        a in ("s3:ListBucket", "s3:List*") or a.startswith("s3:List")
+        for a in s3_actions
+    )
+    assert has_get_object, f"S3 GetObject capability missing from actions: {s3_actions}"
+    assert has_list_bucket, f"S3 List/ListBucket capability missing from actions: {s3_actions}"
+
+    # Reject write, delete, and global wildcard permissions
     for action in s3_actions:
-        assert "Put" not in action, f"Write action {action} forbidden"
-        assert "Delete" not in action, f"Delete action {action} forbidden"
+        assert not action.startswith("s3:Put"), f"Write action {action} forbidden"
+        assert not action.startswith("s3:Delete"), f"Delete action {action} forbidden"
         assert action != "s3:*", "Wildcard s3:* forbidden"
 
 

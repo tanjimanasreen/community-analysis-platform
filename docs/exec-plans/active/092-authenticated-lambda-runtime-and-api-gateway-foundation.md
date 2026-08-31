@@ -39,14 +39,14 @@ Deploy the read-only FastAPI serving layer (`src/api/`) to AWS Lambda (ARM64) be
    - Timeout: `30 seconds` (maximum HTTP API integration limit).
    - Ephemeral storage: default `512 MB`.
    - VPC: `NONE` (zero database/internal dependencies).
-   - Provisioned Concurrency: `NONE` (zsh idle compute cost).
+   - Provisioned Concurrency: `NONE` ($0 idle compute cost).
 
 3. **Authentication & Route Security**:
    - Cognito User Pool: self sign-up disabled, email/username sign-in.
    - Cognito App Client: client secret disabled, `USER_SRP_AUTH`, `USER_PASSWORD_AUTH`, and `ADMIN_USER_PASSWORD_AUTH` enabled.
    - API Gateway HTTP API (v2) with `HttpJwtAuthorizer`.
    - Public Route: `GET /api/v1/health` (no JWT required).
-   - Protected Route: `` route with Cognito JWT authorizer. All analytical routes (`/api/v1/ready`, `/api/v1/runs`, etc.) require valid Cognito Bearer tokens.
+   - Protected Route: `$default` route with Cognito JWT authorizer. All analytical routes (`/api/v1/ready`, `/api/v1/runs`, etc.) require valid Cognito Bearer tokens.
 
 4. **S3 IAM & Storage Configuration**:
    - Consumes `StorageStack.bucket` directly.
@@ -134,3 +134,4 @@ Deploy the read-only FastAPI serving layer (`src/api/`) to AWS Lambda (ARM64) be
 - 2026-08-30: Verified live endpoints (public health 200, unauthorized 401, authenticated 200, S3 readiness 200).
 - 2026-08-30: Completed cold/warm benchmarking and cleaned up temporary Cognito validation user.
 - 2026-08-30: Finalized Plan 092 deployment evidence.
+- 2026-08-31: Final review remediation removed the unsafe default API image tag, added explicit IMAGE_TAG guards, corrected Plan 092 documentation text, and strengthened the S3 read-only IAM regression test. Local validation passed; no AWS resources were modified.
