@@ -4,12 +4,7 @@
 
 Implement a production-grade, additive AWS Batch job definition for real Text Embeddings Inference (TEI) on AWS Fargate ARM64. The workload executes a multi-container task consisting of the primary analytical container alongside two dedicated TEI sidecars (similarity on port 8080, clustering on port 8081) communicating strictly over `localhost`. The existing Plan 094 mock/offline analytical Batch job remains completely intact and operational.
 
-**STRICT DEPLOYMENT GATE**: This iteration covers implementation design, execution plan remediation, and local verification planning ONLY.
-- **NO AWS resources will be modified, created, or deleted.**
-- **NO Docker images will be pushed to remote ECR.**
-- **NO AWS Batch jobs will be submitted.**
-- **NO git commits or pushes will be performed.**
-- **All changes remain local until explicit human review and authorization.**
+**HISTORICAL IMPLEMENTATION GATE — SATISFIED:** The source implementation and local verification phase prohibited AWS mutations until explicit human review. That review was completed, and the subsequent controlled dev deployment and bounded acceptance were explicitly authorized. Final deployment evidence is recorded in the Progress Log below.
 
 ---
 
@@ -499,3 +494,79 @@ When approved for implementation, validation must be executed in this exact sequ
 - 2026-09-01: Final operator-command cleanup pass: Updated Makefile `infra-list` to forward `TEI_ANALYTICS_IMAGE_TAG` and updated its usage text; updated documented synth and diff commands in validation section to preferred `make infra-synth` and `make infra-diff-batch` forms with explicit review tags; added explicit ECR authentication step before pushes to future deployment sequence; added `SKIP_S3_DOWNLOAD=true` to future acceptance submit override while ensuring `SKIP_S3_UPLOAD` remains false.
 - 2026-09-01: Disclosed test suite status: Plan 095 targeted tests (27 unit tests, 71 infra tests, 4 manifest ordering tests, 32 clustering/similarity tests) all PASS; full `make test` reports 14 pre-existing/environmental failures unrelated to Plan 095.
 - 2026-09-01: Verified `git diff --check` passes with zero errors; no commits, no pushes, and no AWS deployment performed. Ready for commit approval.
+
+
+### 2026-09-01 — Dev deployment and bounded acceptance COMPLETE
+
+Plan 095 was deployed to the authorized `dev` AWS environment and completed its single bounded live acceptance run successfully.
+
+Deployment source:
+
+- Branch: `dev`
+- Plan 095 source commit: `4841a773e5ca3f13d985fe5a9bb45d6ab84fac32`
+- AWS region: `us-east-1`
+- Existing Plan 094 analytics image remained pinned to `3adeb1fd`.
+- Plan 095 analytics image tag: `4841a773e5ca3f13d985fe5a9bb45d6ab84fac32`
+- Plan 095 analytics image digest: `sha256:f1ba87c91c3264a10c51c0774e7400e3fbd6a9eaa3e86ad35fdfa632b3328923`
+- Plan 095 TEI image tag: `4841a773e5ca3f13d985fe5a9bb45d6ab84fac32`
+- Plan 095 TEI image digest: `sha256:0cf8e31c4039b5fe77f7d2dc0064c03809e67f148180f3bdd3db4a9ae67c0c15`
+- Plan 095 Batch Job Definition: `community-analysis-dev-analytics-tei-job`, revision `1`
+- Batch stack final state: `UPDATE_COMPLETE`
+
+Pre-deployment verification:
+
+- Fargate On-Demand quota: `30` vCPU.
+- Fargate Spot quota: `30` vCPU.
+- Existing queue ordering remained Spot first and On-Demand fallback.
+- Both compute environments remained `ENABLED`, `VALID`, with `maxvCpus=16`.
+- Batch VPC remained NAT-free.
+- CDK diff was additive: dedicated TEI ECR repository, Plan 095 multi-container Job Definition, TEI-related outputs, and TEI ECR pull access on the existing Batch execution role.
+- Existing Plan 094 Job Definition, queue, compute environments, VPC, networking, and scoped S3 job-role permissions were unchanged.
+- `infra/cdk.context.json` remained unchanged across deployment.
+
+Exact-image local verification:
+
+- Analytics image verified as `linux/arm64`.
+- TEI image verified as `linux/arm64`.
+- Offline exact-image analytical regression completed successfully with mock theme generation and no TEI/OpenAI network access.
+- Real TEI compatibility smoke passed for similarity and clustering profiles, including the production Stage A, Stage B, and theme-similarity consumers.
+
+Bounded AWS acceptance:
+
+- Acceptance Batch Job ID: `89a1695d-52eb-4182-b16d-d166e5ef4d36`
+- Result: `SUCCEEDED`
+- Application attempts: `1`
+- `analytics`, `tei-similarity`, and `tei-clustering` all exited with code `0`.
+- Accepted pipeline run ID: `6e1c6e4e-a8c5-4786-91cd-2b6f6bc3d722`
+- `THEME_PROVIDER=mock` was used; no real GPT/OpenAI theme-generation request was required.
+
+Real TEI analytical inference evidence:
+
+- Similarity TEI logged one readiness `/embed` success followed by a second `/embed` success during analytical execution.
+- Clustering TEI logged one readiness `/embed` success followed by a second `/embed` success during analytical execution.
+- This proves analytical use of both live TEI profiles beyond readiness-only traffic.
+
+Canonical run verification:
+
+- Top-level run manifest status: `completed`.
+- Canonical manifest artifact count: `60`.
+- Every manifest-referenced canonical artifact exists in S3 and passed byte-size verification.
+- Expected nested topic-input manifests for `03_2017` and `04_2017` are present.
+- Total objects under the run S3 prefix: `126` (informational only; not a canonical-artifact-count requirement).
+- Analytics logs prove `uploading_manifest_last` occurred before final successful Batch completion.
+
+Serving-path verification:
+
+- Live API reported healthy.
+- Strict run verification succeeded.
+- Deployed frontend resolved the accepted Plan 095 run and displayed `Run verified`.
+- The Thematic Analysis page rendered successfully for the accepted run.
+
+Plan 094 regression protection:
+
+- Final read-only verification confirmed `community-analysis-dev-analytics-job` still references `community-analysis-dev-analytics:3adeb1fd`.
+- No Plan 094 AWS regression job was submitted.
+
+**Plan 095 status: COMPLETE.**
+
+No second Plan 095 Batch job was submitted. No Git push occurred during deployment/acceptance. Analytical metric definitions, LDA/Louvain defaults, Stage A, Stage B, artifact contracts, and GPT-downstream-of-LDA behavior were unchanged.
