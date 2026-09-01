@@ -1,6 +1,6 @@
 # Execution Plan 094: AWS Batch Analytical Compute
 
-**Status**: in-progress
+**Status**: complete
 **Milestones**:
 - [x] Pre-change verification (Git branch `dev`, clean working tree, HEAD at `b36dc50b`)
 - [x] Verified canonical analytical CLI entry points and orchestration contracts (`run-evolution-pipeline` and `run-all`)
@@ -122,18 +122,151 @@ Discovered by Plan 092 Lambda API & Plan 093 CloudFront Frontend
 - No frontend or API modifications.
 
 ---
+## Final AWS acceptance evidence
+
+Plan 094 was deployed and validated end-to-end in the `dev` environment.
+
+### Initial deployment
+
+- Foundation commit: `677def7d` — `Add AWS Batch analytical compute foundation`.
+- AWS Batch stack deployed successfully.
+- Analytical ECR repository:
+  `community-analysis-dev-analytics`.
+- Batch job definition:
+  `community-analysis-dev-analytics-job`.
+- Batch queue:
+  `community-analysis-dev-queue`.
+- Compute environments:
+  - `FARGATE_SPOT`
+  - `FARGATE`
+- Job definition runtime:
+  - Linux ARM64
+  - 4 vCPU
+  - 16 GiB memory
+  - 30 GiB ephemeral storage
+  - public IP enabled
+- No NAT Gateway is used.
+
+The first live mock acceptance job completed successfully at the AWS
+Batch level with exit code `0`, but strict API/frontend verification
+exposed an incomplete published run bundle.
+
+Initial acceptance run:
+
+- Run ID: `5543dbaf-4367-49c9-8586-4a0d4d8e506e`
+- Batch status: `SUCCEEDED`
+- Exit code: `0`
+- Top-level manifest status: `completed`
+- Canonical artifacts: `60`
+
+The frontend correctly rejected the run with `INVALID_MANIFEST` because
+nested canonical artifacts such as:
+
+`_intermediate/topic_inputs/reply/03_2017/manifest.json`
+
+were absent from `runs/<run_id>/`.
+
+### Nested-manifest publication remediation
+
+Root cause:
+
+`publish_completed_run_to_s3()` excluded artifacts using a
+filename-only `manifest.json` check. This unintentionally skipped every
+nested artifact named `manifest.json`, rather than only withholding the
+top-level run manifest used as the final publication marker.
+
+Remediation commit:
+
+`3adeb1fd` — `Fix nested manifest Batch publication`
+
+The publication logic now:
+
+- uploads nested `manifest.json` artifacts normally;
+- skips only `<run_dir>/manifest.json` during ordinary artifact
+  publication;
+- uploads the top-level run manifest exactly once and strictly last.
+
+A regression test was added proving nested manifests are uploaded while
+top-level manifest-last semantics remain intact.
+
+### Final live acceptance
+
+The remediated ARM64 analytical image was pushed using immutable tag:
+
+`3adeb1fd`
+
+The Batch stack was updated to job-definition revision `2`, pointing to:
+
+`community-analysis-dev-analytics:3adeb1fd`
+
+Final acceptance job completed successfully.
+
+Final run:
+
+- Run ID: `53305127-f53d-44c9-86b9-21c4e1ae52ad`
+- Batch status: `SUCCEEDED`
+- Exit code: `0`
+- Manifest status: `completed`
+- Canonical artifacts: `60`
+
+The previously missing nested artifacts were verified directly in S3:
+
+- `_intermediate/topic_inputs/reply/03_2017/manifest.json`
+- `_intermediate/topic_inputs/reply/04_2017/manifest.json`
+
+Both were present in the final `runs/<run_id>/` bundle.
+
+The deployed API/frontend subsequently loaded the final run successfully
+and displayed `Run verified`.
+
+### Plan 094 acceptance result
+
+Plan 094 is complete.
+
+Validated path:
+
+AWS Batch Fargate
+→ analytical container
+→ existing analytical pipeline
+→ canonical run bundle
+→ S3
+→ Lambda API
+→ strict manifest verification
+→ CloudFront frontend.
+
+No thesis analytical metric definitions, algorithm defaults, Stage A,
+Stage B, manifest schema, or artifact schema were changed by Plan 094.
+
+---
 
 ## 6. Progress Log
 
-- 2026-08-31: Completed Plan 094 discovery and finalized frozen architecture.
-- 2026-08-31: Added `boto3>=1.28.0` to `pyproject.toml` and updated `uv.lock`.
-- 2026-08-31: Implemented `src/cloud/batch_runner.py` with S3 sync, workspace redirection, manifest-last validation, and error boundaries.
-- 2026-08-31: Created unit test suite in `tests/unit/test_batch_runner.py` (10 passing unit tests).
-- 2026-08-31: Implemented `Dockerfile.analytics` for ARM64 with pre-bundled spaCy model and no default help CMD.
-- 2026-08-31: Implemented `BatchStack` in `infra/community_analysis_infra/batch_stack.py` with ECR, VPC (0 NAT), Fargate Spot/On-Demand compute, job queue, job definition, and scoped IAM roles.
-- 2026-08-31: Created CDK test suite in `infra/tests/test_batch_stack.py` (66 total infra unit tests passing).
-- 2026-08-31: Updated `infra/app.py` with context isolation (existing stacks synthesize without `batch_image_tag`).
-- 2026-08-31: Updated `Makefile` with targets for `analytics-image-build` (`ANALYTICS_LOCAL_IMAGE`), `analytics-image-smoke`, `analytics-image-sample`, `infra-diff-batch`, `infra-deploy-batch`, and `submit-batch-run`.
-- 2026-08-31: Verified local CDK synthesis for `dev` and `prod` stages with separate image contexts.
-- 2026-08-31: Validated local ARM64 Docker container with `--help`, `--dry-run`, and real sample execution (`analytics-image-sample` passed in 14.2s verifying 60 artifacts).
-- 2026-08-31: Executed first live AWS Batch acceptance job (`677def7d`). Job SUCCEEDED with exit code 0 (run ID `5543dbaf-4367-49c9-8586-4a0d4d8e506e`). Top-level manifest reported completed with 60 canonical artifacts. API/frontend strict verification exposed a publication defect: nested artifact `manifest.json` files (`_intermediate/topic_inputs/.../manifest.json`) were omitted from S3 publication due to filename-only `file_path.name != "manifest.json"` exclusion logic. Remediated `src/cloud/batch_runner.py` to preserve nested manifest artifacts while strictly uploading the top-level run `manifest.json` last as the immutable completion marker. Added regression test in `tests/unit/test_batch_runner.py`. Plan status remains `in-progress` pending final human source review, tagged image build/push, and second acceptance run.
+7. Progress Log
+- 2026-08-31: Completed Plan 094 discovery and finalized the frozen AWS Batch architecture.
+- 2026-08-31: Added boto3>=1.28.0 to pyproject.toml and updated uv.lock.
+- 2026-08-31: Implemented src/cloud/batch_runner.py with S3 synchronization, workspace redirection, completed-manifest verification, manifest-last publication, and error boundaries.
+- 2026-08-31: Added the initial Batch runner unit-test suite.
+- 2026-08-31: Implemented S3 download path-containment protection against absolute paths and parent traversal.
+- 2026-08-31: Created Dockerfile.analytics for ARM64 with pre-bundled spaCy model and no default help command.
+- 2026-08-31: Implemented BatchStack with analytical ECR, dedicated 2-AZ VPC with 0 NAT Gateways, Fargate Spot/On-Demand compute, queue, ARM64 job definition, scoped IAM roles, and bounded CloudWatch retention.
+- 2026-08-31: Added Batch CDK infrastructure tests and validated the full infra test suite.
+- 2026-08-31: Updated infra/app.py with Batch context isolation so existing API/frontend stacks continue to synthesize without batch_image_tag.
+- 2026-08-31: Updated the Makefile with analytical image build/smoke/sample targets, Batch diff/deploy targets, and explicit Batch submission requiring INFRA_STAGE, CONFIG, and THEME_PROVIDER.
+- 2026-08-31: Verified local CDK synthesis for dev and prod.
+- 2026-08-31: Validated the local ARM64 analytics image with smoke, dry-run, and deterministic sample execution; the sample produced 60 canonical artifacts.
+- 2026-08-31: Committed the Plan 094 analytical compute foundation as 677def7d.
+- 2026-08-31: Deployed community-analysis-dev-batch successfully. Both FARGATE_SPOT and FARGATE compute environments reported ENABLED / VALID, and the Batch queue reported ENABLED / VALID.
+- 2026-08-31: Built and pushed immutable ARM64 analytical image 677def7d to community-analysis-dev-analytics.
+- 2026-08-31: Executed the first live mock Batch acceptance job. AWS Batch completed with SUCCEEDED and exit code 0; run 5543dbaf-4367-49c9-8586-4a0d4d8e506e produced a completed top-level manifest containing 60 canonical artifacts.
+- 2026-08-31: API/frontend strict verification exposed an incomplete publication bundle because nested canonical files named manifest.json were excluded by filename-only publication logic.
+- 2026-08-31: Added a focused nested-manifest publication regression test, reproduced the defect locally, and fixed publish_completed_run_to_s3() so only the top-level run manifest is withheld from ordinary publication.
+- 2026-08-31: Completed remediation validation with 15 Batch runner tests passing, targeted lint passing, compile validation passing, API smoke tests passing, and git diff --check clean.
+- 2026-08-31: Committed the publication remediation as 3adeb1fd.
+- 2026-08-31: Built and pushed corrected immutable ARM64 analytical image 3adeb1fd.
+- 2026-08-31: Reviewed the remediation CDK diff; only the Batch job-definition image changed from 677def7d to 3adeb1fd.
+- 2026-08-31: Deployed Batch job-definition revision 2 successfully with no storage, VPC, compute-environment, queue, ECR, or IAM architecture changes.
+- 2026-08-31: Executed the final live mock Batch acceptance job successfully.
+- 2026-08-31: Verified final run 53305127-f53d-44c9-86b9-21c4e1ae52ad with Batch SUCCEEDED, exit code 0, top-level manifest status completed, and 60 canonical artifacts.
+- 2026-08-31: Verified nested 03_2017/manifest.json and 04_2017/manifest.json canonical artifacts directly in the final S3 run bundle.
+- 2026-08-31: Verified the final run end-to-end through the deployed Lambda API and CloudFront frontend; the UI displayed Run verified and rendered the Community Evolution analysis successfully.
+- 2026-08-31: Marked Plan 094 complete.
