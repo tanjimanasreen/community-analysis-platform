@@ -273,6 +273,64 @@ def test_publish_completed_run_manifest_last_ordering(tmp_path: Path) -> None:
     assert "cache/cache_meta.json" in uploaded_keys[:-1]
 
 
+def test_publish_completed_run_uploads_nested_manifests_and_top_level_last(
+    tmp_path: Path,
+) -> None:
+    mock_s3 = MagicMock()
+    output_root = tmp_path / "output"
+    run_id = "run-nested-manifest-123"
+    run_dir = output_root / "runs" / run_id
+    run_dir.mkdir(parents=True)
+
+    # 1. Top-level manifest and standard artifacts
+    (run_dir / "result.parquet").write_bytes(b"PAR1")
+    (run_dir / "manifest.json").write_text('{"status": "completed"}')
+
+    # 2. Nested manifest artifacts
+    nested_03 = run_dir / "_intermediate" / "topic_inputs" / "reply" / "03_2017"
+    nested_03.mkdir(parents=True)
+    (nested_03 / "manifest.json").write_text('{"stage": "topics", "month": "03_2017"}')
+
+    nested_04 = run_dir / "_intermediate" / "topic_inputs" / "reply" / "04_2017"
+    nested_04.mkdir(parents=True)
+    (nested_04 / "manifest.json").write_text('{"stage": "topics", "month": "04_2017"}')
+
+    publish_completed_run_to_s3(
+        s3_client=mock_s3,
+        bucket="my-bucket",
+        run_dir=run_dir,
+        run_id=run_id,
+        output_root=output_root,
+    )
+
+    uploaded_keys = [c[0][2] for c in mock_s3.upload_file.call_args_list]
+
+    # Nested manifests and result.parquet must be uploaded
+    assert f"runs/{run_id}/result.parquet" in uploaded_keys
+    assert (
+        f"runs/{run_id}/_intermediate/topic_inputs/reply/03_2017/manifest.json"
+        in uploaded_keys
+    )
+    assert (
+        f"runs/{run_id}/_intermediate/topic_inputs/reply/04_2017/manifest.json"
+        in uploaded_keys
+    )
+
+    # Top-level manifest.json must be uploaded strictly LAST and exactly once
+    assert uploaded_keys[-1] == f"runs/{run_id}/manifest.json"
+    assert uploaded_keys.count(f"runs/{run_id}/manifest.json") == 1
+
+    # Nested manifests must have been uploaded BEFORE the top-level manifest
+    assert (
+        f"runs/{run_id}/_intermediate/topic_inputs/reply/03_2017/manifest.json"
+        in uploaded_keys[:-1]
+    )
+    assert (
+        f"runs/{run_id}/_intermediate/topic_inputs/reply/04_2017/manifest.json"
+        in uploaded_keys[:-1]
+    )
+
+
 def test_publish_fails_before_manifest_on_artifact_failure(tmp_path: Path) -> None:
     mock_s3 = MagicMock()
     output_root = tmp_path / "output"

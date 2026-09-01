@@ -248,9 +248,9 @@ def publish_completed_run_to_s3(
     if not manifest_file.exists():
         raise RuntimeError(f"Manifest not found at: {manifest_file}")
 
-    # 1. Upload all run artifacts EXCEPT manifest.json
+    # 1. Upload all run artifacts EXCEPT the top-level completion manifest
     for file_path in sorted(run_dir.rglob("*")):
-        if file_path.is_file() and file_path.name != "manifest.json":
+        if file_path.is_file() and file_path != manifest_file:
             rel_path = file_path.relative_to(run_dir).as_posix()
             s3_key = f"runs/{run_id}/{rel_path}"
             logger.info(
