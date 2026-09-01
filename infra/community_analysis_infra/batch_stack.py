@@ -36,9 +36,22 @@ class BatchStack(cdk.Stack):
         stage_config: StageConfig,
         bucket: s3.IBucket,
         batch_image_tag: str,
+        tei_analytics_image_tag: str,
+        tei_image_tag: str,
         **kwargs,
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
+
+        if not batch_image_tag or not str(batch_image_tag).strip():
+            raise ValueError("batch_image_tag is required for BatchStack")
+        if not tei_analytics_image_tag or not str(tei_analytics_image_tag).strip():
+            raise ValueError("tei_analytics_image_tag is required for BatchStack")
+        if not tei_image_tag or not str(tei_image_tag).strip():
+            raise ValueError("tei_image_tag is required for BatchStack")
+
+        resolved_batch_image_tag = str(batch_image_tag).strip()
+        resolved_tei_analytics_image_tag = str(tei_analytics_image_tag).strip()
+        resolved_tei_image_tag = str(tei_image_tag).strip()
 
         self.stage_config = stage_config
         is_dev = stage_config.stage_name == "dev"
@@ -52,6 +65,25 @@ class BatchStack(cdk.Stack):
             self,
             "AnalyticsRepository",
             repository_name=repo_name,
+            image_tag_mutability=ecr.TagMutability.IMMUTABLE,
+            encryption=ecr.RepositoryEncryption.AES_256,
+            removal_policy=removal_policy,
+            empty_on_delete=is_dev,
+            lifecycle_rules=[
+                ecr.LifecycleRule(
+                    description="Expire untagged images after 1 day",
+                    max_image_age=cdk.Duration.days(1),
+                    tag_status=ecr.TagStatus.UNTAGGED,
+                ),
+            ],
+        )
+
+        # 1b. Dedicated TEI ECR Repository
+        tei_repo_name = f"{stage_config.project_name}-{stage_config.stage_name}-tei"
+        self.tei_repository = ecr.Repository(
+            self,
+            "TeiRepository",
+            repository_name=tei_repo_name,
             image_tag_mutability=ecr.TagMutability.IMMUTABLE,
             encryption=ecr.RepositoryEncryption.AES_256,
             removal_policy=removal_policy,
@@ -121,6 +153,7 @@ class BatchStack(cdk.Stack):
                 ),
             ],
         )
+        self.tei_repository.grant_pull(self.execution_role)
 
         # 6. IAM Job Role (Task process permissions - strictly scoped S3 read/write)
         self.job_role = iam.Role(
@@ -223,7 +256,7 @@ class BatchStack(cdk.Stack):
             "AnalyticsContainer",
             image=ecs.ContainerImage.from_ecr_repository(
                 self.repository,
-                tag=batch_image_tag,
+                tag=resolved_batch_image_tag,
             ),
             cpu=4,
             memory=cdk.Size.gibibytes(16),
@@ -258,12 +291,196 @@ class BatchStack(cdk.Stack):
             retry_attempts=2,
         )
 
+        # 10b. Additive Multi-Container TEI Job Definition (ARM64, 8 vCPUs aggregate, 24 GiB RAM)
+        tei_job_def_name = (
+            f"{stage_config.project_name}-{stage_config.stage_name}-analytics-tei-job"
+        )
+        self.tei_job_definition = batch.CfnJobDefinition(
+            self,
+            "AnalyticsTeiJobDefinition",
+            job_definition_name=tei_job_def_name,
+            type="container",
+            platform_capabilities=["FARGATE"],
+            timeout=batch.CfnJobDefinition.TimeoutProperty(
+                attempt_duration_seconds=7200
+            ),
+            retry_strategy=batch.CfnJobDefinition.RetryStrategyProperty(attempts=2),
+            ecs_properties=batch.CfnJobDefinition.EcsPropertiesProperty(
+                task_properties=[
+                    batch.CfnJobDefinition.EcsTaskPropertiesProperty(
+                        execution_role_arn=self.execution_role.role_arn,
+                        task_role_arn=self.job_role.role_arn,
+                        platform_version="LATEST",
+                        network_configuration=batch.CfnJobDefinition.NetworkConfigurationProperty(
+                            assign_public_ip="ENABLED",
+                        ),
+                        runtime_platform=batch.CfnJobDefinition.RuntimePlatformProperty(
+                            cpu_architecture="ARM64",
+                            operating_system_family="LINUX",
+                        ),
+                        ephemeral_storage=batch.CfnJobDefinition.EphemeralStorageProperty(
+                            size_in_gib=30,
+                        ),
+                        containers=[
+                            batch.CfnJobDefinition.TaskContainerPropertiesProperty(
+                                name="analytics",
+                                image=f"{self.repository.repository_uri}:{resolved_tei_analytics_image_tag}",
+                                essential=True,
+                                resource_requirements=[
+                                    batch.CfnJobDefinition.ResourceRequirementProperty(
+                                        type="VCPU", value="4"
+                                    ),
+                                    batch.CfnJobDefinition.ResourceRequirementProperty(
+                                        type="MEMORY", value="16384"
+                                    ),
+                                ],
+                                depends_on=[
+                                    batch.CfnJobDefinition.TaskContainerDependencyProperty(
+                                        container_name="tei-similarity",
+                                        condition="START",
+                                    ),
+                                    batch.CfnJobDefinition.TaskContainerDependencyProperty(
+                                        container_name="tei-clustering",
+                                        condition="START",
+                                    ),
+                                ],
+                                log_configuration=batch.CfnJobDefinition.LogConfigurationProperty(
+                                    log_driver="awslogs",
+                                    options={
+                                        "awslogs-group": self.log_group.log_group_name,
+                                        "awslogs-region": self.region,
+                                        "awslogs-stream-prefix": "analytics",
+                                    },
+                                ),
+                                environment=[
+                                    batch.CfnJobDefinition.EnvironmentProperty(
+                                        name="COMMUNITY_ANALYSIS_STORAGE_BACKEND",
+                                        value="s3",
+                                    ),
+                                    batch.CfnJobDefinition.EnvironmentProperty(
+                                        name="COMMUNITY_ANALYSIS_S3_BUCKET",
+                                        value=bucket.bucket_name,
+                                    ),
+                                    batch.CfnJobDefinition.EnvironmentProperty(
+                                        name="LOG_FORMAT", value="json"
+                                    ),
+                                    batch.CfnJobDefinition.EnvironmentProperty(
+                                        name="LOG_LEVEL", value="INFO"
+                                    ),
+                                    batch.CfnJobDefinition.EnvironmentProperty(
+                                        name="THEME_SIMILARITY_PROVIDER", value="tei"
+                                    ),
+                                    batch.CfnJobDefinition.EnvironmentProperty(
+                                        name="THEME_CLUSTERING_PROVIDER", value="tei"
+                                    ),
+                                    batch.CfnJobDefinition.EnvironmentProperty(
+                                        name="THEME_SIMILARITY_FAILURE_POLICY",
+                                        value="fail",
+                                    ),
+                                    batch.CfnJobDefinition.EnvironmentProperty(
+                                        name="TEI_SIMILARITY_BASE_URL",
+                                        value="http://127.0.0.1:8080",
+                                    ),
+                                    batch.CfnJobDefinition.EnvironmentProperty(
+                                        name="TEI_CLUSTERING_BASE_URL",
+                                        value="http://127.0.0.1:8081",
+                                    ),
+                                    batch.CfnJobDefinition.EnvironmentProperty(
+                                        name="TEI_SIMILARITY_CLIENT_BATCH_SIZE",
+                                        value="32",
+                                    ),
+                                    batch.CfnJobDefinition.EnvironmentProperty(
+                                        name="TEI_CLUSTERING_CLIENT_BATCH_SIZE",
+                                        value="32",
+                                    ),
+                                    batch.CfnJobDefinition.EnvironmentProperty(
+                                        name="TEI_SIMILARITY_TIMEOUT_SECONDS",
+                                        value="60.0",
+                                    ),
+                                    batch.CfnJobDefinition.EnvironmentProperty(
+                                        name="TEI_CLUSTERING_TIMEOUT_SECONDS",
+                                        value="60.0",
+                                    ),
+                                ],
+                            ),
+                            batch.CfnJobDefinition.TaskContainerPropertiesProperty(
+                                name="tei-similarity",
+                                image=f"{self.tei_repository.repository_uri}:{resolved_tei_image_tag}",
+                                essential=False,
+                                command=[
+                                    "--model-id",
+                                    "/models/similarity",
+                                    "--port",
+                                    "8080",
+                                ],
+                                resource_requirements=[
+                                    batch.CfnJobDefinition.ResourceRequirementProperty(
+                                        type="VCPU", value="2"
+                                    ),
+                                    batch.CfnJobDefinition.ResourceRequirementProperty(
+                                        type="MEMORY", value="4096"
+                                    ),
+                                ],
+                                log_configuration=batch.CfnJobDefinition.LogConfigurationProperty(
+                                    log_driver="awslogs",
+                                    options={
+                                        "awslogs-group": self.log_group.log_group_name,
+                                        "awslogs-region": self.region,
+                                        "awslogs-stream-prefix": "tei-similarity",
+                                    },
+                                ),
+                            ),
+                            batch.CfnJobDefinition.TaskContainerPropertiesProperty(
+                                name="tei-clustering",
+                                image=f"{self.tei_repository.repository_uri}:{resolved_tei_image_tag}",
+                                essential=False,
+                                command=[
+                                    "--model-id",
+                                    "/models/clustering",
+                                    "--port",
+                                    "8081",
+                                ],
+                                resource_requirements=[
+                                    batch.CfnJobDefinition.ResourceRequirementProperty(
+                                        type="VCPU", value="2"
+                                    ),
+                                    batch.CfnJobDefinition.ResourceRequirementProperty(
+                                        type="MEMORY", value="4096"
+                                    ),
+                                ],
+                                log_configuration=batch.CfnJobDefinition.LogConfigurationProperty(
+                                    log_driver="awslogs",
+                                    options={
+                                        "awslogs-group": self.log_group.log_group_name,
+                                        "awslogs-region": self.region,
+                                        "awslogs-stream-prefix": "tei-clustering",
+                                    },
+                                ),
+                            ),
+                        ],
+                    )
+                ]
+            ),
+        )
+
         # 11. Stack Outputs
         cdk.CfnOutput(
             self,
             "AnalyticsRepositoryUri",
             value=self.repository.repository_uri,
             description="URI of the analytical ECR repository",
+        )
+        cdk.CfnOutput(
+            self,
+            "TeiRepositoryUri",
+            value=self.tei_repository.repository_uri,
+            description="URI of the dedicated TEI ECR repository",
+        )
+        cdk.CfnOutput(
+            self,
+            "TeiRepositoryName",
+            value=self.tei_repository.repository_name,
+            description="Name of the dedicated TEI ECR repository",
         )
         cdk.CfnOutput(
             self,
@@ -294,4 +511,16 @@ class BatchStack(cdk.Stack):
             "BatchJobDefinitionName",
             value=self.job_definition.job_definition_name,
             description="Name of the analytical Batch job definition",
+        )
+        cdk.CfnOutput(
+            self,
+            "BatchTeiJobDefinitionArn",
+            value=self.tei_job_definition.ref,
+            description="ARN of the multi-container TEI Batch job definition",
+        )
+        cdk.CfnOutput(
+            self,
+            "BatchTeiJobDefinitionName",
+            value=self.tei_job_definition.job_definition_name,
+            description="Name of the multi-container TEI Batch job definition",
         )

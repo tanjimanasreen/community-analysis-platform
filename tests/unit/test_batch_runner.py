@@ -392,3 +392,275 @@ def test_run_batch_job_manifest_status_verification(
 
     with pytest.raises(RuntimeError, match="status is 'failed'"):
         run_batch_job(config)
+
+
+def test_batch_runner_invokes_wait_for_tei_services(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = BatchRunnerConfig(
+        config_path="tests/configs/test_single_month.yml",
+        command="run-all",
+        s3_bucket="my-bucket",
+        theme_provider="mock",
+        dataset_id=None,
+        workspace_dir=tmp_path,
+        skip_s3_download=True,
+        skip_s3_upload=True,
+        dry_run=False,
+    )
+
+    tei_calls = []
+
+    def fake_wait(cfg):
+        tei_calls.append(cfg)
+        return {"similarity": 384}
+
+    monkeypatch.setattr("src.cloud.batch_runner.wait_for_tei_services", fake_wait)
+
+    mock_result = MagicMock()
+    mock_result.context.pipeline_run_id = "test-run-tei"
+    workspace_output_dir = (tmp_path / "output").resolve()
+    mock_result.context.output_root = str(workspace_output_dir)
+
+    run_dir = workspace_output_dir / "runs" / "test-run-tei"
+    run_dir.mkdir(parents=True)
+    (run_dir / "manifest.json").write_text(json.dumps({"status": "completed"}))
+
+    from src.orchestration import composition_flow
+
+    monkeypatch.setattr(
+        composition_flow, "run_monthly_analysis_flow", lambda **kwargs: mock_result
+    )
+
+    exit_code = run_batch_job(config)
+    assert exit_code == 0
+    assert len(tei_calls) == 1
+    assert isinstance(tei_calls[0], dict)
+
+
+def test_batch_runner_fails_fast_when_wait_for_tei_services_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = BatchRunnerConfig(
+        config_path="tests/configs/test_single_month.yml",
+        command="run-all",
+        s3_bucket="my-bucket",
+        theme_provider="mock",
+        dataset_id=None,
+        workspace_dir=tmp_path,
+        skip_s3_download=True,
+        skip_s3_upload=True,
+        dry_run=False,
+    )
+
+    def failing_wait(cfg):
+        raise RuntimeError("TEI similarity service unhealthy")
+
+    monkeypatch.setattr("src.cloud.batch_runner.wait_for_tei_services", failing_wait)
+
+    flow_executed = False
+
+    def fake_flow(**kwargs):
+        nonlocal flow_executed
+        flow_executed = True
+
+    from src.orchestration import composition_flow
+
+    monkeypatch.setattr(composition_flow, "run_monthly_analysis_flow", fake_flow)
+
+    with pytest.raises(RuntimeError, match="TEI similarity service unhealthy"):
+        run_batch_job(config)
+
+    assert flow_executed is False
+
+
+def test_batch_runner_explicit_env_embedding_providers_override_yaml_mock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Explicit THEME_SIMILARITY_PROVIDER and THEME_CLUSTERING_PROVIDER override YAML mock."""
+    config = BatchRunnerConfig(
+        config_path="tests/configs/test_evolution.yml",
+        command="run-evolution-pipeline",
+        s3_bucket="my-bucket",
+        theme_provider="mock",
+        dataset_id=None,
+        workspace_dir=tmp_path,
+        skip_s3_download=True,
+        skip_s3_upload=True,
+        dry_run=False,
+    )
+
+    monkeypatch.setenv("THEME_SIMILARITY_PROVIDER", "tei")
+    monkeypatch.setenv("THEME_CLUSTERING_PROVIDER", "tei")
+
+    passed_cfg = None
+
+    def fake_wait(cfg):
+        nonlocal passed_cfg
+        passed_cfg = cfg
+        return {"similarity": 384, "clustering": 384}
+
+    monkeypatch.setattr("src.cloud.batch_runner.wait_for_tei_services", fake_wait)
+
+    mock_result = MagicMock()
+    mock_result.context.pipeline_run_id = "test-env-override"
+    workspace_output_dir = (tmp_path / "output").resolve()
+    mock_result.context.output_root = str(workspace_output_dir)
+
+    run_dir = workspace_output_dir / "runs" / "test-env-override"
+    run_dir.mkdir(parents=True)
+    (run_dir / "manifest.json").write_text(json.dumps({"status": "completed"}))
+
+    from src.orchestration import composition_flow
+
+    monkeypatch.setattr(
+        composition_flow, "run_evolution_analysis_flow", lambda **kwargs: mock_result
+    )
+
+    exit_code = run_batch_job(config)
+    assert exit_code == 0
+    assert passed_cfg is not None
+    # Explicit env overrides must win over the YAML mock values
+    assert passed_cfg["theme"]["similarity_provider"] == "tei"
+    assert passed_cfg["theme"]["clustering_provider"] == "tei"
+    assert passed_cfg["theme_provider"]["primary"] == "mock"
+
+
+def test_batch_runner_plan094_config_remains_mock_without_embedding_env(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Without explicit embedding env vars, Plan 094 YAML mock values remain mock."""
+    config = BatchRunnerConfig(
+        config_path="tests/configs/test_evolution.yml",
+        command="run-evolution-pipeline",
+        s3_bucket="my-bucket",
+        theme_provider="mock",
+        dataset_id=None,
+        workspace_dir=tmp_path,
+        skip_s3_download=True,
+        skip_s3_upload=True,
+        dry_run=False,
+    )
+
+    monkeypatch.delenv("THEME_SIMILARITY_PROVIDER", raising=False)
+    monkeypatch.delenv("THEME_CLUSTERING_PROVIDER", raising=False)
+
+    passed_cfg = None
+
+    def fake_wait(cfg):
+        nonlocal passed_cfg
+        passed_cfg = cfg
+        return {}
+
+    monkeypatch.setattr("src.cloud.batch_runner.wait_for_tei_services", fake_wait)
+
+    mock_result = MagicMock()
+    mock_result.context.pipeline_run_id = "test-mock-remain"
+    workspace_output_dir = (tmp_path / "output").resolve()
+    mock_result.context.output_root = str(workspace_output_dir)
+
+    run_dir = workspace_output_dir / "runs" / "test-mock-remain"
+    run_dir.mkdir(parents=True)
+    (run_dir / "manifest.json").write_text(json.dumps({"status": "completed"}))
+
+    from src.orchestration import composition_flow
+
+    monkeypatch.setattr(
+        composition_flow, "run_evolution_analysis_flow", lambda **kwargs: mock_result
+    )
+
+    exit_code = run_batch_job(config)
+    assert exit_code == 0
+    assert passed_cfg is not None
+    assert passed_cfg["theme"]["similarity_provider"] == "mock"
+    assert passed_cfg["theme"]["clustering_provider"] == "mock"
+    assert passed_cfg["theme_provider"]["primary"] == "mock"
+
+
+def test_batch_runner_config_resolves_to_tei_embedders(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Verify that post-Batch config resolves to TEIClient when env overrides are set."""
+    from src.themes.tei_client import TEIClient
+    from src.themes.theme_clustering import (
+        DeterministicThemeEmbeddingModel,
+        build_clustering_embedder,
+    )
+    from src.themes.theme_similarity import (
+        OfflineThemeEmbeddingModel,
+        build_similarity_embedder,
+    )
+
+    config = BatchRunnerConfig(
+        config_path="tests/configs/test_evolution.yml",
+        command="run-evolution-pipeline",
+        s3_bucket="my-bucket",
+        theme_provider="mock",
+        dataset_id=None,
+        workspace_dir=tmp_path,
+        skip_s3_download=True,
+        skip_s3_upload=True,
+        dry_run=False,
+    )
+
+    # 1. With explicit TEI environment overrides
+    monkeypatch.setenv("THEME_SIMILARITY_PROVIDER", "tei")
+    monkeypatch.setenv("THEME_CLUSTERING_PROVIDER", "tei")
+
+    passed_cfg = None
+
+    def fake_wait(cfg):
+        nonlocal passed_cfg
+        passed_cfg = cfg
+        return {"similarity": 384, "clustering": 384}
+
+    monkeypatch.setattr("src.cloud.batch_runner.wait_for_tei_services", fake_wait)
+
+    mock_result = MagicMock()
+    mock_result.context.pipeline_run_id = "test-builder-resolve"
+    workspace_output_dir = (tmp_path / "output").resolve()
+    mock_result.context.output_root = str(workspace_output_dir)
+    run_dir = workspace_output_dir / "runs" / "test-builder-resolve"
+    run_dir.mkdir(parents=True)
+    (run_dir / "manifest.json").write_text(json.dumps({"status": "completed"}))
+
+    from src.orchestration import composition_flow
+
+    monkeypatch.setattr(
+        composition_flow, "run_evolution_analysis_flow", lambda **kwargs: mock_result
+    )
+
+    exit_code = run_batch_job(config)
+    assert exit_code == 0
+    assert passed_cfg is not None
+
+    # Real production builders resolve to TEIClient
+    sim_embedder, sim_model, sim_rev, sim_dim = build_similarity_embedder(passed_cfg)
+    assert isinstance(sim_embedder, TEIClient)
+    assert sim_dim == 384
+
+    clust_embedder = build_clustering_embedder(passed_cfg)
+    assert isinstance(clust_embedder, TEIClient)
+
+    # 2. Without explicit TEI environment overrides, builders resolve to mock models
+    monkeypatch.delenv("THEME_SIMILARITY_PROVIDER", raising=False)
+    monkeypatch.delenv("THEME_CLUSTERING_PROVIDER", raising=False)
+
+    passed_mock_cfg = None
+
+    def fake_wait_mock(cfg):
+        nonlocal passed_mock_cfg
+        passed_mock_cfg = cfg
+        return {}
+
+    monkeypatch.setattr("src.cloud.batch_runner.wait_for_tei_services", fake_wait_mock)
+
+    exit_code_mock = run_batch_job(config)
+    assert exit_code_mock == 0
+    assert passed_mock_cfg is not None
+
+    mock_sim_embedder, _, _, _ = build_similarity_embedder(passed_mock_cfg)
+    assert isinstance(mock_sim_embedder, OfflineThemeEmbeddingModel)
+
+    mock_clust_embedder = build_clustering_embedder(passed_mock_cfg)
+    assert isinstance(mock_clust_embedder, DeterministicThemeEmbeddingModel)

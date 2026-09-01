@@ -9,7 +9,8 @@
 	run-frontend clean-generated clean-cache build-report benchmark-performance \
 	infra-install infra-test infra-synth infra-list \
 	infra-diff-api infra-deploy-api \
-	api-image-build api-image-smoke
+	api-image-build api-image-smoke \
+	tei-image-build tei-image-smoke tei-compat-smoke
 
 PYTHON ?= .venv/bin/python
 UV ?= uv
@@ -90,6 +91,9 @@ help:
 	@echo "  infra-deploy-api     - Deploy CDK ApiStack (STAGE=dev|prod, IMAGE_TAG=...)"
 	@echo "  api-image-build      - Build API Docker container image for linux/arm64"
 	@echo "  api-image-smoke      - Build and run local smoke test on API container"
+	@echo "  tei-image-build      - Build TEI Docker container image for linux/arm64"
+	@echo "  tei-image-smoke      - Run local CLI smoke test on TEI container"
+	@echo "  tei-compat-smoke     - Run local dual-container TEI compatibility smoke test"
 
 bootstrap:
 	$(UV) sync --frozen --extra orchestration
@@ -301,15 +305,15 @@ infra-test:
 
 infra-synth:
 ifndef IMAGE_TAG
-	$(error IMAGE_TAG is required (e.g. make infra-synth INFRA_STAGE=$(INFRA_STAGE) IMAGE_TAG=<GIT_SHA> [BATCH_IMAGE_TAG=<BATCH_TAG>]))
+	$(error IMAGE_TAG is required (e.g. make infra-synth INFRA_STAGE=$(INFRA_STAGE) IMAGE_TAG=<GIT_SHA> [BATCH_IMAGE_TAG=<BATCH_TAG>] [TEI_ANALYTICS_IMAGE_TAG=<ANALYTICS_TAG>] [TEI_IMAGE_TAG=<TEI_TAG>]))
 endif
-	cd infra && cdk synth -c stage=$(INFRA_STAGE) -c image_tag=$(IMAGE_TAG) $(if $(BATCH_IMAGE_TAG),-c batch_image_tag=$(BATCH_IMAGE_TAG))
+	cd infra && cdk synth -c stage=$(INFRA_STAGE) -c image_tag=$(IMAGE_TAG) $(if $(BATCH_IMAGE_TAG),-c batch_image_tag=$(BATCH_IMAGE_TAG)) $(if $(TEI_ANALYTICS_IMAGE_TAG),-c tei_analytics_image_tag=$(TEI_ANALYTICS_IMAGE_TAG)) $(if $(TEI_IMAGE_TAG),-c tei_image_tag=$(TEI_IMAGE_TAG))
 
 infra-list:
 ifndef IMAGE_TAG
-	$(error IMAGE_TAG is required (e.g. make infra-list INFRA_STAGE=$(INFRA_STAGE) IMAGE_TAG=<GIT_SHA> [BATCH_IMAGE_TAG=<BATCH_TAG>]))
+	$(error IMAGE_TAG is required (e.g. make infra-list INFRA_STAGE=$(INFRA_STAGE) IMAGE_TAG=<GIT_SHA> [BATCH_IMAGE_TAG=<BATCH_TAG>] [TEI_ANALYTICS_IMAGE_TAG=<ANALYTICS_TAG>] [TEI_IMAGE_TAG=<TEI_TAG>]))
 endif
-	cd infra && cdk list -c stage=$(INFRA_STAGE) -c image_tag=$(IMAGE_TAG) $(if $(BATCH_IMAGE_TAG),-c batch_image_tag=$(BATCH_IMAGE_TAG))
+	cd infra && cdk list -c stage=$(INFRA_STAGE) -c image_tag=$(IMAGE_TAG) $(if $(BATCH_IMAGE_TAG),-c batch_image_tag=$(BATCH_IMAGE_TAG)) $(if $(TEI_ANALYTICS_IMAGE_TAG),-c tei_analytics_image_tag=$(TEI_ANALYTICS_IMAGE_TAG)) $(if $(TEI_IMAGE_TAG),-c tei_image_tag=$(TEI_IMAGE_TAG))
 
 infra-diff-api:
 ifndef IMAGE_TAG
@@ -337,21 +341,33 @@ endif
 
 infra-diff-batch:
 ifndef IMAGE_TAG
-	$(error IMAGE_TAG is required (e.g. make infra-diff-batch INFRA_STAGE=$(INFRA_STAGE) IMAGE_TAG=<GIT_SHA> BATCH_IMAGE_TAG=<BATCH_TAG>))
+	$(error IMAGE_TAG is required (e.g. make infra-diff-batch INFRA_STAGE=$(INFRA_STAGE) IMAGE_TAG=<GIT_SHA> BATCH_IMAGE_TAG=<BATCH_TAG> TEI_ANALYTICS_IMAGE_TAG=<PLAN095_SHA> TEI_IMAGE_TAG=<PLAN095_SHA>))
 endif
 ifndef BATCH_IMAGE_TAG
-	$(error BATCH_IMAGE_TAG is required (e.g. make infra-diff-batch INFRA_STAGE=$(INFRA_STAGE) IMAGE_TAG=<GIT_SHA> BATCH_IMAGE_TAG=<BATCH_TAG>))
+	$(error BATCH_IMAGE_TAG is required (e.g. make infra-diff-batch INFRA_STAGE=$(INFRA_STAGE) IMAGE_TAG=<GIT_SHA> BATCH_IMAGE_TAG=<BATCH_TAG> TEI_ANALYTICS_IMAGE_TAG=<PLAN095_SHA> TEI_IMAGE_TAG=<PLAN095_SHA>))
 endif
-	cd infra && cdk diff community-analysis-$(INFRA_STAGE)-batch -c stage=$(INFRA_STAGE) -c image_tag=$(IMAGE_TAG) -c batch_image_tag=$(BATCH_IMAGE_TAG)
+ifndef TEI_ANALYTICS_IMAGE_TAG
+	$(error TEI_ANALYTICS_IMAGE_TAG is required (e.g. make infra-diff-batch INFRA_STAGE=$(INFRA_STAGE) IMAGE_TAG=<GIT_SHA> BATCH_IMAGE_TAG=<BATCH_TAG> TEI_ANALYTICS_IMAGE_TAG=<PLAN095_SHA> TEI_IMAGE_TAG=<PLAN095_SHA>))
+endif
+ifndef TEI_IMAGE_TAG
+	$(error TEI_IMAGE_TAG is required (e.g. make infra-diff-batch INFRA_STAGE=$(INFRA_STAGE) IMAGE_TAG=<GIT_SHA> BATCH_IMAGE_TAG=<BATCH_TAG> TEI_ANALYTICS_IMAGE_TAG=<PLAN095_SHA> TEI_IMAGE_TAG=<PLAN095_SHA>))
+endif
+	cd infra && cdk diff community-analysis-$(INFRA_STAGE)-batch -c stage=$(INFRA_STAGE) -c image_tag=$(IMAGE_TAG) -c batch_image_tag=$(BATCH_IMAGE_TAG) -c tei_analytics_image_tag=$(TEI_ANALYTICS_IMAGE_TAG) -c tei_image_tag=$(TEI_IMAGE_TAG)
 
 infra-deploy-batch:
 ifndef IMAGE_TAG
-	$(error IMAGE_TAG is required (e.g. make infra-deploy-batch INFRA_STAGE=$(INFRA_STAGE) IMAGE_TAG=<GIT_SHA> BATCH_IMAGE_TAG=<BATCH_TAG>))
+	$(error IMAGE_TAG is required (e.g. make infra-deploy-batch INFRA_STAGE=$(INFRA_STAGE) IMAGE_TAG=<GIT_SHA> BATCH_IMAGE_TAG=<BATCH_TAG> TEI_ANALYTICS_IMAGE_TAG=<PLAN095_SHA> TEI_IMAGE_TAG=<PLAN095_SHA>))
 endif
 ifndef BATCH_IMAGE_TAG
-	$(error BATCH_IMAGE_TAG is required (e.g. make infra-deploy-batch INFRA_STAGE=$(INFRA_STAGE) IMAGE_TAG=<GIT_SHA> BATCH_IMAGE_TAG=<BATCH_TAG>))
+	$(error BATCH_IMAGE_TAG is required (e.g. make infra-deploy-batch INFRA_STAGE=$(INFRA_STAGE) IMAGE_TAG=<GIT_SHA> BATCH_IMAGE_TAG=<BATCH_TAG> TEI_ANALYTICS_IMAGE_TAG=<PLAN095_SHA> TEI_IMAGE_TAG=<PLAN095_SHA>))
 endif
-	cd infra && cdk deploy community-analysis-$(INFRA_STAGE)-batch -c stage=$(INFRA_STAGE) -c image_tag=$(IMAGE_TAG) -c batch_image_tag=$(BATCH_IMAGE_TAG) --require-approval never
+ifndef TEI_ANALYTICS_IMAGE_TAG
+	$(error TEI_ANALYTICS_IMAGE_TAG is required (e.g. make infra-deploy-batch INFRA_STAGE=$(INFRA_STAGE) IMAGE_TAG=<GIT_SHA> BATCH_IMAGE_TAG=<BATCH_TAG> TEI_ANALYTICS_IMAGE_TAG=<PLAN095_SHA> TEI_IMAGE_TAG=<PLAN095_SHA>))
+endif
+ifndef TEI_IMAGE_TAG
+	$(error TEI_IMAGE_TAG is required (e.g. make infra-deploy-batch INFRA_STAGE=$(INFRA_STAGE) IMAGE_TAG=<GIT_SHA> BATCH_IMAGE_TAG=<BATCH_TAG> TEI_ANALYTICS_IMAGE_TAG=<PLAN095_SHA> TEI_IMAGE_TAG=<PLAN095_SHA>))
+endif
+	cd infra && cdk deploy community-analysis-$(INFRA_STAGE)-batch -c stage=$(INFRA_STAGE) -c image_tag=$(IMAGE_TAG) -c batch_image_tag=$(BATCH_IMAGE_TAG) -c tei_analytics_image_tag=$(TEI_ANALYTICS_IMAGE_TAG) -c tei_image_tag=$(TEI_IMAGE_TAG) --require-approval never
 
 API_LOCAL_IMAGE ?= community-analysis-api:dev
 API_IMAGE_TAG ?= $(API_LOCAL_IMAGE)
@@ -385,6 +401,21 @@ analytics-image-sample: analytics-image-build
 	@echo "Running real deterministic analytical sample inside $(ANALYTICS_LOCAL_IMAGE)..."
 	docker run --rm -e THEME_PROVIDER=mock $(ANALYTICS_LOCAL_IMAGE) --config tests/configs/test_evolution.yml --skip-s3-download --skip-s3-upload
 	@echo "Analytics container real sample execution passed."
+
+TEI_LOCAL_IMAGE ?= community-analysis-tei:dev
+TEI_IMAGE_PLATFORM ?= linux/arm64
+
+tei-image-build:
+	docker build --platform $(TEI_IMAGE_PLATFORM) -t $(TEI_LOCAL_IMAGE) -f Dockerfile.tei .
+
+tei-image-smoke: tei-image-build
+	@echo "Running local container smoke tests on $(TEI_LOCAL_IMAGE)..."
+	docker run --rm $(TEI_LOCAL_IMAGE) --help >/dev/null && echo "TEI container --help smoke passed."
+	@echo "TEI container smoke tests passed."
+
+tei-compat-smoke: tei-image-build
+	@echo "Running real local TEI compatibility smoke against $(TEI_LOCAL_IMAGE)..."
+	uv run python scripts/check_tei_compat.py --image $(TEI_LOCAL_IMAGE)
 
 submit-batch-run:
 ifeq ($(filter command line environment%,$(origin INFRA_STAGE)),)

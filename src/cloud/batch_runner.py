@@ -27,6 +27,7 @@ import boto3
 
 from src.config.loader import load_config, validate_run_config
 from src.logging_config import setup_logging
+from src.themes.tei_health import wait_for_tei_services
 
 logger = logging.getLogger("community_analysis.batch_runner")
 
@@ -370,8 +371,22 @@ def run_batch_job(config: BatchRunnerConfig, s3_client: Any = None) -> int:
         if config.theme_provider == "mock":
             if "theme" not in cfg or not isinstance(cfg["theme"], dict):
                 cfg["theme"] = {}
-            cfg["theme"].setdefault("clustering_provider", "mock")
-            cfg["theme"].setdefault("similarity_provider", "mock")
+            if "THEME_CLUSTERING_PROVIDER" not in os.environ:
+                cfg["theme"].setdefault("clustering_provider", "mock")
+            if "THEME_SIMILARITY_PROVIDER" not in os.environ:
+                cfg["theme"].setdefault("similarity_provider", "mock")
+
+    # Explicit embedding-provider environment variables act as operator runtime overrides
+    if "theme" not in cfg or not isinstance(cfg["theme"], dict):
+        cfg["theme"] = {}
+    if "THEME_SIMILARITY_PROVIDER" in os.environ:
+        sim_env = os.environ["THEME_SIMILARITY_PROVIDER"].strip()
+        if sim_env:
+            cfg["theme"]["similarity_provider"] = sim_env
+    if "THEME_CLUSTERING_PROVIDER" in os.environ:
+        clust_env = os.environ["THEME_CLUSTERING_PROVIDER"].strip()
+        if clust_env:
+            cfg["theme"]["clustering_provider"] = clust_env
 
     validate_run_config(cfg)
 
@@ -381,6 +396,9 @@ def run_batch_job(config: BatchRunnerConfig, s3_client: Any = None) -> int:
             workspace_output_dir,
         )
         return 0
+
+    # Ensure TEI services are ready before starting analytical pipeline flow
+    wait_for_tei_services(cfg)
 
     # 3. Execute analytical pipeline flow
     logger.info(

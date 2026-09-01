@@ -1,0 +1,38 @@
+# Multi-stage ARM64 Dockerfile for local & AWS Batch Text Embeddings Inference (TEI)
+# Models are pre-downloaded and materialized at build time into /models/similarity
+# and /models/clustering so the runtime container starts deterministically offline.
+
+FROM --platform=linux/arm64 python:3.11-slim AS model-fetcher
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1
+
+RUN pip install --no-cache-dir "huggingface_hub==0.29.0"
+
+# Pre-cache and materialize similarity and clustering models at pinned revisions
+RUN python3 -c '\
+import shutil; \
+from huggingface_hub import snapshot_download; \
+sim_src = snapshot_download("sentence-transformers/paraphrase-MiniLM-L6-v2", revision="c9a2bfebc254878aee8c3aca9e6844d5bbb102d1"); \
+clust_src = snapshot_download("sentence-transformers/all-MiniLM-L6-v2", revision="1110a243fdf4706b3f48f1d95db1a4f5529b4d41"); \
+shutil.copytree(sim_src, "/models/similarity", symlinks=False); \
+shutil.copytree(clust_src, "/models/clustering", symlinks=False); \
+'
+
+FROM --platform=linux/arm64 ghcr.io/huggingface/text-embeddings-inference:cpu-arm64-sha-cc7ca31@sha256:06749852e5edb64a6147e9db5bd1e92c5fb1119a2fe0cb92ce5e313d046d10cd
+
+LABEL org.opencontainers.image.title="community-analysis-tei" \
+      org.opencontainers.image.description="Baked Text Embeddings Inference container for community-analysis" \
+      tei.similarity.model="sentence-transformers/paraphrase-MiniLM-L6-v2" \
+      tei.similarity.revision="c9a2bfebc254878aee8c3aca9e6844d5bbb102d1" \
+      tei.clustering.model="sentence-transformers/all-MiniLM-L6-v2" \
+      tei.clustering.revision="1110a243fdf4706b3f48f1d95db1a4f5529b4d41"
+
+ENV TEI_SIMILARITY_MODEL_ID="sentence-transformers/paraphrase-MiniLM-L6-v2" \
+    TEI_SIMILARITY_MODEL_REVISION="c9a2bfebc254878aee8c3aca9e6844d5bbb102d1" \
+    TEI_CLUSTERING_MODEL_ID="sentence-transformers/all-MiniLM-L6-v2" \
+    TEI_CLUSTERING_MODEL_REVISION="1110a243fdf4706b3f48f1d95db1a4f5529b4d41" \
+    TEI_SIMILARITY_LOCAL_PATH="/models/similarity" \
+    TEI_CLUSTERING_LOCAL_PATH="/models/clustering"
+
+COPY --from=model-fetcher /models /models
