@@ -1,0 +1,131 @@
+name: Run Evolution Pipeline
+run-name: Evolution • ${{ inputs.environment }} • ${{ inputs.dataset }} • ${{ github.ref_name }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Runtime environment
+        required: true
+        type: choice
+        default: dev
+        options:
+          - dev
+      dataset:
+        description: Canonical evolution dataset configuration
+        required: true
+        type: choice
+        options:
+          - telegram-forwarded
+          - twitter-reply
+          - twitter-retweet-quote
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_PAGER: ""
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+  guard:
+    name: Validate run request
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require dev branch for dev analytical runs
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ inputs.environment }}" != "dev" ]]; then
+            echo "Plan 097 supports dev only. Production is added in Plan 098." >&2
+            exit 1
+          fi
+          if [[ "$GITHUB_REF" != "refs/heads/dev" ]]; then
+            echo "Dev evolution runs must be dispatched from the dev branch." >&2
+            exit 1
+          fi
+
+  run-evolution:
+    name: Submit and verify evolution run
+    needs: guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          check-latest: false
+
+      - name: Install dependencies
+        run: uv sync --frozen --extra orchestration --extra tracking
+
+      - name: Resolve canonical config
+        id: config
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${{ inputs.dataset }}" in
+            telegram-forwarded)
+              config_path="configs/telegram/forwarded_message_evolution.yml"
+              ;;
+            twitter-reply)
+              config_path="configs/twitter/reply_evolution.yml"
+              ;;
+            twitter-retweet-quote)
+              config_path="configs/twitter/retweet_quote_evolution.yml"
+              ;;
+            *)
+              echo "Unsupported dataset selection." >&2
+              exit 1
+              ;;
+          esac
+
+          if [[ ! -f "$config_path" ]]; then
+            echo "Canonical config does not exist: $config_path" >&2
+            exit 1
+          fi
+
+          echo "config_path=$config_path" >> "$GITHUB_OUTPUT"
+          echo "Using canonical config: $config_path"
+
+      - name: Configure AWS credentials with GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_DEV_PIPELINE_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          allowed-account-ids: ${{ vars.AWS_DEV_ACCOUNT_ID }}
+          role-session-name: gha-evolution-${{ github.run_id }}
+
+      - name: Verify assumed AWS identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          aws sts get-caller-identity
+
+      - name: Submit evolution pipeline and wait for completion
+        shell: bash
+        run: |
+            set -euo pipefail
+            uv run --frozen python scripts/aws_run_evolution.py \
+              --environment dev \
+              --config-path "${{ steps.config.outputs.config_path }}" \
+              --wait \
+              --verify-manifest

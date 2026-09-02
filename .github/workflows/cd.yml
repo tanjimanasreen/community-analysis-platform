@@ -1,0 +1,126 @@
+name: CD
+run-name: CD • ${{ inputs.environment }} • ${{ github.ref_name }} • ${{ github.sha }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Deployment environment
+        required: true
+        type: choice
+        default: dev
+        options:
+          - dev
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_PAGER: ""
+  PYTHONUNBUFFERED: "1"
+
+concurrency:
+  group: cd-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    name: Validate deployment request
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require dev branch for dev deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ inputs.environment }}" != "dev" ]]; then
+            echo "Plan 097 supports dev only. Production is added in Plan 098." >&2
+            exit 1
+          fi
+          if [[ "$GITHUB_REF" != "refs/heads/dev" ]]; then
+            echo "Dev deployment must be dispatched from the dev branch." >&2
+            exit 1
+          fi
+
+  validate:
+    name: Run CI gate
+    needs: guard
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    name: Deploy dev and run acceptance
+    needs:
+      - guard
+      - validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          check-latest: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Python dependencies
+        run: uv sync --frozen --extra orchestration --extra tracking
+
+      - name: Install frontend dependencies
+        run: npm ci --prefix frontend
+
+      - name: Configure AWS credentials with GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_DEV_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          allowed-account-ids: ${{ vars.AWS_DEV_ACCOUNT_ID }}
+          role-session-name: gha-cd-${{ github.run_id }}
+
+      - name: Verify assumed AWS identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          aws sts get-caller-identity
+
+      - name: Enable ARM64 emulation
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Deploy dev and run bounded acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run --frozen python scripts/aws_cd.py \
+            --environment dev \
+            --source-sha "$GITHUB_SHA" \
+            --acceptance-config tests/configs/test_evolution.yml \
+            --acceptance-theme-provider mock

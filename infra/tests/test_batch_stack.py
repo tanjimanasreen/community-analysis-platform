@@ -383,16 +383,24 @@ def test_iam_roles_and_scoped_s3_permissions(dev_batch_template: Template) -> No
     dev_batch_template.resource_count_is("AWS::IAM::Role", 2)
 
     template_dict = dev_batch_template.to_json()
-    policy_statements = []
+    job_policy_statements = []
+    exec_policy_statements = []
     for res in template_dict.get("Resources", {}).values():
         if res.get("Type") == "AWS::IAM::Policy":
+            roles = res.get("Properties", {}).get("Roles", [])
             policy_doc = res.get("Properties", {}).get("PolicyDocument", {})
             for statement in policy_doc.get("Statement", []):
-                policy_statements.append(statement)
+                for role_ref in roles:
+                    if isinstance(role_ref, dict) and "Ref" in role_ref:
+                        ref_str = role_ref["Ref"]
+                        if "JobRole" in ref_str:
+                            job_policy_statements.append(statement)
+                        elif "ExecutionRole" in ref_str:
+                            exec_policy_statements.append(statement)
 
     # 1. Verify ListBucket statement exists with prefix condition
     list_statements = [
-        s for s in policy_statements if s.get("Action") == "s3:ListBucket"
+        s for s in job_policy_statements if s.get("Action") == "s3:ListBucket"
     ]
     assert len(list_statements) == 1
     list_stmt = list_statements[0]
@@ -404,7 +412,9 @@ def test_iam_roles_and_scoped_s3_permissions(dev_batch_template: Template) -> No
     }
 
     # 2. Verify GetObject statement exists and is scoped to raw/* and cache/*
-    get_statements = [s for s in policy_statements if s.get("Action") == "s3:GetObject"]
+    get_statements = [
+        s for s in job_policy_statements if s.get("Action") == "s3:GetObject"
+    ]
     assert len(get_statements) == 1
     get_stmt = get_statements[0]
     assert get_stmt.get("Effect") == "Allow"
@@ -416,7 +426,9 @@ def test_iam_roles_and_scoped_s3_permissions(dev_batch_template: Template) -> No
     assert any("cache/*" in r for r in joined_get)
 
     # 3. Verify PutObject statement exists and is scoped to runs/*, reports/*, cache/*
-    put_statements = [s for s in policy_statements if s.get("Action") == "s3:PutObject"]
+    put_statements = [
+        s for s in job_policy_statements if s.get("Action") == "s3:PutObject"
+    ]
     assert len(put_statements) == 1
     put_stmt = put_statements[0]
     assert put_stmt.get("Effect") == "Allow"
@@ -427,8 +439,8 @@ def test_iam_roles_and_scoped_s3_permissions(dev_batch_template: Template) -> No
     assert any("reports/*" in r for r in joined_put)
     assert any("cache/*" in r for r in joined_put)
 
-    # 4. Verify no wildcard s3:*, Resource: *, configs/*, or bucket-admin actions exist
-    for statement in policy_statements:
+    # 4. Verify no wildcard s3:*, Resource: *, configs/*, or bucket-admin actions exist in JobRole
+    for statement in job_policy_statements:
         actions = statement.get("Action", [])
         if isinstance(actions, str):
             actions = [actions]
@@ -453,6 +465,18 @@ def test_iam_roles_and_scoped_s3_permissions(dev_batch_template: Template) -> No
             elif isinstance(res, dict) and "Fn::Join" in res:
                 joined_parts = "".join(str(p) for p in res["Fn::Join"][1])
                 assert "configs/*" not in joined_parts
+
+    # 5. Verify ExecutionRole has scoped secretsmanager read (no wildcards)
+    exec_actions = []
+    for statement in exec_policy_statements:
+        actions = statement.get("Action", [])
+        if isinstance(actions, str):
+            actions = [actions]
+        exec_actions.extend(actions)
+        for act in actions:
+            assert act != "*"
+            assert act != "secretsmanager:*"
+    assert "secretsmanager:GetSecretValue" in exec_actions
 
 
 def test_no_ecs_service_alb_or_cloud_map(dev_batch_template: Template) -> None:
@@ -517,9 +541,84 @@ def test_batch_stack_outputs(dev_batch_template: Template) -> None:
         "BatchJobDefinitionName",
         "BatchTeiJobDefinitionArn",
         "BatchTeiJobDefinitionName",
+        "OpenAiSecretArn",
+        "AzureTranslatorSecretArn",
     ]
     for exp in expected_outputs:
         assert exp in outputs, f"Missing expected output: {exp}"
+
+
+def test_batch_stack_secrets_and_data_root(dev_batch_template: Template) -> None:
+    """Verify that BatchStack defines secrets and injects DATA_ROOT and provider secrets."""
+    # Verify 2 secrets manager secrets are created
+    dev_batch_template.resource_count_is("AWS::SecretsManager::Secret", 2)
+    dev_batch_template.has_resource_properties(
+        "AWS::SecretsManager::Secret",
+        {"Name": "community-analysis-dev-openai-api-key"},
+    )
+    dev_batch_template.has_resource_properties(
+        "AWS::SecretsManager::Secret",
+        {"Name": "community-analysis-dev-azure-translator-key"},
+    )
+
+    # Verify DeletionPolicy and UpdateReplacePolicy are Retain even in dev
+    template_dict = dev_batch_template.to_json()
+    secrets = [
+        res
+        for res in template_dict.get("Resources", {}).values()
+        if res.get("Type") == "AWS::SecretsManager::Secret"
+    ]
+    assert len(secrets) == 2
+    for sec in secrets:
+        assert sec.get("DeletionPolicy") == "Retain"
+        assert sec.get("UpdateReplacePolicy") == "Retain"
+
+    # Verify single-container job def has DATA_ROOT and Secrets
+    dev_batch_template.has_resource_properties(
+        "AWS::Batch::JobDefinition",
+        {
+            "JobDefinitionName": "community-analysis-dev-analytics-job",
+            "ContainerProperties": Match.object_like(
+                {
+                    "Environment": Match.array_with(
+                        [{"Name": "DATA_ROOT", "Value": "/app/workspace/data/raw"}]
+                    ),
+                    "Secrets": Match.array_with(
+                        [
+                            Match.object_like({"Name": "OPENAI_API_KEY"}),
+                            Match.object_like({"Name": "AZURE_TRANSLATOR_KEY"}),
+                        ]
+                    ),
+                }
+            ),
+        },
+    )
+
+    # Verify multi-container TEI job def analytics container has DATA_ROOT and Secrets
+    template_dict = dev_batch_template.to_json()
+    job_defs = [
+        res
+        for res in template_dict.get("Resources", {}).values()
+        if res.get("Type") == "AWS::Batch::JobDefinition"
+        and res.get("Properties", {}).get("JobDefinitionName")
+        == "community-analysis-dev-analytics-tei-job"
+    ]
+    assert len(job_defs) == 1
+    containers = (
+        job_defs[0]
+        .get("Properties", {})
+        .get("EcsProperties", {})
+        .get("TaskProperties", [{}])[0]
+        .get("Containers", [])
+    )
+    analytics_container = [c for c in containers if c.get("Name") == "analytics"][0]
+
+    env_names = [e.get("Name") for e in analytics_container.get("Environment", [])]
+    assert "DATA_ROOT" in env_names
+
+    secret_names = [s.get("Name") for s in analytics_container.get("Secrets", [])]
+    assert "OPENAI_API_KEY" in secret_names
+    assert "AZURE_TRANSLATOR_KEY" in secret_names
 
 
 def test_prod_batch_stack_retention() -> None:

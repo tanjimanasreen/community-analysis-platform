@@ -20,6 +20,7 @@ import aws_cdk.aws_ecs as ecs
 import aws_cdk.aws_iam as iam
 import aws_cdk.aws_logs as logs
 import aws_cdk.aws_s3 as s3
+import aws_cdk.aws_secretsmanager as secretsmanager
 import constructs
 
 from community_analysis_infra.config import StageConfig
@@ -97,6 +98,29 @@ class BatchStack(cdk.Stack):
             ],
         )
 
+        # 1c. Provider Secret Containers for AWS Secrets Manager (always RETAIN even in dev)
+        openai_secret_name = (
+            f"{stage_config.project_name}-{stage_config.stage_name}-openai-api-key"
+        )
+        self.openai_secret = secretsmanager.Secret(
+            self,
+            "OpenAiApiKeySecret",
+            secret_name=openai_secret_name,
+            description=f"OpenAI API key for {stage_config.project_name} ({stage_config.stage_name}) theme generation",
+            removal_policy=cdk.RemovalPolicy.RETAIN,
+        )
+
+        azure_secret_name = (
+            f"{stage_config.project_name}-{stage_config.stage_name}-azure-translator-key"
+        )
+        self.azure_secret = secretsmanager.Secret(
+            self,
+            "AzureTranslatorKeySecret",
+            secret_name=azure_secret_name,
+            description=f"Azure Translator API key for {stage_config.project_name} ({stage_config.stage_name}) translation",
+            removal_policy=cdk.RemovalPolicy.RETAIN,
+        )
+
         # 2. Dedicated Batch VPC (2 AZs, Public Subnets Only, 0 NAT Gateways)
         vpc_name = f"{stage_config.project_name}-{stage_config.stage_name}-batch-vpc"
         self.vpc = ec2.Vpc(
@@ -154,6 +178,8 @@ class BatchStack(cdk.Stack):
             ],
         )
         self.tei_repository.grant_pull(self.execution_role)
+        self.openai_secret.grant_read(self.execution_role)
+        self.azure_secret.grant_read(self.execution_role)
 
         # 6. IAM Job Role (Task process permissions - strictly scoped S3 read/write)
         self.job_role = iam.Role(
@@ -275,6 +301,13 @@ class BatchStack(cdk.Stack):
                 "COMMUNITY_ANALYSIS_S3_BUCKET": bucket.bucket_name,
                 "LOG_FORMAT": "json",
                 "LOG_LEVEL": "INFO",
+                "DATA_ROOT": "/app/workspace/data/raw",
+            },
+            secrets={
+                "OPENAI_API_KEY": batch.Secret.from_secrets_manager(self.openai_secret),
+                "AZURE_TRANSLATOR_KEY": batch.Secret.from_secrets_manager(
+                    self.azure_secret
+                ),
             },
         )
 
@@ -302,9 +335,11 @@ class BatchStack(cdk.Stack):
             type="container",
             platform_capabilities=["FARGATE"],
             timeout=batch.CfnJobDefinition.TimeoutProperty(
-                attempt_duration_seconds=7200
+                attempt_duration_seconds=7200,
             ),
-            retry_strategy=batch.CfnJobDefinition.RetryStrategyProperty(attempts=2),
+            retry_strategy=batch.CfnJobDefinition.RetryStrategyProperty(
+                attempts=2,
+            ),
             ecs_properties=batch.CfnJobDefinition.EcsPropertiesProperty(
                 task_properties=[
                     batch.CfnJobDefinition.EcsTaskPropertiesProperty(
@@ -368,6 +403,10 @@ class BatchStack(cdk.Stack):
                                         name="LOG_LEVEL", value="INFO"
                                     ),
                                     batch.CfnJobDefinition.EnvironmentProperty(
+                                        name="DATA_ROOT",
+                                        value="/app/workspace/data/raw",
+                                    ),
+                                    batch.CfnJobDefinition.EnvironmentProperty(
                                         name="THEME_SIMILARITY_PROVIDER", value="tei"
                                     ),
                                     batch.CfnJobDefinition.EnvironmentProperty(
@@ -400,6 +439,16 @@ class BatchStack(cdk.Stack):
                                     batch.CfnJobDefinition.EnvironmentProperty(
                                         name="TEI_CLUSTERING_TIMEOUT_SECONDS",
                                         value="60.0",
+                                    ),
+                                ],
+                                secrets=[
+                                    batch.CfnJobDefinition.SecretProperty(
+                                        name="OPENAI_API_KEY",
+                                        value_from=self.openai_secret.secret_arn,
+                                    ),
+                                    batch.CfnJobDefinition.SecretProperty(
+                                        name="AZURE_TRANSLATOR_KEY",
+                                        value_from=self.azure_secret.secret_arn,
                                     ),
                                 ],
                             ),
@@ -523,4 +572,16 @@ class BatchStack(cdk.Stack):
             "BatchTeiJobDefinitionName",
             value=self.tei_job_definition.job_definition_name,
             description="Name of the multi-container TEI Batch job definition",
+        )
+        cdk.CfnOutput(
+            self,
+            "OpenAiSecretArn",
+            value=self.openai_secret.secret_arn,
+            description="ARN of the OpenAI API key secret container",
+        )
+        cdk.CfnOutput(
+            self,
+            "AzureTranslatorSecretArn",
+            value=self.azure_secret.secret_arn,
+            description="ARN of the Azure Translator key secret container",
         )
