@@ -305,6 +305,19 @@ class CicdStack(cdk.Stack):
             )
         )
 
+        # 2f. CloudFormation Read Application Stack Outputs for CD acceptance and smoke testing
+        self.deploy_role.add_to_policy(
+            iam.PolicyStatement(
+                sid="CloudFormationReadApplicationStackOutputs",
+                effect=iam.Effect.ALLOW,
+                actions=["cloudformation:DescribeStacks"],
+                resources=[
+                    f"arn:{self.partition}:cloudformation:{self.region}:{self.account}:stack/{project}-{stage}-api/*",
+                    f"arn:{self.partition}:cloudformation:{self.region}:{self.account}:stack/{project}-{stage}-frontend/*",
+                ],
+            )
+        )
+
         # 3. Dev Pipeline Runner Role (for run-evolution.yml)
         # MUST NOT have CloudFormation, ECR push, IAM, CDK, or Frontend sync permissions
         pipeline_role_name = f"{project}-{stage}-github-pipeline"

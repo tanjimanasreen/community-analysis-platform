@@ -310,6 +310,94 @@ def test_pipeline_role_strict_scoping_and_no_terminate_job(dev_cicd_template: Te
     assert "cloudfront:CreateInvalidation" not in all_actions
     assert "sts:AssumeRole" not in all_actions
     assert "cognito-idp:AdminCreateUser" not in all_actions
+    assert not any("cloudformation" in act.lower() for act in all_actions)
+
+
+def test_deploy_role_cloudformation_describe_stacks_narrowly_scoped(dev_cicd_template: Template) -> None:
+    """Verify DeployRole has cloudformation:DescribeStacks for API and frontend stacks only."""
+    template_dict = dev_cicd_template.to_json()
+    policies = [res for res in template_dict.get("Resources", {}).values() if res.get("Type") == "AWS::IAM::Policy"]
+
+    deploy_policies = []
+    pipeline_policies = []
+    for policy in policies:
+        roles = policy.get("Properties", {}).get("Roles", [])
+        for role_ref in roles:
+            if isinstance(role_ref, dict):
+                ref = role_ref.get("Ref", "")
+                if "Deploy" in ref:
+                    deploy_policies.append(policy)
+                elif "Pipeline" in ref:
+                    pipeline_policies.append(policy)
+
+    all_statements = []
+    for p in deploy_policies:
+        all_statements.extend(p.get("Properties", {}).get("PolicyDocument", {}).get("Statement", []))
+
+    cfn_statements = []
+    for s in all_statements:
+        actions = s.get("Action", [])
+        if isinstance(actions, str):
+            actions = [actions]
+        if any("cloudformation" in a.lower() for a in actions):
+            cfn_statements.append(s)
+
+    # 1. Exactly one CloudFormation statement in DeployRole
+    assert len(cfn_statements) == 1
+    cfn_stmt = cfn_statements[0]
+
+    # 2. Action is exactly cloudformation:DescribeStacks
+    actions = cfn_stmt.get("Action", [])
+    if isinstance(actions, str):
+        actions = [actions]
+    assert actions == ["cloudformation:DescribeStacks"]
+
+    # 3. No mutation actions in any statement of DeployRole
+    all_actions = []
+    for s in all_statements:
+        act = s.get("Action", [])
+        all_actions.extend([act] if isinstance(act, str) else act)
+
+    forbidden_cfn_actions = [
+        "cloudformation:*",
+        "cloudformation:CreateStack",
+        "cloudformation:UpdateStack",
+        "cloudformation:DeleteStack",
+        "cloudformation:ExecuteChangeSet",
+        "cloudformation:CreateChangeSet",
+        "cloudformation:DeleteChangeSet",
+    ]
+    for forbidden in forbidden_cfn_actions:
+        assert forbidden not in all_actions
+
+    # 4. Resources include exactly community-analysis-dev-api/* and community-analysis-dev-frontend/*
+    resources = cfn_stmt.get("Resource", [])
+    if isinstance(resources, str):
+        resources = [resources]
+    assert len(resources) == 2
+    res_str = [str(r) for r in resources]
+
+    assert any("stack/community-analysis-dev-api/*" in r for r in res_str)
+    assert any("stack/community-analysis-dev-frontend/*" in r for r in res_str)
+
+    # 5. Resources do NOT include wildcard '*' or other stacks
+    assert "*" not in res_str
+    assert not any("community-analysis-dev-cicd" in r for r in res_str)
+    assert not any("community-analysis-dev-batch" in r for r in res_str)
+    assert not any("community-analysis-dev-storage" in r for r in res_str)
+    assert not any("community-analysis-dev-registry" in r for r in res_str)
+
+    # 6. PipelineRole has zero CloudFormation actions
+    pipeline_statements = []
+    for p in pipeline_policies:
+        pipeline_statements.extend(p.get("Properties", {}).get("PolicyDocument", {}).get("Statement", []))
+
+    pipeline_actions = []
+    for s in pipeline_statements:
+        act = s.get("Action", [])
+        pipeline_actions.extend([act] if isinstance(act, str) else act)
+
+    assert not any("cloudformation" in a.lower() for a in pipeline_actions)
 
 
 def test_cicd_stack_outputs(dev_cicd_template: Template) -> None:
