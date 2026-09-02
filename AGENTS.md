@@ -104,6 +104,7 @@ The system supports:
 - Do not remove Telegram support while making Twitter/reply workflows configurable.
 - Do not replace thesis outputs with only LLM-generated themes. GPT themes are downstream of LDA keywords.
 - Do not call OpenAI APIs in tests.
+- Do not run any destructive git commands (e.g., `git reset --hard`, `git clean -f`, `git restore`, `git checkout --`, `git push --force`, `git branch -D`, or any command that discards uncommitted work or git history).
 - Do not change `shared_post`, `weighted_post`, graph thresholds, Louvain defaults, LDA defaults, monthly Stage-A clustering contract, Stage-B canonicalization contract, output categories, public schemas, or the LDA-before-theme analytical order without an approved execution plan and behavior-preservation tests.
 - The FastAPI layer must not run ingestion, NetworkX, Louvain, LDA, provider, TEI, or visualization-generation code in request paths.
 - Dashboard/API handlers must not compute or persist embeddings.
@@ -219,3 +220,4 @@ Ask the human before:
 - Changing the Stage-A monthly clustering contract version.
 - Changing the Stage-B canonicalization contract version.
 - Changing TEI model IDs or Hugging Face revision pins.
+- Running any destructive git operations or commands that could overwrite or discard git history or working tree state.
