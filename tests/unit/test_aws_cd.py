@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import urllib.request
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -13,6 +14,7 @@ from scripts.aws_cd import (
     APPROVED_DEV_APPLICATION_STACKS,
     build_and_deploy_frontend,
     check_ecr_image_exists,
+    cleanup_github_runner_docker_state,
     compute_tei_fingerprint,
     deploy_cdk_application_stacks,
     smoke_test_frontend,
@@ -219,3 +221,331 @@ def test_cd_main_exact_run_id_correlation_and_no_docker_login(
             cmd = call[0][0]
             assert "docker login" not in str(cmd)
             assert "get-login-password" not in str(cmd)
+
+
+@patch("scripts.aws_cd.run_command")
+def test_cleanup_github_runner_docker_state_noop_locally(
+    mock_run_cmd: MagicMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Test A: When GITHUB_ACTIONS is absent or not 'true', no cleanup commands are run."""
+    image_ref = "123456789012.dkr.ecr.us-east-1.amazonaws.com/test-repo:test-tag"
+
+    # Absent
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    cleanup_github_runner_docker_state(image_ref)
+    mock_run_cmd.assert_not_called()
+
+    # Explicitly false
+    monkeypatch.setenv("GITHUB_ACTIONS", "false")
+    cleanup_github_runner_docker_state(image_ref)
+    mock_run_cmd.assert_not_called()
+
+    # Empty string
+    monkeypatch.setenv("GITHUB_ACTIONS", "")
+    cleanup_github_runner_docker_state(image_ref)
+    mock_run_cmd.assert_not_called()
+
+    # Arbitrary non-true values
+    monkeypatch.setenv("GITHUB_ACTIONS", "1")
+    cleanup_github_runner_docker_state(image_ref)
+    mock_run_cmd.assert_not_called()
+
+    monkeypatch.setenv("GITHUB_ACTIONS", "TRUE")
+    cleanup_github_runner_docker_state(image_ref)
+    mock_run_cmd.assert_not_called()
+
+
+@patch("scripts.aws_cd.run_command")
+def test_cleanup_github_runner_docker_state_github_actions(
+    mock_run_cmd: MagicMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Test B: When GITHUB_ACTIONS=true, issues exact docker image rm followed by builder prune --force."""
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    image_ref = "123456789012.dkr.ecr.us-east-1.amazonaws.com/community-analysis-dev-api:abc1234"
+
+    cleanup_github_runner_docker_state(image_ref)
+
+    assert mock_run_cmd.call_count == 2
+    calls = [call[0][0] for call in mock_run_cmd.call_args_list]
+    assert calls[0] == ["docker", "image", "rm", image_ref]
+    assert calls[1] == ["docker", "builder", "prune", "--force"]
+
+    # Verify no broad pruning or force-removal flags
+    for call_cmd in calls:
+        cmd_str = " ".join(call_cmd)
+        assert "system prune" not in cmd_str
+        assert "container prune" not in cmd_str
+        assert "volume prune" not in cmd_str
+        assert "image prune" not in cmd_str
+    assert "--force" not in calls[0]  # exact image rm must not use --force
+
+
+def _setup_mock_cd_environment(
+    mock_boto: MagicMock,
+    *,
+    tei_exists: bool = False,
+    batch_job_id: str = "batch-accept-job-999",
+) -> None:
+    """Helper to mock common AWS services for aws_cd.main() tests."""
+    cfn_mock = MagicMock()
+    cfn_mock.describe_stacks.return_value = {
+        "Stacks": [
+            {
+                "Outputs": [
+                    {"OutputKey": "ApiEndpoint", "OutputValue": "https://api.test/api/v1"},
+                    {"OutputKey": "CognitoUserPoolId", "OutputValue": "pool-123"},
+                    {"OutputKey": "CognitoAppClientId", "OutputValue": "client-123"},
+                    {"OutputKey": "FrontendBucketName", "OutputValue": "fe-bucket"},
+                    {"OutputKey": "CloudFrontDistributionId", "OutputValue": "dist-123"},
+                    {"OutputKey": "CloudFrontDomainName", "OutputValue": "d123.cloudfront.net"},
+                ]
+            }
+        ]
+    }
+    sts_mock = MagicMock()
+    sts_mock.get_caller_identity.return_value = {"Account": "123456789012"}
+    ecr_mock = MagicMock()
+    ecr_mock.describe_images.return_value = (
+        {"imageDetails": [{"imageTag": "tei-test"}]} if tei_exists else {"imageDetails": []}
+    )
+    batch_mock = MagicMock()
+    batch_mock.submit_job.return_value = {"jobId": batch_job_id}
+
+    def client_factory(service_name: str, **kwargs: Any) -> MagicMock:
+        if service_name == "cloudformation":
+            return cfn_mock
+        elif service_name == "sts":
+            return sts_mock
+        elif service_name == "batch":
+            return batch_mock
+        elif service_name == "ecr":
+            return ecr_mock
+        return MagicMock()
+
+    mock_boto.side_effect = client_factory
+
+
+@patch("scripts.aws_cd.smoke_test_frontend")
+@patch("scripts.aws_cd.deploy_cdk_application_stacks")
+@patch("scripts.aws_cd.build_and_deploy_frontend")
+@patch("scripts.aws_cd.run_command")
+def test_cd_main_github_actions_cleanup_order(
+    mock_run_cmd: MagicMock,
+    mock_build_fe: MagicMock,
+    mock_deploy_cdk: MagicMock,
+    mock_smoke_fe: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test C: Under GITHUB_ACTIONS=true, verify build -> push -> cleanup order for all built images."""
+    from scripts.aws_cd import main
+
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+
+    with (
+        patch("boto3.client") as mock_boto,
+        patch("scripts.aws_run_evolution.wait_for_batch_job"),
+        patch("scripts.aws_run_evolution.discover_run_id_from_batch_job", return_value="run-accept-1"),
+        patch("scripts.aws_run_evolution.verify_completed_manifest"),
+        patch("scripts.smoke_live_api.main", return_value=0),
+    ):
+        _setup_mock_cd_environment(mock_boto, tei_exists=False)
+
+        exit_code = main(
+            [
+                "--environment",
+                "dev",
+                "--source-sha",
+                "6d4dcbbcd5f67ff89850d4b52c333b0804965b77",
+            ]
+        )
+        assert exit_code == 0
+
+        docker_cmds = [
+            call[0][0] for call in mock_run_cmd.call_args_list if call[0][0][0] == "docker"
+        ]
+
+        # Should have 3 images x 4 commands each = 12 docker commands:
+        # [build, push, image rm, builder prune] for TEI, API, Analytics
+        assert len(docker_cmds) == 12
+
+        # Verify TEI cycle
+        assert docker_cmds[0][:3] == ["docker", "build", "--platform"]
+        assert "community-analysis-dev-tei" in docker_cmds[0][5]
+        tei_ref = docker_cmds[0][5]
+        assert docker_cmds[1] == ["docker", "push", tei_ref]
+        assert docker_cmds[2] == ["docker", "image", "rm", tei_ref]
+        assert docker_cmds[3] == ["docker", "builder", "prune", "--force"]
+
+        # Verify API cycle
+        assert docker_cmds[4][:3] == ["docker", "build", "--platform"]
+        assert "community-analysis-dev-api" in docker_cmds[4][5]
+        api_ref = docker_cmds[4][5]
+        assert docker_cmds[5] == ["docker", "push", api_ref]
+        assert docker_cmds[6] == ["docker", "image", "rm", api_ref]
+        assert docker_cmds[7] == ["docker", "builder", "prune", "--force"]
+
+        # Verify Analytics cycle
+        assert docker_cmds[8][:3] == ["docker", "build", "--platform"]
+        assert "community-analysis-dev-analytics" in docker_cmds[8][5]
+        analytics_ref = docker_cmds[8][5]
+        assert docker_cmds[9] == ["docker", "push", analytics_ref]
+        assert docker_cmds[10] == ["docker", "image", "rm", analytics_ref]
+        assert docker_cmds[11] == ["docker", "builder", "prune", "--force"]
+
+
+@patch("scripts.aws_cd.smoke_test_frontend")
+@patch("scripts.aws_cd.deploy_cdk_application_stacks")
+@patch("scripts.aws_cd.build_and_deploy_frontend")
+@patch("scripts.aws_cd.run_command")
+def test_cd_main_push_failure_does_not_cleanup(
+    mock_run_cmd: MagicMock,
+    mock_build_fe: MagicMock,
+    mock_deploy_cdk: MagicMock,
+    mock_smoke_fe: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test D: When a docker push fails, no docker image rm or builder prune is executed."""
+    from scripts.aws_cd import main
+
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+
+    def side_effect(cmd: list[str], **kwargs: Any) -> MagicMock:
+        if cmd[:2] == ["docker", "push"]:
+            raise RuntimeError("Simulated push failure to ECR")
+        res = MagicMock()
+        res.returncode = 0
+        return res
+
+    mock_run_cmd.side_effect = side_effect
+
+    with (
+        patch("boto3.client") as mock_boto,
+        patch("scripts.aws_run_evolution.wait_for_batch_job"),
+        patch("scripts.aws_run_evolution.discover_run_id_from_batch_job"),
+        patch("scripts.aws_run_evolution.verify_completed_manifest"),
+        patch("scripts.smoke_live_api.main", return_value=0),
+    ):
+        _setup_mock_cd_environment(mock_boto, tei_exists=True)  # TEI skipped, fails on API push
+
+        with pytest.raises(RuntimeError, match="Simulated push failure to ECR"):
+            main(
+                [
+                    "--environment",
+                    "dev",
+                    "--source-sha",
+                    "6d4dcbbcd5f67ff89850d4b52c333b0804965b77",
+                ]
+            )
+
+        executed_cmds = [call[0][0] for call in mock_run_cmd.call_args_list]
+        # Verify no cleanup was attempted
+        for cmd in executed_cmds:
+            assert cmd[:3] != ["docker", "image", "rm"]
+            assert cmd[:3] != ["docker", "builder", "prune"]
+
+
+@patch("scripts.aws_cd.smoke_test_frontend")
+@patch("scripts.aws_cd.deploy_cdk_application_stacks")
+@patch("scripts.aws_cd.build_and_deploy_frontend")
+@patch("scripts.aws_cd.run_command")
+def test_cd_main_tei_ecr_cache_hit_does_not_cleanup_tei(
+    mock_run_cmd: MagicMock,
+    mock_build_fe: MagicMock,
+    mock_deploy_cdk: MagicMock,
+    mock_smoke_fe: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test E: When TEI fingerprint exists in ECR, TEI build/push/cleanup are all skipped."""
+    from scripts.aws_cd import main
+
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+
+    with (
+        patch("boto3.client") as mock_boto,
+        patch("scripts.aws_run_evolution.wait_for_batch_job"),
+        patch("scripts.aws_run_evolution.discover_run_id_from_batch_job", return_value="run-accept-2"),
+        patch("scripts.aws_run_evolution.verify_completed_manifest"),
+        patch("scripts.smoke_live_api.main", return_value=0),
+    ):
+        _setup_mock_cd_environment(mock_boto, tei_exists=True)
+
+        exit_code = main(
+            [
+                "--environment",
+                "dev",
+                "--source-sha",
+                "6d4dcbbcd5f67ff89850d4b52c333b0804965b77",
+            ]
+        )
+        assert exit_code == 0
+
+        docker_cmds = [
+            call[0][0] for call in mock_run_cmd.call_args_list if call[0][0][0] == "docker"
+        ]
+
+        # Only API and Analytics: 2 images x 4 commands = 8 commands
+        assert len(docker_cmds) == 8
+
+        # No command references the TEI repository
+        for cmd in docker_cmds:
+            assert "community-analysis-dev-tei" not in " ".join(cmd)
+
+        # API cycle
+        api_ref = docker_cmds[0][5]
+        assert "community-analysis-dev-api" in api_ref
+        assert docker_cmds[1] == ["docker", "push", api_ref]
+        assert docker_cmds[2] == ["docker", "image", "rm", api_ref]
+        assert docker_cmds[3] == ["docker", "builder", "prune", "--force"]
+
+        # Analytics cycle
+        analytics_ref = docker_cmds[4][5]
+        assert "community-analysis-dev-analytics" in analytics_ref
+        assert docker_cmds[5] == ["docker", "push", analytics_ref]
+        assert docker_cmds[6] == ["docker", "image", "rm", analytics_ref]
+        assert docker_cmds[7] == ["docker", "builder", "prune", "--force"]
+
+
+@patch("scripts.aws_cd.smoke_test_frontend")
+@patch("scripts.aws_cd.deploy_cdk_application_stacks")
+@patch("scripts.aws_cd.build_and_deploy_frontend")
+@patch("scripts.aws_cd.run_command")
+def test_cd_main_local_execution_no_cleanup(
+    mock_run_cmd: MagicMock,
+    mock_build_fe: MagicMock,
+    mock_deploy_cdk: MagicMock,
+    mock_smoke_fe: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test F: Local execution (no GITHUB_ACTIONS) performs zero Docker image or cache cleanup."""
+    from scripts.aws_cd import main
+
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+
+    with (
+        patch("boto3.client") as mock_boto,
+        patch("scripts.aws_run_evolution.wait_for_batch_job"),
+        patch("scripts.aws_run_evolution.discover_run_id_from_batch_job", return_value="run-accept-3"),
+        patch("scripts.aws_run_evolution.verify_completed_manifest"),
+        patch("scripts.smoke_live_api.main", return_value=0),
+    ):
+        _setup_mock_cd_environment(mock_boto, tei_exists=False)
+
+        exit_code = main(
+            [
+                "--environment",
+                "dev",
+                "--source-sha",
+                "6d4dcbbcd5f67ff89850d4b52c333b0804965b77",
+            ]
+        )
+        assert exit_code == 0
+
+        docker_cmds = [
+            call[0][0] for call in mock_run_cmd.call_args_list if call[0][0][0] == "docker"
+        ]
+
+        # 3 builds + 3 pushes = 6 docker commands
+        assert len(docker_cmds) == 6
+        for cmd in docker_cmds:
+            assert cmd[:3] != ["docker", "image", "rm"]
+            assert cmd[:3] != ["docker", "builder", "prune"]

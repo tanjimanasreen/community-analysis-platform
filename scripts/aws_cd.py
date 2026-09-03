@@ -119,6 +119,16 @@ def run_command(
     return res
 
 
+def cleanup_github_runner_docker_state(image_ref: str) -> None:
+    """Remove exact pushed image and clear disposable builder cache under GitHub Actions."""
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        return
+
+    logger.info("Cleaning up local Docker state in GitHub Actions: %s", image_ref)
+    run_command(["docker", "image", "rm", image_ref])
+    run_command(["docker", "builder", "prune", "--force"])
+
+
 def get_cloudformation_stack_outputs(
     cfn_client: Any,
     stack_name: str,
@@ -257,6 +267,7 @@ def main(argv: list[str] | None = None) -> int:
     if not args.skip_image_build:
         # 1a. TEI Image (check if exact fingerprint exists)
         tei_repo = f"community-analysis-{args.environment}-tei"
+        tei_image_ref = f"{ecr_registry}/{tei_repo}:{tei_fingerprint}"
         if check_ecr_image_exists(ecr_client, tei_repo, tei_fingerprint):
             logger.info(
                 "TEI image %s:%s already exists in ECR. Reusing existing image without rebuilding.",
@@ -272,16 +283,18 @@ def main(argv: list[str] | None = None) -> int:
                     "--platform",
                     "linux/arm64",
                     "-t",
-                    f"{ecr_registry}/{tei_repo}:{tei_fingerprint}",
+                    tei_image_ref,
                     "-f",
                     "Dockerfile.tei",
                     ".",
                 ]
             )
-            run_command(["docker", "push", f"{ecr_registry}/{tei_repo}:{tei_fingerprint}"])
+            run_command(["docker", "push", tei_image_ref])
+            cleanup_github_runner_docker_state(tei_image_ref)
 
         # 1b. API Image
         api_repo = f"community-analysis-{args.environment}-api"
+        api_image_ref = f"{ecr_registry}/{api_repo}:{clean_sha}"
         logger.info("Building API image %s:%s...", api_repo, clean_sha)
         run_command(
             [
@@ -290,16 +303,18 @@ def main(argv: list[str] | None = None) -> int:
                 "--platform",
                 "linux/arm64",
                 "-t",
-                f"{ecr_registry}/{api_repo}:{clean_sha}",
+                api_image_ref,
                 "-f",
                 "Dockerfile.api",
                 ".",
             ]
         )
-        run_command(["docker", "push", f"{ecr_registry}/{api_repo}:{clean_sha}"])
+        run_command(["docker", "push", api_image_ref])
+        cleanup_github_runner_docker_state(api_image_ref)
 
         # 1c. Analytics Image
         analytics_repo = f"community-analysis-{args.environment}-analytics"
+        analytics_image_ref = f"{ecr_registry}/{analytics_repo}:{clean_sha}"
         logger.info("Building Analytics image %s:%s...", analytics_repo, clean_sha)
         run_command(
             [
@@ -308,13 +323,14 @@ def main(argv: list[str] | None = None) -> int:
                 "--platform",
                 "linux/arm64",
                 "-t",
-                f"{ecr_registry}/{analytics_repo}:{clean_sha}",
+                analytics_image_ref,
                 "-f",
                 "Dockerfile.analytics",
                 ".",
             ]
         )
-        run_command(["docker", "push", f"{ecr_registry}/{analytics_repo}:{clean_sha}"])
+        run_command(["docker", "push", analytics_image_ref])
+        cleanup_github_runner_docker_state(analytics_image_ref)
 
     # 2. Deploy CDK application stacks
     if not args.skip_deploy:
