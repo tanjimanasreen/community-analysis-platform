@@ -52,6 +52,27 @@ def test_cd_workflow_contract() -> None:
     assert "--acceptance-config" in raw_text
     assert "--acceptance-theme-provider mock" in raw_text
 
+    # 5. Provisions isolated infra/.venv before calling aws_cd.py
+    assert "uv venv infra/.venv" in raw_text
+    assert "uv pip install" in raw_text
+    assert "infra/requirements.txt" in raw_text
+
+    deploy_steps = wf["jobs"]["deploy"]["steps"]
+    infra_step_idx = None
+    cd_step_idx = None
+    for idx, step in enumerate(deploy_steps):
+        step_run = step.get("run", "")
+        if "uv venv infra/.venv" in step_run and "infra/requirements.txt" in step_run:
+            infra_step_idx = idx
+        if "python scripts/aws_cd.py" in step_run:
+            cd_step_idx = idx
+
+    assert infra_step_idx is not None, "infra/.venv provisioning step missing in deploy job"
+    assert cd_step_idx is not None, "scripts/aws_cd.py execution step missing in deploy job"
+    assert (
+        infra_step_idx < cd_step_idx
+    ), "infra/.venv must be provisioned before scripts/aws_cd.py is executed"
+
 
 def test_run_evolution_workflow_contract() -> None:
     wf = _load_workflow("run-evolution.yml")

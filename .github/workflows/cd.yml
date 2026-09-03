@@ -87,6 +87,11 @@ jobs:
       - name: Install Python dependencies
         run: uv sync --frozen --extra orchestration --extra tracking
 
+      - name: Provision infrastructure Python environment
+        run: |
+          uv venv infra/.venv --python 3.11
+          uv pip install --python infra/.venv/bin/python -r infra/requirements.txt
+
       - name: Install frontend dependencies
         run: npm ci --prefix frontend
 
