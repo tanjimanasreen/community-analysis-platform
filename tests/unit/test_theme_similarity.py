@@ -1,6 +1,8 @@
-import pytest
+import numpy as np
 import pandas as pd
-from src.themes.heatmaps import extract_themes, calculate_sentence_similarity
+import pytest
+from src.themes.heatmaps import calculate_sentence_similarity, extract_themes
+from src.themes.theme_similarity import OfflineThemeEmbeddingModel
 
 
 def test_extract_themes_formats():
@@ -24,14 +26,19 @@ def test_extract_themes_formats():
 
 def test_calculate_sentence_similarity_matrix():
     themes = ["Apple and orange", "Fruit like apple", "Car and truck", "Vehicle"]
-    embeddings, matrix = calculate_sentence_similarity(themes)
+    model = OfflineThemeEmbeddingModel()
+    embeddings, matrix = calculate_sentence_similarity(themes, model=model)
 
     assert embeddings is not None
     assert matrix is not None
+    assert len(embeddings) == 4
     assert matrix.shape == (4, 4)
+    assert np.all(np.isfinite(matrix))
+    assert np.allclose(matrix, matrix.T, atol=1e-6)
 
     # Self-similarity should be ~1.0
     assert abs(matrix[0][0] - 1.0) < 1e-4
+    assert abs(matrix[1][1] - 1.0) < 1e-4
 
     # Semantic similarity: 0 and 1 should be more similar than 0 and 2
     assert matrix[0][1] > matrix[0][2]
