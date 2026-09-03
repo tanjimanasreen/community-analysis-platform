@@ -370,6 +370,7 @@ def main(argv: list[str] | None = None) -> int:
     if not args.skip_acceptance:
         from scripts.aws_run_evolution import (
             discover_run_id_from_batch_job,
+            resolve_latest_active_job_definition,
             verify_completed_manifest,
             wait_for_batch_job,
         )
@@ -380,7 +381,8 @@ def main(argv: list[str] | None = None) -> int:
             args.acceptance_theme_provider,
         )
         queue = f"community-analysis-{args.environment}-queue"
-        job_def = f"community-analysis-{args.environment}-analytics-tei-job"
+        job_def_name = f"community-analysis-{args.environment}-analytics-tei-job"
+        job_def_arn = resolve_latest_active_job_definition(batch_client, job_def_name)
         job_name = f"community-analysis-{args.environment}-acceptance-{time.strftime('%Y%m%d%H%M%S')}"
 
         container_overrides = {
@@ -393,7 +395,7 @@ def main(argv: list[str] | None = None) -> int:
         res = batch_client.submit_job(
             jobName=job_name,
             jobQueue=queue,
-            jobDefinition=job_def,
+            jobDefinition=job_def_arn,
             containerOverrides=container_overrides,
         )
         job_id = res["jobId"]

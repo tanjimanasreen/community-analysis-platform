@@ -145,6 +145,16 @@ def test_cd_main_exact_run_id_correlation_and_no_docker_login(
     from scripts.aws_cd import main
 
     batch_mock = MagicMock()
+    batch_mock.describe_job_definitions.return_value = {
+        "jobDefinitions": [
+            {
+                "jobDefinitionName": "community-analysis-dev-analytics-tei-job",
+                "jobDefinitionArn": "arn:aws:batch:us-east-1:123456789012:job-definition/community-analysis-dev-analytics-tei-job:3",
+                "revision": 3,
+                "status": "ACTIVE",
+            }
+        ]
+    }
     batch_mock.submit_job.return_value = {"jobId": "batch-accept-job-999"}
 
     with (
@@ -198,8 +208,14 @@ def test_cd_main_exact_run_id_correlation_and_no_docker_login(
         )
 
         assert exit_code == 0
-        # Verify Batch job submitted
+        # Verify Batch job submitted with resolved revisioned ARN
         batch_mock.submit_job.assert_called_once()
+        submit_kwargs = batch_mock.submit_job.call_args[1]
+        assert (
+            submit_kwargs["jobDefinition"]
+            == "arn:aws:batch:us-east-1:123456789012:job-definition/community-analysis-dev-analytics-tei-job:3"
+        )
+        assert submit_kwargs["jobDefinition"] != "community-analysis-dev-analytics-tei-job"
         # Verify wait called on exact job ID
         mock_wait.assert_called_once_with(batch_mock, "batch-accept-job-999", timeout_seconds=7200.0)
         # Verify exact run_id discovery from Batch job logs
@@ -309,6 +325,16 @@ def _setup_mock_cd_environment(
         {"imageDetails": [{"imageTag": "tei-test"}]} if tei_exists else {"imageDetails": []}
     )
     batch_mock = MagicMock()
+    batch_mock.describe_job_definitions.return_value = {
+        "jobDefinitions": [
+            {
+                "jobDefinitionName": "community-analysis-dev-analytics-tei-job",
+                "jobDefinitionArn": "arn:aws:batch:us-east-1:123456789012:job-definition/community-analysis-dev-analytics-tei-job:3",
+                "revision": 3,
+                "status": "ACTIVE",
+            }
+        ]
+    }
     batch_mock.submit_job.return_value = {"jobId": batch_job_id}
 
     def client_factory(service_name: str, **kwargs: Any) -> MagicMock:
@@ -549,3 +575,45 @@ def test_cd_main_local_execution_no_cleanup(
         for cmd in docker_cmds:
             assert cmd[:3] != ["docker", "image", "rm"]
             assert cmd[:3] != ["docker", "builder", "prune"]
+
+
+@patch("scripts.aws_cd.smoke_test_frontend")
+@patch("scripts.aws_cd.deploy_cdk_application_stacks")
+@patch("scripts.aws_cd.build_and_deploy_frontend")
+@patch("scripts.aws_cd.run_command")
+def test_cd_acceptance_submit_job_receives_revisioned_arn(
+    mock_run_cmd: MagicMock,
+    mock_build_fe: MagicMock,
+    mock_deploy_cdk: MagicMock,
+    mock_smoke_fe: MagicMock,
+) -> None:
+    """Verify CD acceptance SubmitJob receives exact revisioned ARN and never unrevisioned name."""
+    from scripts.aws_cd import main
+
+    with (
+        patch("boto3.client") as mock_boto,
+        patch("scripts.aws_run_evolution.wait_for_batch_job"),
+        patch("scripts.aws_run_evolution.discover_run_id_from_batch_job", return_value="run-accept-rev"),
+        patch("scripts.aws_run_evolution.verify_completed_manifest"),
+        patch("scripts.smoke_live_api.main", return_value=0),
+    ):
+        _setup_mock_cd_environment(mock_boto, tei_exists=False)
+        batch_mock = mock_boto("batch")
+
+        exit_code = main(
+            [
+                "--environment",
+                "dev",
+                "--source-sha",
+                "6d4dcbbcd5f67ff89850d4b52c333b0804965b77",
+            ]
+        )
+        assert exit_code == 0
+        batch_mock.submit_job.assert_called_once()
+        call_kwargs = batch_mock.submit_job.call_args[1]
+        assert (
+            call_kwargs["jobDefinition"]
+            == "arn:aws:batch:us-east-1:123456789012:job-definition/community-analysis-dev-analytics-tei-job:3"
+        )
+        assert call_kwargs["jobDefinition"] != "community-analysis-dev-analytics-tei-job"
+        assert ":3" in call_kwargs["jobDefinition"]

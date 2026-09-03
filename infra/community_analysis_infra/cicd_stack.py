@@ -235,7 +235,7 @@ class CicdStack(cdk.Stack):
         )
 
         # 2d. Batch Acceptance Run & Verification Policies
-        # Split by AWS IAM resource scoping requirements: SubmitJob is resource-scoped, DescribeJobs requires *
+        # Split by AWS IAM resource scoping requirements: SubmitJob is resource-scoped, DescribeJobs/DescribeJobDefinitions require *
         self.deploy_role.add_to_policy(
             iam.PolicyStatement(
                 sid="BatchSubmitAcceptance",
@@ -251,7 +251,7 @@ class CicdStack(cdk.Stack):
             iam.PolicyStatement(
                 sid="BatchDescribeJobsAcceptance",
                 effect=iam.Effect.ALLOW,
-                actions=["batch:DescribeJobs"],
+                actions=["batch:DescribeJobs", "batch:DescribeJobDefinitions"],
                 resources=["*"],
             )
         )
@@ -345,7 +345,7 @@ class CicdStack(cdk.Stack):
             iam.PolicyStatement(
                 sid="BatchDescribeJobsEvolution",
                 effect=iam.Effect.ALLOW,
-                actions=["batch:DescribeJobs"],
+                actions=["batch:DescribeJobs", "batch:DescribeJobDefinitions"],
                 resources=["*"],
             )
         )

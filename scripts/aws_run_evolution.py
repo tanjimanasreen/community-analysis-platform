@@ -56,6 +56,111 @@ def validate_canonical_config(config_path: str | Path) -> str:
     return normalized
 
 
+def resolve_latest_active_job_definition(
+    batch_client: Any,
+    job_definition_name: str,
+) -> str:
+    """Resolve the latest ACTIVE revision ARN for a given AWS Batch job definition name.
+
+    Calls describe_job_definitions with status='ACTIVE' and handles pagination via nextToken.
+    Returns the exact revisioned jobDefinitionArn for the highest numeric revision matching
+    job_definition_name.
+
+    Raises:
+        RuntimeError: If no matching ACTIVE job definition can be resolved.
+    """
+    matching_definitions: list[dict[str, Any]] = []
+    next_token: str | None = None
+
+    while True:
+        kwargs: dict[str, Any] = {
+            "jobDefinitionName": job_definition_name,
+            "status": "ACTIVE",
+        }
+        if next_token:
+            kwargs["nextToken"] = next_token
+
+        response = batch_client.describe_job_definitions(**kwargs)
+        job_defs = response.get("jobDefinitions", [])
+        for jd in job_defs:
+            if jd.get("jobDefinitionName") == job_definition_name and jd.get("status") == "ACTIVE":
+                matching_definitions.append(jd)
+
+        next_token = response.get("nextToken")
+        if not next_token:
+            break
+
+    if not matching_definitions:
+        raise RuntimeError(
+            f"No ACTIVE AWS Batch job definition found for '{job_definition_name}'"
+        )
+
+    def _revision_key(jd: dict[str, Any]) -> tuple[int, str]:
+        rev = jd.get("revision")
+        try:
+            numeric_rev = int(rev)
+        except (TypeError, ValueError):
+            numeric_rev = 0
+        arn = str(jd.get("jobDefinitionArn", ""))
+        return numeric_rev, arn
+
+    latest_jd = max(matching_definitions, key=_revision_key)
+    arn = latest_jd.get("jobDefinitionArn")
+    if not arn:
+        raise RuntimeError(
+            f"Resolved job definition for '{job_definition_name}' (revision {latest_jd.get('revision')}) "
+            "missing 'jobDefinitionArn'"
+        )
+    return str(arn)
+
+
+def resolve_job_definition_identifier(
+    batch_client: Any,
+    job_definition: str,
+) -> str:
+    """Resolve or validate an explicit AWS Batch job definition override.
+
+    Supports:
+    1. Revisioned short-name (e.g. 'custom-job:2') -> pass through unchanged without describe call.
+    2. Revisioned ARN (e.g. 'arn:...:job-definition/custom-job:2') -> pass through unchanged without describe call.
+    3. Unrevisioned short-name (e.g. 'custom-job') -> resolve latest ACTIVE revision ARN.
+    4. Unrevisioned ARN (e.g. 'arn:...:job-definition/custom-job') -> extract name and resolve latest ACTIVE revision ARN.
+
+    Raises:
+        ValueError: If job_definition is empty or malformed.
+        RuntimeError: If resolving an unrevisioned definition finds no active revision.
+    """
+    if not job_definition or not job_definition.strip():
+        raise ValueError("Job definition override cannot be empty")
+
+    cleaned = job_definition.strip()
+
+    if cleaned.startswith("arn:"):
+        arn_match = re.match(r"^arn:[^:]+:batch:[^:]*:[^:]*:job-definition/([^/:]+)(?::(\d+))?$", cleaned)
+        if not arn_match:
+            raise ValueError(f"Malformed or invalid AWS Batch job definition ARN: '{cleaned}'")
+        name, rev = arn_match.group(1), arn_match.group(2)
+        if rev is not None:
+            return cleaned
+        resolved_arn = resolve_latest_active_job_definition(batch_client, name)
+        if not re.fullmatch(re.escape(cleaned) + r":\d+", resolved_arn):
+            raise ValueError(
+                f"Resolved job definition ARN '{resolved_arn}' does not match supplied ARN scope '{cleaned}'"
+            )
+        return resolved_arn
+
+    if ":" in cleaned:
+        name_match = re.match(r"^([a-zA-Z0-9_-]+):(\d+)$", cleaned)
+        if not name_match:
+            raise ValueError(f"Malformed or invalid AWS Batch job definition identifier: '{cleaned}'")
+        return cleaned
+
+    if not re.match(r"^[a-zA-Z0-9_-]+$", cleaned):
+        raise ValueError(f"Malformed or invalid AWS Batch job definition identifier: '{cleaned}'")
+
+    return resolve_latest_active_job_definition(batch_client, cleaned)
+
+
 def submit_evolution_batch_job(
     batch_client: Any,
     *,
@@ -67,7 +172,12 @@ def submit_evolution_batch_job(
 ) -> tuple[str, str]:
     """Submit the evolution pipeline Batch job."""
     queue = job_queue or f"{job_name_prefix}-{environment}-queue"
-    job_def = job_definition or f"{job_name_prefix}-{environment}-analytics-tei-job"
+    if job_definition is not None:
+        job_def_arn = resolve_job_definition_identifier(batch_client, job_definition)
+    else:
+        job_def_name = f"{job_name_prefix}-{environment}-analytics-tei-job"
+        job_def_arn = resolve_latest_active_job_definition(batch_client, job_def_name)
+
     sanitized_config = re.sub(r"[^a-zA-Z0-9-]", "-", Path(config_path).stem)
     timestamp = time.strftime("%Y%m%d%H%M%S")
     job_name = f"{job_name_prefix}-{environment}-{sanitized_config}-{timestamp}"
@@ -83,12 +193,12 @@ def submit_evolution_batch_job(
         "Submitting Batch job '%s' to queue '%s' using job definition '%s'...",
         job_name,
         queue,
-        job_def,
+        job_def_arn,
     )
     response = batch_client.submit_job(
         jobName=job_name,
         jobQueue=queue,
-        jobDefinition=job_def,
+        jobDefinition=job_def_arn,
         containerOverrides=container_overrides,
     )
     job_id = response["jobId"]

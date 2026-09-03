@@ -206,6 +206,7 @@ def test_deploy_role_tei_only_batch_submit_and_narrowed_bootstrap_roles(dev_cicd
     assume_resources = []
     submit_resources = []
     describe_resources = []
+    describe_def_resources = []
     for s in all_statements:
         actions = s.get("Action", [])
         if isinstance(actions, str):
@@ -220,11 +221,16 @@ def test_deploy_role_tei_only_batch_submit_and_narrowed_bootstrap_roles(dev_cicd
         if "batch:DescribeJobs" in actions:
             r = s.get("Resource", [])
             describe_resources.extend(r if isinstance(r, list) else [r])
+        if "batch:DescribeJobDefinitions" in actions:
+            r = s.get("Resource", [])
+            describe_def_resources.extend(r if isinstance(r, list) else [r])
 
     # 1. No batch:TerminateJob
     assert "batch:TerminateJob" not in all_actions
     assert "batch:SubmitJob" in all_actions
     assert "batch:DescribeJobs" in all_actions
+    assert "batch:DescribeJobDefinitions" in all_actions
+    assert "batch:*" not in all_actions
 
     # 2. SubmitJob restricted strictly to queue and analytics-tei-job (Remediation 2)
     assert len(submit_resources) == 2
@@ -236,8 +242,9 @@ def test_deploy_role_tei_only_batch_submit_and_narrowed_bootstrap_roles(dev_cicd
         assert "analytics-job" not in r_str
         assert "community-analysis-dev-*" not in r_str
 
-    # 3. DescribeJobs uses Resource: "*"
+    # 3. DescribeJobs and DescribeJobDefinitions use Resource: "*"
     assert describe_resources == ["*"]
+    assert describe_def_resources == ["*"]
 
     # 4. Narrowed bootstrap role assumption (NO *-role-* wildcard, NO cfn-exec-role)
     assert len(assume_resources) == 4
@@ -275,6 +282,7 @@ def test_pipeline_role_strict_scoping_and_no_terminate_job(dev_cicd_template: Te
     all_actions = []
     submit_resources = []
     describe_resources = []
+    describe_def_resources = []
     for s in all_statements:
         actions = s.get("Action", [])
         if isinstance(actions, str):
@@ -286,11 +294,16 @@ def test_pipeline_role_strict_scoping_and_no_terminate_job(dev_cicd_template: Te
         if "batch:DescribeJobs" in actions:
             r = s.get("Resource", [])
             describe_resources.extend(r if isinstance(r, list) else [r])
+        if "batch:DescribeJobDefinitions" in actions:
+            r = s.get("Resource", [])
+            describe_def_resources.extend(r if isinstance(r, list) else [r])
 
     # 1. No batch:TerminateJob
     assert "batch:TerminateJob" not in all_actions
     assert "batch:SubmitJob" in all_actions
     assert "batch:DescribeJobs" in all_actions
+    assert "batch:DescribeJobDefinitions" in all_actions
+    assert "batch:*" not in all_actions
 
     # 2. SubmitJob strictly limited to queue and analytics-tei-job
     assert len(submit_resources) == 2
@@ -301,8 +314,9 @@ def test_pipeline_role_strict_scoping_and_no_terminate_job(dev_cicd_template: Te
         assert "analytics-job" not in r_str
         assert "community-analysis-dev-*" not in r_str
 
-    # 3. DescribeJobs uses Resource: "*"
+    # 3. DescribeJobs and DescribeJobDefinitions use Resource: "*"
     assert describe_resources == ["*"]
+    assert describe_def_resources == ["*"]
 
     # 4. Forbidden actions for pipeline role
     assert "ecr:PutImage" not in all_actions

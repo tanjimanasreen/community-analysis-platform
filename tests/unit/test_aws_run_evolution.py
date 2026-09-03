@@ -13,6 +13,8 @@ from scripts.aws_run_evolution import (
     discover_run_id_from_batch_job,
     extract_run_id_from_log_events,
     get_batch_job_log_stream_name,
+    resolve_job_definition_identifier,
+    resolve_latest_active_job_definition,
     submit_evolution_batch_job,
     validate_canonical_config,
     validate_environment,
@@ -37,8 +39,133 @@ def test_validate_canonical_config() -> None:
         validate_canonical_config("/etc/passwd")
 
 
+def test_resolve_latest_active_job_definition_single_active() -> None:
+    batch_mock = MagicMock()
+    batch_mock.describe_job_definitions.return_value = {
+        "jobDefinitions": [
+            {
+                "jobDefinitionName": "community-analysis-dev-analytics-tei-job",
+                "jobDefinitionArn": "arn:aws:batch:us-east-1:123456789012:job-definition/community-analysis-dev-analytics-tei-job:1",
+                "revision": 1,
+                "status": "ACTIVE",
+            }
+        ]
+    }
+    arn = resolve_latest_active_job_definition(batch_mock, "community-analysis-dev-analytics-tei-job")
+    assert arn == "arn:aws:batch:us-east-1:123456789012:job-definition/community-analysis-dev-analytics-tei-job:1"
+    batch_mock.describe_job_definitions.assert_called_once_with(
+        jobDefinitionName="community-analysis-dev-analytics-tei-job",
+        status="ACTIVE",
+    )
+
+
+def test_resolve_latest_active_job_definition_multiple_active_highest_selected() -> None:
+    batch_mock = MagicMock()
+    batch_mock.describe_job_definitions.return_value = {
+        "jobDefinitions": [
+            {
+                "jobDefinitionName": "community-analysis-dev-analytics-tei-job",
+                "jobDefinitionArn": "arn:aws:batch:us-east-1:123456789012:job-definition/community-analysis-dev-analytics-tei-job:1",
+                "revision": 1,
+                "status": "ACTIVE",
+            },
+            {
+                "jobDefinitionName": "community-analysis-dev-analytics-tei-job",
+                "jobDefinitionArn": "arn:aws:batch:us-east-1:123456789012:job-definition/community-analysis-dev-analytics-tei-job:3",
+                "revision": 3,
+                "status": "ACTIVE",
+            },
+            {
+                "jobDefinitionName": "community-analysis-dev-analytics-tei-job",
+                "jobDefinitionArn": "arn:aws:batch:us-east-1:123456789012:job-definition/community-analysis-dev-analytics-tei-job:2",
+                "revision": 2,
+                "status": "ACTIVE",
+            },
+        ]
+    }
+    arn = resolve_latest_active_job_definition(batch_mock, "community-analysis-dev-analytics-tei-job")
+    assert arn == "arn:aws:batch:us-east-1:123456789012:job-definition/community-analysis-dev-analytics-tei-job:3"
+
+
+def test_resolve_latest_active_job_definition_pagination() -> None:
+    batch_mock = MagicMock()
+    batch_mock.describe_job_definitions.side_effect = [
+        {
+            "jobDefinitions": [
+                {
+                    "jobDefinitionName": "community-analysis-dev-analytics-tei-job",
+                    "jobDefinitionArn": "arn:aws:batch:us-east-1:123456789012:job-definition/community-analysis-dev-analytics-tei-job:1",
+                    "revision": 1,
+                    "status": "ACTIVE",
+                }
+            ],
+            "nextToken": "token-page-2",
+        },
+        {
+            "jobDefinitions": [
+                {
+                    "jobDefinitionName": "community-analysis-dev-analytics-tei-job",
+                    "jobDefinitionArn": "arn:aws:batch:us-east-1:123456789012:job-definition/community-analysis-dev-analytics-tei-job:4",
+                    "revision": 4,
+                    "status": "ACTIVE",
+                }
+            ],
+        },
+    ]
+    arn = resolve_latest_active_job_definition(batch_mock, "community-analysis-dev-analytics-tei-job")
+    assert arn == "arn:aws:batch:us-east-1:123456789012:job-definition/community-analysis-dev-analytics-tei-job:4"
+    assert batch_mock.describe_job_definitions.call_count == 2
+    second_call_kwargs = batch_mock.describe_job_definitions.call_args_list[1][1]
+    assert second_call_kwargs.get("nextToken") == "token-page-2"
+
+
+def test_resolve_latest_active_job_definition_filters_by_name_and_active() -> None:
+    batch_mock = MagicMock()
+    batch_mock.describe_job_definitions.return_value = {
+        "jobDefinitions": [
+            {
+                "jobDefinitionName": "different-job",
+                "jobDefinitionArn": "arn:aws:batch:us-east-1:123456789012:job-definition/different-job:99",
+                "revision": 99,
+                "status": "ACTIVE",
+            },
+            {
+                "jobDefinitionName": "community-analysis-dev-analytics-tei-job",
+                "jobDefinitionArn": "arn:aws:batch:us-east-1:123456789012:job-definition/community-analysis-dev-analytics-tei-job:5",
+                "revision": 5,
+                "status": "INACTIVE",
+            },
+            {
+                "jobDefinitionName": "community-analysis-dev-analytics-tei-job",
+                "jobDefinitionArn": "arn:aws:batch:us-east-1:123456789012:job-definition/community-analysis-dev-analytics-tei-job:2",
+                "revision": 2,
+                "status": "ACTIVE",
+            },
+        ]
+    }
+    arn = resolve_latest_active_job_definition(batch_mock, "community-analysis-dev-analytics-tei-job")
+    assert arn == "arn:aws:batch:us-east-1:123456789012:job-definition/community-analysis-dev-analytics-tei-job:2"
+
+
+def test_resolve_latest_active_job_definition_fail_closed() -> None:
+    batch_mock = MagicMock()
+    batch_mock.describe_job_definitions.return_value = {"jobDefinitions": []}
+    with pytest.raises(RuntimeError, match="No ACTIVE AWS Batch job definition found for 'missing-job'"):
+        resolve_latest_active_job_definition(batch_mock, "missing-job")
+
+
 def test_submit_evolution_batch_job() -> None:
     batch_mock = MagicMock()
+    batch_mock.describe_job_definitions.return_value = {
+        "jobDefinitions": [
+            {
+                "jobDefinitionName": "community-analysis-dev-analytics-tei-job",
+                "jobDefinitionArn": "arn:aws:batch:us-east-1:123456789012:job-definition/community-analysis-dev-analytics-tei-job:3",
+                "revision": 3,
+                "status": "ACTIVE",
+            }
+        ]
+    }
     batch_mock.submit_job.return_value = {"jobId": "job-12345"}
 
     job_name, job_id = submit_evolution_batch_job(
@@ -51,11 +178,177 @@ def test_submit_evolution_batch_job() -> None:
     batch_mock.submit_job.assert_called_once()
     kwargs = batch_mock.submit_job.call_args[1]
     assert kwargs["jobQueue"] == "community-analysis-dev-queue"
-    assert kwargs["jobDefinition"] == "community-analysis-dev-analytics-tei-job"
+    assert (
+        kwargs["jobDefinition"]
+        == "arn:aws:batch:us-east-1:123456789012:job-definition/community-analysis-dev-analytics-tei-job:3"
+    )
     env_vars = kwargs["containerOverrides"]["environment"]
     env_map = {e["name"]: e["value"] for e in env_vars}
     assert env_map["CONFIG_PATH"] == "configs/telegram/forwarded_message_evolution.yml"
     assert env_map["PIPELINE_COMMAND"] == "run-evolution-pipeline"
+
+
+def test_submit_evolution_batch_job_override_revisioned_arn() -> None:
+    batch_mock = MagicMock()
+    batch_mock.submit_job.return_value = {"jobId": "job-rev-arn"}
+
+    job_name, job_id = submit_evolution_batch_job(
+        batch_mock,
+        environment="dev",
+        config_path="configs/telegram/forwarded_message_evolution.yml",
+        job_definition="arn:aws:batch:us-east-1:123456789012:job-definition/custom-job:2",
+    )
+    assert job_id == "job-rev-arn"
+    batch_mock.submit_job.assert_called_once()
+    assert (
+        batch_mock.submit_job.call_args[1]["jobDefinition"]
+        == "arn:aws:batch:us-east-1:123456789012:job-definition/custom-job:2"
+    )
+    batch_mock.describe_job_definitions.assert_not_called()
+
+
+def test_submit_evolution_batch_job_override_revisioned_short_name() -> None:
+    batch_mock = MagicMock()
+    batch_mock.submit_job.return_value = {"jobId": "job-rev-short"}
+
+    job_name, job_id = submit_evolution_batch_job(
+        batch_mock,
+        environment="dev",
+        config_path="configs/telegram/forwarded_message_evolution.yml",
+        job_definition="custom-job:7",
+    )
+    assert job_id == "job-rev-short"
+    batch_mock.submit_job.assert_called_once()
+    assert batch_mock.submit_job.call_args[1]["jobDefinition"] == "custom-job:7"
+    batch_mock.describe_job_definitions.assert_not_called()
+
+
+def test_submit_evolution_batch_job_override_unrevisioned_short_name() -> None:
+    batch_mock = MagicMock()
+    batch_mock.describe_job_definitions.return_value = {
+        "jobDefinitions": [
+            {
+                "jobDefinitionName": "custom-job",
+                "jobDefinitionArn": "arn:aws:batch:us-east-1:123456789012:job-definition/custom-job:5",
+                "revision": 5,
+                "status": "ACTIVE",
+            }
+        ]
+    }
+    batch_mock.submit_job.return_value = {"jobId": "job-unrev-short"}
+
+    job_name, job_id = submit_evolution_batch_job(
+        batch_mock,
+        environment="dev",
+        config_path="configs/telegram/forwarded_message_evolution.yml",
+        job_definition="custom-job",
+    )
+    assert job_id == "job-unrev-short"
+    batch_mock.describe_job_definitions.assert_called_once_with(
+        jobDefinitionName="custom-job",
+        status="ACTIVE",
+    )
+    batch_mock.submit_job.assert_called_once()
+    assert (
+        batch_mock.submit_job.call_args[1]["jobDefinition"]
+        == "arn:aws:batch:us-east-1:123456789012:job-definition/custom-job:5"
+    )
+
+
+def test_submit_evolution_batch_job_override_unrevisioned_arn() -> None:
+    batch_mock = MagicMock()
+    batch_mock.describe_job_definitions.return_value = {
+        "jobDefinitions": [
+            {
+                "jobDefinitionName": "custom-job",
+                "jobDefinitionArn": "arn:aws:batch:us-east-1:123456789012:job-definition/custom-job:8",
+                "revision": 8,
+                "status": "ACTIVE",
+            }
+        ]
+    }
+    batch_mock.submit_job.return_value = {"jobId": "job-unrev-arn"}
+
+    job_name, job_id = submit_evolution_batch_job(
+        batch_mock,
+        environment="dev",
+        config_path="configs/telegram/forwarded_message_evolution.yml",
+        job_definition="arn:aws:batch:us-east-1:123456789012:job-definition/custom-job",
+    )
+    assert job_id == "job-unrev-arn"
+    batch_mock.describe_job_definitions.assert_called_once_with(
+        jobDefinitionName="custom-job",
+        status="ACTIVE",
+    )
+    batch_mock.submit_job.assert_called_once()
+    assert (
+        batch_mock.submit_job.call_args[1]["jobDefinition"]
+        == "arn:aws:batch:us-east-1:123456789012:job-definition/custom-job:8"
+    )
+
+
+def test_submit_evolution_batch_job_override_unrevisioned_arn_scope_mismatch_fails_closed() -> None:
+    batch_mock = MagicMock()
+    batch_mock.describe_job_definitions.return_value = {
+        "jobDefinitions": [
+            {
+                "jobDefinitionName": "custom-job",
+                "jobDefinitionArn": "arn:aws:batch:us-east-1:123456789012:job-definition/custom-job:8",
+                "revision": 8,
+                "status": "ACTIVE",
+            }
+        ]
+    }
+
+    with pytest.raises(ValueError, match="does not match supplied ARN scope"):
+        submit_evolution_batch_job(
+            batch_mock,
+            environment="dev",
+            config_path="configs/telegram/forwarded_message_evolution.yml",
+            job_definition="arn:aws:batch:us-west-2:999999999999:job-definition/custom-job",
+        )
+
+    batch_mock.describe_job_definitions.assert_called_once_with(
+        jobDefinitionName="custom-job",
+        status="ACTIVE",
+    )
+    batch_mock.submit_job.assert_not_called()
+
+
+def test_submit_evolution_batch_job_override_malformed_fails_closed() -> None:
+    batch_mock = MagicMock()
+
+    with pytest.raises(ValueError, match="Malformed or invalid AWS Batch job definition ARN"):
+        submit_evolution_batch_job(
+            batch_mock,
+            environment="dev",
+            config_path="configs/telegram/forwarded_message_evolution.yml",
+            job_definition="arn:aws:batch:us-east-1:123456789012:job-definition/",
+        )
+
+    with pytest.raises(ValueError, match="Malformed or invalid AWS Batch job definition ARN"):
+        submit_evolution_batch_job(
+            batch_mock,
+            environment="dev",
+            config_path="configs/telegram/forwarded_message_evolution.yml",
+            job_definition="arn:invalid",
+        )
+
+    with pytest.raises(ValueError, match="Malformed or invalid AWS Batch job definition identifier"):
+        submit_evolution_batch_job(
+            batch_mock,
+            environment="dev",
+            config_path="configs/telegram/forwarded_message_evolution.yml",
+            job_definition="custom-job:abc",
+        )
+
+    with pytest.raises(ValueError, match="Job definition override cannot be empty"):
+        submit_evolution_batch_job(
+            batch_mock,
+            environment="dev",
+            config_path="configs/telegram/forwarded_message_evolution.yml",
+            job_definition="   ",
+        )
 
 
 def test_wait_for_batch_job_success() -> None:
