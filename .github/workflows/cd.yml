@@ -124,7 +124,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          uv run --frozen python scripts/aws_cd.py \
+          uv run --frozen python -m scripts.aws_cd \
             --environment dev \
             --source-sha "$GITHUB_SHA" \
             --acceptance-config tests/configs/test_evolution.yml \

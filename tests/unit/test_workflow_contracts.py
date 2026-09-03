@@ -46,13 +46,14 @@ def test_cd_workflow_contract() -> None:
     assert "vars.AWS_DEV_DEPLOY_ROLE_ARN" in raw_text
     assert "id-token: write" in raw_text
 
-    # 4. Calls aws_cd.py with required flags
-    assert "python scripts/aws_cd.py" in raw_text
+    # 4. Calls scripts.aws_cd in module mode with required flags
+    assert "python -m scripts.aws_cd" in raw_text
+    assert "python scripts/aws_cd.py" not in raw_text
     assert "--environment dev" in raw_text
     assert "--acceptance-config" in raw_text
     assert "--acceptance-theme-provider mock" in raw_text
 
-    # 5. Provisions isolated infra/.venv before calling aws_cd.py
+    # 5. Provisions isolated infra/.venv before calling scripts.aws_cd
     assert "uv venv infra/.venv" in raw_text
     assert "uv pip install" in raw_text
     assert "infra/requirements.txt" in raw_text
@@ -64,14 +65,23 @@ def test_cd_workflow_contract() -> None:
         step_run = step.get("run", "")
         if "uv venv infra/.venv" in step_run and "infra/requirements.txt" in step_run:
             infra_step_idx = idx
-        if "python scripts/aws_cd.py" in step_run:
+        if "python -m scripts.aws_cd" in step_run:
             cd_step_idx = idx
 
     assert infra_step_idx is not None, "infra/.venv provisioning step missing in deploy job"
-    assert cd_step_idx is not None, "scripts/aws_cd.py execution step missing in deploy job"
+    assert cd_step_idx is not None, "scripts.aws_cd module execution step missing in deploy job"
     assert (
         infra_step_idx < cd_step_idx
-    ), "infra/.venv must be provisioned before scripts/aws_cd.py is executed"
+    ), "infra/.venv must be provisioned before scripts.aws_cd is executed"
+
+
+def test_cd_module_imports() -> None:
+    """Verify scripts.aws_cd and scripts.aws_run_evolution can be imported as modules from repo root."""
+    import scripts.aws_cd
+    import scripts.aws_run_evolution
+
+    assert scripts.aws_cd is not None
+    assert scripts.aws_run_evolution is not None
 
 
 def test_run_evolution_workflow_contract() -> None:
@@ -112,3 +122,14 @@ def test_run_evolution_workflow_contract() -> None:
 
     # 7. No operational API verification (CD responsibility only)
     assert "--verify-api" not in raw_text
+
+
+def test_makefile_cd_preflight_contract() -> None:
+    """Verify Makefile defines cd-preflight and runs all required local CD checks."""
+    makefile_text = Path("Makefile").read_text(encoding="utf-8")
+    assert "cd-preflight:" in makefile_text
+    assert "cd-preflight" in makefile_text
+    assert "import aws_cdk" in makefile_text
+    assert "import scripts.aws_cd; import scripts.aws_run_evolution" in makefile_text
+    assert "test_workflow_contracts.py" in makefile_text
+    assert "test_aws_cd.py" in makefile_text

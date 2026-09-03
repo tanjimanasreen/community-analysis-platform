@@ -2,7 +2,7 @@
 	db-up db-down db-check tei-up tei-down tei-check validate-config ingest-sample run-network-sample \
 	run-topic-sample run-theme-sample evaluate-sample run-pipeline-test \
 	run-pipeline-sample run-dashboard-sample run-longitudinal-sample \
-	run-evolution-pipeline-test pipeline-preflight translation-preflight translation-detect canonical-theme-benchmark monthly-theme-cluster-benchmark run-evolution-pipeline verify-output-contract \
+	run-evolution-pipeline-test pipeline-preflight translation-preflight translation-detect cd-preflight canonical-theme-benchmark monthly-theme-cluster-benchmark run-evolution-pipeline verify-output-contract \
 	verify-evolution-output-contract verify-longitudinal-output-contract api-smoke-test run-api demo demo-api \
 	demo-frontend frontend-install frontend-build frontend-lint frontend-typecheck \
 	frontend-test frontend-coverage frontend-e2e frontend-check dashboard-fixture \
@@ -59,6 +59,7 @@ help:
 	@echo "  pipeline-preflight   - Fail fast on dependencies, inputs, credentials, and required TEI profiles"
 	@echo "  translation-preflight - Prepare/reuse network outputs and report cached translation workload without cloud translation calls"
 	@echo "  translation-detect   - Call language detection only, cache results, and report exact translation request workload"
+	@echo "  cd-preflight         - Validate local CD environment, infra venv, Python imports, and workflow contracts without AWS access or deployment"
 	@echo "  canonical-theme-benchmark - Benchmark Stage-B canonicalization from saved theme artifacts without changing production outputs"
 	@echo "  monthly-theme-cluster-benchmark - Benchmark Stage-A monthly HDBSCAN from saved clean theme artifacts without changing production outputs"
 	@echo "  run-evolution-pipeline - Run a real evolution pipeline after preflight (CONFIG=...)"
@@ -215,6 +216,19 @@ translation-detect:
 	fi
 	@mkdir -p /tmp/prefect
 	PREFECT_HOME=/tmp/prefect PREFECT_API_DATABASE_CONNECTION_URL="sqlite+aiosqlite:////tmp/prefect/prefect.db" MPLBACKEND=Agg MPLCONFIGDIR=/tmp $(UV) run --frozen --extra orchestration python -m src.cli translation-detect --config $(CONFIG) $(if $(DATASET_ID),--dataset-id $(DATASET_ID))
+
+cd-preflight:
+	@echo "=== CD Preflight: 1. Verifying/provisioning infra environment ==="
+	@if [ ! -x infra/.venv/bin/python ]; then \
+		echo "Provisioning infra/.venv using uv..."; \
+		$(UV) venv infra/.venv --python 3.11 && $(UV) pip install --python infra/.venv/bin/python -r infra/requirements.txt; \
+	fi
+	@infra/.venv/bin/python -c "import aws_cdk; print('  [OK] infra/.venv imports aws_cdk')"
+	@echo "=== CD Preflight: 2. Verifying repository root CD module imports ==="
+	@$(UV) run --frozen python -c "import scripts.aws_cd; import scripts.aws_run_evolution; print('  [OK] root environment imports scripts.aws_cd and scripts.aws_run_evolution')"
+	@echo "=== CD Preflight: 3. Verifying CD workflow contracts and unit tests ==="
+	@$(UV) run --frozen --extra orchestration --extra tracking python -m pytest tests/unit/test_workflow_contracts.py tests/unit/test_aws_cd.py -v --tb=short
+	@echo "=== CD Preflight: PASS ==="
 
 canonical-theme-benchmark:
 	@if [ -z "$(THEMES_DIR)" ]; then \
