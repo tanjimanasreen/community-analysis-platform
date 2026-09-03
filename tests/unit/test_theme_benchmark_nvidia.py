@@ -11,6 +11,12 @@ def test_nvidia_provider_init_requires_allow_live():
 
 def test_nvidia_provider_init_requires_api_key(monkeypatch):
     monkeypatch.delenv("NVIDIA_API_KEY", raising=False)
+    from src.config.settings import ProviderSettings
+
+    isolated_settings = ProviderSettings(_env_file=None, nvidia_api_key=None)
+    monkeypatch.setattr(
+        "src.providers.nvidia.get_provider_settings", lambda: isolated_settings
+    )
     with pytest.raises(ThemeBenchmarkError, match="NVIDIA_API_KEY must be set"):
         NvidiaBenchmarkProvider(model_id="test", allow_live=True)
 

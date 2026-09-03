@@ -151,6 +151,12 @@ def test_llm7_provider_requires_allow_live_before_client_creation():
 
 def test_llm7_provider_requires_key_without_client(monkeypatch):
     monkeypatch.delenv("LLM7_API_KEY", raising=False)
+    from src.config.settings import ProviderSettings
+
+    isolated_settings = ProviderSettings(_env_file=None, llm7_api_key=None)
+    monkeypatch.setattr(
+        "src.providers.llm7.get_provider_settings", lambda: isolated_settings
+    )
 
     with pytest.raises(ThemeBenchmarkError, match="LLM7_API_KEY"):
         LLM7BenchmarkProvider(model_id="llm7-turbo-json", allow_live=True)
@@ -192,6 +198,12 @@ def test_llm7_model_discovery_normalizes_filters_and_hides_secrets(
     tmp_path, monkeypatch
 ):
     monkeypatch.delenv("LLM7_BASE_URL", raising=False)
+    from src.config.settings import ProviderSettings
+
+    isolated_settings = ProviderSettings(_env_file=None, llm7_base_url=None)
+    monkeypatch.setattr(
+        "src.providers.llm7.get_provider_settings", lambda: isolated_settings
+    )
     models = [
         {
             "id": "llm7-turbo-json",
@@ -336,7 +348,9 @@ def test_llm7_retries_rate_limit_and_enforces_request_cap(tmp_path):
     client = FakeClient(
         [
             FakeStatusError("rate limited", 429),
-            FakeCompletion(json.dumps({"themes": []})),
+            FakeCompletion(
+                json.dumps({"themes": [{"name": "Fruit", "keyword_indices": [0, 1]}]})
+            ),
         ]
     )
     provider = LLM7BenchmarkProvider(
@@ -358,7 +372,11 @@ def test_llm7_retries_rate_limit_and_enforces_request_cap(tmp_path):
         client=FakeClient(
             [
                 FakeStatusError("rate limited", 429),
-                FakeCompletion(json.dumps({"themes": []})),
+                FakeCompletion(
+                    json.dumps(
+                        {"themes": [{"name": "Fruit", "keyword_indices": [0, 1]}]}
+                    )
+                ),
             ]
         ),
         sdk_version="2.44.0",

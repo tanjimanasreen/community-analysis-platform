@@ -44,6 +44,20 @@ def test_dashboard_fixture_is_deterministic_valid_and_covers_variants(tmp_path):
         else:
             validate_run_manifest(run_root)
 
+    import pandas as pd
+
+    telegram_network = pd.read_parquet(
+        paths["default"] / "runs" / "telegram-2017-03" / "data" / "network" / "network.parquet"
+    )
+    assert "forwarded_date" in telegram_network.columns
+    assert "created_at" not in telegram_network.columns
+
+    twitter_network = pd.read_parquet(
+        paths["default"] / "runs" / "twitter-2017-04" / "data" / "network" / "network.parquet"
+    )
+    assert "created_at" in twitter_network.columns
+    assert "forwarded_date" not in twitter_network.columns
+
     client = _client(paths["default"])
     runs = client.get("/api/v1/runs").json()["runs"]
     assert runs[0]["run_id"] == "twitter-2017-04"

@@ -11,6 +11,7 @@ import yaml
 from src.themes.benchmark.contracts import (
     THEME_OUTPUT_JSON_SCHEMA,
     ThemeBenchmarkError,
+    build_theme_output_json_schema,
     read_jsonl,
 )
 from src.themes.benchmark.dataset import (
@@ -19,6 +20,7 @@ from src.themes.benchmark.dataset import (
     benchmark_root,
     build_dataset,
     build_gpt4o_reference_metadata,
+    format_indexed_keywords_for_prompt,
     format_keywords_for_production,
     get_jinja_env,
 )
@@ -103,16 +105,18 @@ def test_requests_match_current_production_theme_task(tmp_path):
     request_rows = read_jsonl(result["output_dir"] / "requests.jsonl")
 
     general = request_rows[0]
+    expected_keywords = ["apple", "banana", "big apple", "orange", "big orange"]
     assert general["keyword_mode"] == "general"
     assert general["keyword_text"] == format_keywords_for_production(
-        ["apple", "banana", "big apple", "orange", "big orange"]
+        expected_keywords
     )
     env = get_jinja_env()
+    expected_schema = build_theme_output_json_schema(len(expected_keywords))
     assert general["system_prompt"] == env.get_template("system.jinja2").render(
-        json_schema=json.dumps(THEME_OUTPUT_JSON_SCHEMA, indent=2)
+        json_schema=json.dumps(expected_schema, indent=2)
     )
     assert general["user_prompt"] == env.get_template("user.jinja2").render(
-        keywords="apple,banana,bigapple,orange,bigorange"
+        keywords=format_indexed_keywords_for_prompt(expected_keywords)
     )
 
     reference = json.loads(

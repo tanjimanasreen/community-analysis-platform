@@ -843,6 +843,12 @@ def _build_run(artifact_root: Path, spec: RunSpec) -> Path:
         cluster_path = f"data/themes/clusters/monthly/{spec.year:04d}-{month:02d}.parquet"
         cluster_evidence_path = f"data/themes/clusters/evidence/{spec.year:04d}-{month:02d}.parquet"
 
+        network_columns = contract.get_network_data_required_columns(config)
+        date_column_name = (
+            [c for c in network_columns if c not in contract.NETWORK_DATA_BASE_COLUMNS][0]
+            if any(c not in contract.NETWORK_DATA_BASE_COLUMNS for c in network_columns)
+            else "created_at"
+        )
         network_rows = [
             {
                 "unique_id": (
@@ -857,11 +863,11 @@ def _build_run(artifact_root: Path, spec: RunSpec) -> Path:
                     if spec.is_longitudinal
                     else f"Fixture message {index}"
                 ),
-                "created_at": f"{spec.year}-{month_text}-{min(index, 28):02d}",
+                date_column_name: f"{spec.year}-{month_text}-{min(index, 28):02d}",
             }
             for index in range(1, 11 + month)
         ]
-        _write_parquet(root / network_path, network_rows, contract.NETWORK_DATA_COLUMNS)
+        _write_parquet(root / network_path, network_rows, network_columns)
         _write_parquet(
             root / absolute_path,
             _graph_rows(spec, weighted=False, month=month),

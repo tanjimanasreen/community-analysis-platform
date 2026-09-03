@@ -24,7 +24,7 @@ def run_config():
         config_digest="dummy",
         output_root="/tmp/dummy",
         raw_config={
-            "lda": {"num_topics": 2, "random_state": 100, "passes": 5, "chunksize": 20},
+            "lda": {"num_topics": 2, "random_state": 100, "passes": 5, "chunksize": 20, "workers": 1},
             "preprocessing": {"remove_stopwords": True},
             "matching": {"threshold": 0.1},
             "content_type": "reply",

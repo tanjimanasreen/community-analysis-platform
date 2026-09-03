@@ -20,7 +20,11 @@ from prefect.settings import (
 )
 
 from src.artifacts import RunStatus, load_run_manifest, validate_run_manifest
-from src.orchestration.composition_flow import run_monthly_analysis_flow
+from src.cli import validate_config
+from src.orchestration.composition_flow import (
+    run_evolution_analysis_flow,
+    run_monthly_analysis_flow,
+)
 from src.orchestration.models import (
     ArtifactReference,
     PipelineRunContext,
@@ -170,12 +174,17 @@ def _write_topic_inputs(root: Path) -> TopicInputBundle:
     )
 
 
-def _write_theme_input(root: Path, month: str = "march") -> ThemeInputBundle:
+def _write_theme_input(
+    root: Path, months: tuple[str, ...] = ("march", "april")
+) -> ThemeInputBundle:
     root.mkdir(parents=True, exist_ok=True)
-    path = root / f"{month}_2017.parquet"
-    THEME_INPUT_FRAME.to_parquet(path, index=False)
+    outputs = {}
+    for month in months:
+        path = root / f"{month}_2017.parquet"
+        THEME_INPUT_FRAME.to_parquet(path, index=False)
+        outputs[month] = _ref(path)
     return ThemeInputBundle(
-        monthly_topic_outputs={month: _ref(path)},
+        monthly_topic_outputs=outputs,
         allowed_input_roots=(str(root),),
     )
 
@@ -218,6 +227,15 @@ def _fake_theme_domain(**kwargs) -> None:
         )
     _schema_frame("community_transition").to_parquet(
         out / "community_transition.parquet", index=False
+    )
+    _schema_frame("community_path").to_parquet(
+        out / "community_paths.parquet", index=False
+    )
+    _schema_frame("community_path_membership").to_parquet(
+        out / "community_path_membership.parquet", index=False
+    )
+    _schema_frame("theme_generation_provenance").to_parquet(
+        out / "theme_generation_provenance.parquet", index=False
     )
     sankey = out / "sankey"
     sankey.mkdir(exist_ok=True)
@@ -413,6 +431,8 @@ def test_smoke_theme_phase_alone(monkeypatch, tmp_path):
 
     assert isinstance(result, ThemeOutputBundle)
     assert result.provider_run_summary is not None
+    assert result.community_paths is not None
+    assert result.community_path_membership is not None
     assert not any("stale-debug.png" in ref.path for ref in result.visualizations)
     _assert_result_boundary(result)
     assert _serialized_size(result) < 100 * 1024
@@ -421,33 +441,24 @@ def test_smoke_theme_phase_alone(monkeypatch, tmp_path):
 
 def test_smoke_full_network_topic_theme_composition(monkeypatch, tmp_path):
     results_root = tmp_path / "prefect-results"
-    dataset = tmp_path / "dataset.csv"
-    pd.DataFrame({"value": [1]}).to_csv(dataset, index=False)
     output_root = tmp_path / "output"
 
-    with (
-        patch(
-            "src.pipelines.social_network_pipeline.run_network_community_pipeline",
-            side_effect=_fake_network_domain,
-        ),
-        patch(
-            "src.pipelines.social_network_pipeline.run_topic_phase",
-            side_effect=_fake_topic_domain,
-        ),
-        patch(
-            "src.pipelines.theme_pipeline.run_theme_pipeline_from_monthly_data",
-            side_effect=_fake_theme_domain,
-        ),
-    ):
-        result = _run_with_result_storage(
-            results_root,
-            run_monthly_analysis_flow,
-            config=_full_config(dataset, output_root),
-            dataset_path=str(dataset),
-            dataset_id="smoke-dataset",
-            run_topics=True,
-            run_themes=True,
-        )
+    config = validate_config("tests/configs/test_evolution.yml")
+    config["output_base_path"] = str(output_root)
+    config["theme_provider"] = {
+        "primary": "mock",
+        "fallback": False,
+        "fallback_chain": [],
+    }
+    config["tracking"] = {"enabled": False}
+    config["orchestration"] = {"month_workers": 1}
+    config["provider"] = {"credentials": {"token": "must-not-persist"}}
+
+    result = _run_with_result_storage(
+        results_root,
+        run_evolution_analysis_flow,
+        config=config,
+    )
 
     assert isinstance(result, PipelineRunResult)
     run_root = output_root / "runs" / result.context.pipeline_run_id
@@ -463,8 +474,9 @@ def test_smoke_full_network_topic_theme_composition(monkeypatch, tmp_path):
     assert "must-not-persist" not in resolved_config
     assert "credentials" not in resolved_config
     assert result.context.prefect_flow_run_id is not None
-    assert any(ref.asset_key == "lda_scores" for ref in result.artifacts)
-    assert any(ref.asset_key == "provider_run_summary" for ref in result.artifacts)
+    assert any(ref.asset_key.startswith("lda_scores") for ref in result.artifacts)
+    assert any(ref.asset_key == "community_paths" for ref in result.artifacts)
+    assert any(ref.asset_key == "community_path_membership" for ref in result.artifacts)
     assert not any("stale-debug.png" in ref.path for ref in result.artifacts)
     for ref in result.artifacts:
         assert Path(ref.path).resolve().is_relative_to(run_root.resolve())

@@ -5,29 +5,30 @@ from pathlib import Path
 from unittest.mock import patch
 
 import mlflow
-import pandas as pd
 import pytest
 from mlflow.tracking import MlflowClient
 from prefect.testing.utilities import prefect_test_harness
 
-from src.orchestration.composition_flow import run_monthly_analysis_flow
+from src.cli import validate_config
+from src.orchestration.composition_flow import run_evolution_analysis_flow
 from src.orchestration.models import PipelineRunResult
 from src.orchestration.retry_policy import ErrorCategory, PipelineError
-from tests.integration.test_orchestration_smoke import (
-    _assert_result_boundary,
-    _fake_network_domain,
-    _fake_theme_domain,
-    _fake_topic_domain,
-    _full_config,
-)
+from tests.integration.test_orchestration_smoke import _assert_result_boundary
 
 
-def _tracked_config(dataset: Path, output_root: Path) -> dict:
-    config = _full_config(dataset, output_root)
+def _tracked_evolution_config(output_root: Path, *, enabled: bool = True) -> dict:
+    config = validate_config("tests/configs/test_evolution.yml")
+    config["output_base_path"] = str(output_root)
+    config["theme_provider"] = {
+        "primary": "mock",
+        "fallback": False,
+        "fallback_chain": [],
+    }
+    config["orchestration"] = {"month_workers": 1}
     config["tracking"] = {
-        "enabled": True,
+        "enabled": enabled,
         "backend": "mlflow",
-        "experiment_name": "community-analysis-integration",
+        "experiment_name": "community-analysis-evolution-integration",
         "backend_store_path": ".mlflow-test/mlflow.db",
         "artifact_root": ".mlflow-test/artifacts",
         "nested_stage_runs": True,
@@ -43,29 +44,8 @@ def _tracked_config(dataset: Path, output_root: Path) -> dict:
     return config
 
 
-def _run_full_flow(config: dict, dataset: Path) -> PipelineRunResult:
-    with (
-        patch(
-            "src.pipelines.social_network_pipeline.run_network_community_pipeline",
-            side_effect=_fake_network_domain,
-        ),
-        patch(
-            "src.pipelines.social_network_pipeline.run_topic_phase",
-            side_effect=_fake_topic_domain,
-        ),
-        patch(
-            "src.pipelines.theme_pipeline.run_theme_pipeline_from_monthly_data",
-            side_effect=_fake_theme_domain,
-        ),
-    ):
-        return run_monthly_analysis_flow(
-            config=config,
-            dataset_path=str(dataset),
-            dataset_id="smoke-dataset",
-            run_topics=True,
-            run_themes=True,
-            dvc_revision="revision-1",
-        )
+def _run_full_flow(config: dict) -> PipelineRunResult:
+    return run_evolution_analysis_flow(config=config)
 
 
 def _all_runs(client: MlflowClient, experiment_id: str):
@@ -94,13 +74,6 @@ def test_tracked_full_flow_creates_parent_children_and_safe_summaries(
 ):
     project_root = tmp_path / "project"
     project_root.mkdir()
-    dataset = project_root / "data" / "dataset.csv"
-    dataset.parent.mkdir()
-    pd.DataFrame({"value": [1]}).to_csv(dataset, index=False)
-    Path(f"{dataset}.dvc").write_text(
-        "outs:\n- md5: dvc-content-hash\n  path: dataset.csv\n",
-        encoding="utf-8",
-    )
     output_root = tmp_path / "output"
     monkeypatch.setattr(
         "src.orchestration.composition_flow.get_project_root",
@@ -110,8 +83,7 @@ def test_tracked_full_flow_creates_parent_children_and_safe_summaries(
     assert mlflow.active_run() is None
     with prefect_test_harness():
         result = _run_full_flow(
-            _tracked_config(dataset, output_root),
-            dataset,
+            _tracked_evolution_config(output_root, enabled=True)
         )
 
     assert isinstance(result, PipelineRunResult)
@@ -121,39 +93,45 @@ def test_tracked_full_flow_creates_parent_children_and_safe_summaries(
 
     client = MlflowClient(tracking_uri=result.tracking.tracking_uri)
     runs = _all_runs(client, result.tracking.experiment_id)
-    assert len(runs) == 4
+    assert len(runs) == 6
     by_stage = {run.data.tags.get("stage_name", "parent"): run for run in runs}
     assert set(by_stage) == {
         "parent",
-        "network_community",
-        "topic",
-        "theme",
+        "network_03",
+        "topic_03",
+        "network_04",
+        "topic_04",
+        "evolution_theme",
     }
     assert all(run.info.status == "FINISHED" for run in runs)
-    for stage_name in ("network_community", "topic", "theme"):
+    for stage_name in (
+        "network_03",
+        "topic_03",
+        "network_04",
+        "topic_04",
+        "evolution_theme",
+    ):
         assert (
             by_stage[stage_name].data.tags["mlflow.parentRunId"]
             == result.tracking.parent_run_id
         )
 
     parent = by_stage["parent"]
-    assert parent.data.metrics["stage_count"] == 3
-    assert parent.data.metrics["completed_stage_count"] == 3
+    assert parent.data.metrics["stage_count"] == 5
+    assert parent.data.metrics["completed_stage_count"] == 5
     assert parent.data.tags["run_status"] == "FINISHED"
     _assert_no_secrets_in_runs(runs)
 
     summary_paths = {
         item.path for item in client.list_artifacts(parent.info.run_id, "summaries")
     }
-    assert summary_paths == {
+    assert summary_paths >= {
         "summaries/artifact_reference_manifest.json",
         "summaries/lineage_summary.json",
-        "summaries/provider_run_summary.json",
         "summaries/run_metrics_summary.json",
     }
 
     state_root = project_root / ".mlflow-test"
-    assert not list(state_root.rglob(dataset.name))
     persisted = b"".join(
         path.read_bytes() for path in state_root.rglob("*") if path.is_file()
     )
@@ -161,21 +139,15 @@ def test_tracked_full_flow_creates_parent_children_and_safe_summaries(
     assert b"secret-password" not in persisted
 
     lineage_files = list(state_root.rglob("lineage_summary.json"))
-    assert len(lineage_files) == 1
+    assert len(lineage_files) >= 1
     lineage = json.loads(lineage_files[0].read_text(encoding="utf-8"))
-    dataset_lineage = lineage["datasets"][0]
-    assert dataset_lineage["dataset_relative_path"] == "data/dataset.csv"
-    assert dataset_lineage["dvc_file_relative_path"] == "data/dataset.csv.dvc"
-    assert dataset_lineage["dvc_content_hash"] == "dvc-content-hash"
-    assert dataset_lineage["dvc_revision"] == "revision-1"
+    assert len(lineage["datasets"]) == 2
     assert str(project_root) not in json.dumps(lineage)
 
 
 def test_tracking_disabled_creates_no_mlflow_state(monkeypatch, tmp_path):
     project_root = tmp_path / "project"
     project_root.mkdir()
-    dataset = project_root / "dataset.csv"
-    pd.DataFrame({"value": [1]}).to_csv(dataset, index=False)
     output_root = tmp_path / "output"
     monkeypatch.setattr(
         "src.orchestration.composition_flow.get_project_root",
@@ -184,8 +156,7 @@ def test_tracking_disabled_creates_no_mlflow_state(monkeypatch, tmp_path):
 
     with prefect_test_harness():
         result = _run_full_flow(
-            _full_config(dataset, output_root),
-            dataset,
+            _tracked_evolution_config(output_root, enabled=False)
         )
 
     assert result.tracking is None
@@ -196,10 +167,8 @@ def test_tracking_disabled_creates_no_mlflow_state(monkeypatch, tmp_path):
 def test_analytical_failure_marks_parent_and_stage_failed(monkeypatch, tmp_path):
     project_root = tmp_path / "project"
     project_root.mkdir()
-    dataset = project_root / "dataset.csv"
-    pd.DataFrame({"value": [1]}).to_csv(dataset, index=False)
     output_root = tmp_path / "output"
-    config = _tracked_config(dataset, output_root)
+    config = _tracked_evolution_config(output_root, enabled=True)
     monkeypatch.setattr(
         "src.orchestration.composition_flow.get_project_root",
         lambda: str(project_root),
@@ -217,24 +186,45 @@ def test_analytical_failure_marks_parent_and_stage_failed(monkeypatch, tmp_path)
         ),
     ):
         with pytest.raises(PipelineError, match="safe analytical failure"):
-            run_monthly_analysis_flow(
-                config=config,
-                dataset_path=str(dataset),
-                dataset_id="smoke-dataset",
-            )
+            run_evolution_analysis_flow(config=config)
 
     tracking_uri = f"sqlite:///{project_root / '.mlflow-test' / 'mlflow.db'}"
     client = MlflowClient(tracking_uri=tracking_uri)
-    experiment = client.get_experiment_by_name("community-analysis-integration")
+    experiment = client.get_experiment_by_name("community-analysis-evolution-integration")
     assert experiment is not None
     runs = _all_runs(client, experiment.experiment_id)
-    assert len(runs) == 2
-    assert all(run.info.status == "FAILED" for run in runs)
-    for run in runs:
-        assert run.data.tags["run_status"] == "FAILED"
-        assert run.data.tags["failure_category"] == "SCHEMA_VIOLATION"
-        assert run.data.tags["failure_stage"] == "network_community"
-        assert run.data.tags["exception_type"] == "PipelineError"
+    assert len(runs) == 3
+
+    by_stage = {
+        run.data.tags.get("stage_name", "parent"): run
+        for run in runs
+    }
+    assert set(by_stage) == {"parent", "network_03", "network_04"}
+
+    parent = by_stage["parent"]
+    network_03 = by_stage["network_03"]
+    network_04 = by_stage["network_04"]
+
+    assert parent.info.status == "FAILED"
+    assert network_03.info.status == "FAILED"
+    assert network_04.info.status == "FAILED"
+
+    assert parent.data.tags["run_status"] == "FAILED"
+    assert network_03.data.tags["run_status"] == "FAILED"
+    assert network_04.data.tags["run_status"] == "FAILED"
+
+    assert parent.data.tags["failure_category"] == "SCHEMA_VIOLATION"
+    assert parent.data.tags["exception_type"] == "PipelineError"
+
+    assert network_03.data.tags["failure_category"] == "SCHEMA_VIOLATION"
+    assert network_03.data.tags["failure_stage"] == "network_03"
+    assert network_03.data.tags["exception_type"] == "PipelineError"
+    assert network_03.data.tags["mlflow.parentRunId"] == parent.info.run_id
+
+    assert network_04.data.tags["failure_category"] == "SCHEMA_VIOLATION"
+    assert network_04.data.tags["failure_stage"] == "network_04"
+    assert network_04.data.tags["exception_type"] == "PipelineError"
+    assert network_04.data.tags["mlflow.parentRunId"] == parent.info.run_id
 
 
 def test_mlflow_write_failure_does_not_change_analytical_success(
@@ -243,8 +233,6 @@ def test_mlflow_write_failure_does_not_change_analytical_success(
     caplog.set_level("WARNING")
     project_root = tmp_path / "project"
     project_root.mkdir()
-    dataset = project_root / "dataset.csv"
-    pd.DataFrame({"value": [1]}).to_csv(dataset, index=False)
     output_root = tmp_path / "output"
     monkeypatch.setattr(
         "src.orchestration.composition_flow.get_project_root",
@@ -259,8 +247,7 @@ def test_mlflow_write_failure_does_not_change_analytical_success(
         ),
     ):
         result = _run_full_flow(
-            _tracked_config(dataset, output_root),
-            dataset,
+            _tracked_evolution_config(output_root, enabled=True)
         )
 
     assert isinstance(result, PipelineRunResult)

@@ -121,6 +121,12 @@ def test_gemini_provider_requires_allow_live_before_client_creation():
 
 def test_gemini_provider_missing_key_fails_clearly(monkeypatch):
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    from src.config.settings import ProviderSettings
+
+    isolated_settings = ProviderSettings(_env_file=None, gemini_api_key=None)
+    monkeypatch.setattr(
+        "src.providers.gemini.get_provider_settings", lambda: isolated_settings
+    )
 
     with pytest.raises(ThemeBenchmarkError, match="GEMINI_API_KEY"):
         GeminiBenchmarkProvider(model_id="gemini-3.5-flash", allow_live=True)

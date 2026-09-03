@@ -76,7 +76,7 @@ def test_run_monthly_network_foundation_flow(tmp_path):
     assert manifest.status is RunStatus.COMPLETED
     assert (run_root / "resolved_config.yaml").is_file()
     assert (run_root / "inputs/datasets.json").is_file()
-    assert any(record.key == "network_data" for record in manifest.artifacts)
+    assert any(record.key == "network_data_march" for record in manifest.artifacts)
 
     # ensure everything is written into the pipeline run root
     for art in result.artifacts:
