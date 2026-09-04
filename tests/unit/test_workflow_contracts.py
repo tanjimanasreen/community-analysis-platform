@@ -21,11 +21,10 @@ def test_ci_workflow_contract() -> None:
     assert "id-token: write" not in raw_text
     assert "aws-actions/configure-aws-credentials" not in raw_text
 
-    # 2. No duplicate make test execution
-    assert "make test-unit" in raw_text
-    assert "make test-integration" in raw_text
-    # Ensure 'make test' alone (full suite duplicate) is not in steps
-    assert "run: make test\n" not in raw_text
+    # 2. Unified CI validation gate (single source of truth with no duplicate test execution)
+    assert "make ci-validate" in raw_text
+    assert "make test-unit" not in raw_text
+    assert "make test-integration" not in raw_text
 
 
 def test_cd_workflow_contract() -> None:
@@ -133,3 +132,15 @@ def test_makefile_cd_preflight_contract() -> None:
     assert "import scripts.aws_cd; import scripts.aws_run_evolution" in makefile_text
     assert "test_workflow_contracts.py" in makefile_text
     assert "test_aws_cd.py" in makefile_text
+
+
+def test_makefile_ci_validate_contract() -> None:
+    """Verify Makefile defines ci-validate reproducing all CI gates."""
+    makefile_text = Path("Makefile").read_text(encoding="utf-8")
+    assert "ci-validate:" in makefile_text
+    assert "lock --check" in makefile_text
+    assert "sync --frozen" in makefile_text
+    assert "$(MAKE) lint" in makefile_text or "make lint" in makefile_text or "pre-commit" in makefile_text
+    assert "$(MAKE) test" in makefile_text or "make test" in makefile_text
+    assert "cd-preflight" in makefile_text
+    assert "git diff --check" in makefile_text

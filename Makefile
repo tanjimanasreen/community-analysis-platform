@@ -2,7 +2,7 @@
 	db-up db-down db-check tei-up tei-down tei-check validate-config ingest-sample run-network-sample \
 	run-topic-sample run-theme-sample evaluate-sample run-pipeline-test \
 	run-pipeline-sample run-dashboard-sample run-longitudinal-sample \
-	run-evolution-pipeline-test pipeline-preflight translation-preflight translation-detect cd-preflight canonical-theme-benchmark monthly-theme-cluster-benchmark run-evolution-pipeline verify-output-contract \
+	run-evolution-pipeline-test pipeline-preflight translation-preflight translation-detect cd-preflight ci-validate canonical-theme-benchmark monthly-theme-cluster-benchmark run-evolution-pipeline verify-output-contract \
 	verify-evolution-output-contract verify-longitudinal-output-contract api-smoke-test run-api demo demo-api \
 	demo-frontend frontend-install frontend-build frontend-lint frontend-typecheck \
 	frontend-test frontend-coverage frontend-e2e frontend-check dashboard-fixture \
@@ -60,6 +60,7 @@ help:
 	@echo "  translation-preflight - Prepare/reuse network outputs and report cached translation workload without cloud translation calls"
 	@echo "  translation-detect   - Call language detection only, cache results, and report exact translation request workload"
 	@echo "  cd-preflight         - Validate local CD environment, infra venv, Python imports, and workflow contracts without AWS access or deployment"
+	@echo "  ci-validate          - Run local CI validation gates (lockfile, pre-commit, unit tests, CD preflight, git diff)"
 	@echo "  canonical-theme-benchmark - Benchmark Stage-B canonicalization from saved theme artifacts without changing production outputs"
 	@echo "  monthly-theme-cluster-benchmark - Benchmark Stage-A monthly HDBSCAN from saved clean theme artifacts without changing production outputs"
 	@echo "  run-evolution-pipeline - Run a real evolution pipeline after preflight (CONFIG=...)"
@@ -229,6 +230,21 @@ cd-preflight:
 	@echo "=== CD Preflight: 3. Verifying CD workflow contracts and unit tests ==="
 	@$(UV) run --frozen --extra orchestration --extra tracking python -m pytest tests/unit/test_workflow_contracts.py tests/unit/test_aws_cd.py -v --tb=short
 	@echo "=== CD Preflight: PASS ==="
+
+ci-validate:
+	@echo "=== CI Validate: 1. Checking lockfile ==="
+	$(UV) lock --check
+	@echo "=== CI Validate: 2. Syncing locked dependencies ==="
+	$(UV) sync --frozen --extra orchestration --extra tracking
+	@echo "=== CI Validate: 3. Running pre-commit hooks (lint) ==="
+	$(MAKE) lint
+	@echo "=== CI Validate: 4. Running complete test suite ==="
+	$(MAKE) test
+	@echo "=== CI Validate: 5. Running CD preflight ==="
+	$(MAKE) cd-preflight
+	@echo "=== CI Validate: 6. Checking git diff whitespace ==="
+	git diff --check
+	@echo "=== CI Validate: PASS ==="
 
 canonical-theme-benchmark:
 	@if [ -z "$(THEMES_DIR)" ]; then \
