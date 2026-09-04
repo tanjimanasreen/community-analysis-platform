@@ -4,10 +4,12 @@ import ast
 import json
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Iterable, Iterator, Mapping, Sequence
+from typing import TYPE_CHECKING, Any, Iterable, Iterator, Mapping, Sequence
 
-import pandas as pd
 import yaml
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 from src.api.errors import (
     ArtifactNotFoundError,
@@ -222,6 +224,8 @@ class ArtifactReader:
         columns: list[str] | None = None,
     ) -> tuple[pd.DataFrame, int]:
         """Page across ordered immutable Parquet artifacts without full reads."""
+        import pandas as pd
+
         ordered = list(records)
         total = sum(self.parquet_row_count(run_id, record) for record in ordered)
         if limit <= 0 or offset >= total:
@@ -361,14 +365,19 @@ def normalize_value(value: Any) -> Any:
         return [normalize_value(item) for item in value]
     if isinstance(value, Mapping):
         return {str(key): normalize_value(item) for key, item in value.items()}
-    if isinstance(value, pd.Timestamp):
-        return value.isoformat()
+    import sys
 
-    try:
-        missing = pd.isna(value)
-    except (TypeError, ValueError):
-        missing = False
-    if isinstance(missing, bool) and missing:
+    pd = sys.modules.get("pandas")
+    if pd is not None:
+        if isinstance(value, pd.Timestamp):
+            return value.isoformat()
+        try:
+            missing = pd.isna(value)
+        except (TypeError, ValueError):
+            missing = False
+        if isinstance(missing, bool) and missing:
+            return None
+    elif isinstance(value, float) and value != value:
         return None
 
     if hasattr(value, "tolist") and not isinstance(value, (str, bytes)):

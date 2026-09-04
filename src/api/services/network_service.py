@@ -3,9 +3,10 @@ from __future__ import annotations
 import math
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import TYPE_CHECKING, Any, Mapping
 
-import pandas as pd
+if TYPE_CHECKING:
+    import pandas as pd
 
 from src.api.errors import (
     ArtifactNotFoundError,
@@ -145,6 +146,8 @@ class NetworkService:
         period: str | None = None,
         columns: list[str] | None = None,
     ) -> pd.DataFrame:
+        import pandas as pd
+
         key = self.artifact_key(metric)
         filters: list[tuple[str, str, Any]] = []
         if min_weight > 0:
@@ -181,6 +184,8 @@ class NetworkService:
         | None
     ):
         """Read additive dashboard edges plus exact summary/index totals."""
+        import pandas as pd
+
         try:
             sample_records = self._records_for_key(
                 run_id, self.sample_key(metric), period=period
@@ -267,6 +272,8 @@ class NetworkService:
     def _read_summary_frame(
         self, run_id: str, metric: str, *, period: str | None = None
     ) -> pd.DataFrame | None:
+        import pandas as pd
+
         key = self.summary_key(metric)
         try:
             records = self._records_for_key(run_id, key, period=period)
@@ -278,6 +285,8 @@ class NetworkService:
     def _read_community_interaction_frame(
         self, run_id: str, metric: str, *, period: str | None = None
     ) -> pd.DataFrame | None:
+        import pandas as pd
+
         key = self.interaction_key(metric)
         try:
             records = self._records_for_key(run_id, key, period=period)
@@ -357,6 +366,8 @@ class NetworkService:
         max_edges: int,
         min_weight: float,
     ) -> dict[str, Any]:
+        import pandas as pd
+
         if period is None:
             manifest = self.reader.catalog.get_manifest(run_id)
             periods = discover_periods(manifest, self.reader.read_safe_config(run_id))
@@ -522,6 +533,8 @@ class NetworkService:
         period: str | None,
         sampling: str,
     ) -> dict[str, Any]:
+        import pandas as pd
+
         sample = None
         node_layouts: dict[str, tuple[float, float]] = {}
         if community_id is None and float(min_weight) <= 0:
@@ -1009,6 +1022,8 @@ class NetworkService:
 
 
 def _normalize_graph_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    import pandas as pd
+
     required = {"source", "target", "community_number", "weight"}
     missing = sorted(required - set(frame.columns))
     if missing:
@@ -1019,6 +1034,8 @@ def _normalize_graph_frame(frame: pd.DataFrame) -> pd.DataFrame:
 
 
 def _summary_from_graph_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    import pandas as pd
+
     normalized = _normalize_graph_frame(frame)
     rows: list[dict[str, Any]] = []
     for community_id, group in normalized.groupby("community_number", sort=False):
@@ -1037,6 +1054,8 @@ def _summary_from_graph_frame(frame: pd.DataFrame) -> pd.DataFrame:
 
 
 def _normalize_summary_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    import pandas as pd
+
     missing = sorted(set(_SUMMARY_REQUIRED_COLUMNS) - set(frame.columns))
     if missing:
         raise ValueError(
@@ -1087,6 +1106,8 @@ def _community_interaction_stats(
 
 
 def _normalize_community_interaction_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    import pandas as pd
+
     result = frame.copy()
     for column in ("source_community_id", "target_community_id"):
         result[column] = result[column].map(_identifier_string)

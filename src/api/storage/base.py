@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterator, Protocol, Sequence, runtime_checkable
+from typing import TYPE_CHECKING, Any, Iterator, Protocol, Sequence, runtime_checkable
 
-import pandas as pd
-import pyarrow.parquet as pq
+if TYPE_CHECKING:
+    import pandas as pd
+    import pyarrow.parquet as pq
 
 
 @dataclass(frozen=True)

@@ -7,14 +7,13 @@ import re
 from collections import defaultdict
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
-from typing import Any, TYPE_CHECKING
-
-import pandas as pd
-
-from src.api.errors import ArtifactUnavailableError, InvalidFilterError
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    import pandas as pd
     from src.api.services.artifact_reader import ArtifactReader
+
+from src.api.errors import ArtifactUnavailableError, InvalidFilterError
 
 _PERIOD_RE = re.compile(r"^(?P<year>\d{4})-(?P<month>0[1-9]|1[0-2])$")
 _MONTH_NAMES = {
@@ -442,11 +441,17 @@ def _normalize(value: Any) -> Any:
         return {str(key): _normalize(item) for key, item in value.items()}
     if isinstance(value, (list, tuple, set)):
         return [_normalize(item) for item in value]
-    try:
-        missing = pd.isna(value)
-    except (TypeError, ValueError):
-        missing = False
-    if isinstance(missing, bool) and missing:
+    import sys
+
+    pd = sys.modules.get("pandas")
+    if pd is not None:
+        try:
+            missing = pd.isna(value)
+        except (TypeError, ValueError):
+            missing = False
+        if isinstance(missing, bool) and missing:
+            return None
+    elif isinstance(value, float) and value != value:
         return None
     if hasattr(value, "tolist") and not isinstance(value, (str, bytes)):
         try:

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import pandas as pd
+if TYPE_CHECKING:
+    import pandas as pd
 
 from src.api.errors import (
     ArtifactNotFoundError,
@@ -62,6 +63,8 @@ class TopicService:
         else:
             # Community filtering may span both absolute and weighted columns,
             # so retain the compatibility path for this small targeted query.
+            import pandas as pd
+
             frames = [
                 self.reader.read_parquet_record(run_id, artifact)
                 for artifact in artifacts
@@ -126,6 +129,8 @@ class TopicService:
             )
             page, _ = self.reader.page(frame, limit=limit, offset=0)
         else:
+            import pandas as pd
+
             frames = []
             for artifact in artifacts:
                 frame = self.reader.read_parquet_record(run_id, artifact).copy()
@@ -161,6 +166,8 @@ class TopicService:
         limit: int,
         offset: int,
     ) -> tuple[pd.DataFrame, int]:
+        import pandas as pd
+
         total = sum(self.reader.parquet_row_count(run_id, item) for item in artifacts)
         if offset >= total or limit <= 0:
             return pd.DataFrame(), total

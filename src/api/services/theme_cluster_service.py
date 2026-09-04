@@ -5,13 +5,12 @@ import json
 import re
 from collections import defaultdict
 from collections.abc import Mapping
-from typing import Any, TYPE_CHECKING
-
-import pandas as pd
+from typing import TYPE_CHECKING, Any
 
 from src.api.errors import ArtifactUnavailableError, InvalidFilterError
 
 if TYPE_CHECKING:
+    import pandas as pd
     from src.api.services.artifact_reader import ArtifactReader
 
 _PERIOD_RE = re.compile(r"^(?P<year>\d{4})-(?P<month>0[1-9]|1[0-2])$")
@@ -382,11 +381,17 @@ def _community_pairs(value: Any) -> list[dict[str, Any]]:
 def _parse(value: Any) -> Any:
     if isinstance(value, (list, tuple, Mapping)):
         return value
-    try:
-        if pd.isna(value):
-            return None
-    except (TypeError, ValueError):
-        pass
+    import sys
+
+    pd = sys.modules.get("pandas")
+    if pd is not None:
+        try:
+            if pd.isna(value):
+                return None
+        except (TypeError, ValueError):
+            pass
+    elif isinstance(value, float) and value != value:
+        return None
     if isinstance(value, str):
         text = value.strip()
         if text and text[0] in "[{(" and text[-1] in "]})":
@@ -428,9 +433,20 @@ def _nullable_text(value: Any) -> str | None:
 
 
 def _float(value: Any) -> float | None:
+    if value is None:
+        return None
+    import sys
+
+    pd = sys.modules.get("pandas")
+    if pd is not None:
+        try:
+            if pd.isna(value):
+                return None
+        except (TypeError, ValueError):
+            pass
+    elif isinstance(value, float) and value != value:
+        return None
     try:
-        if value is None or pd.isna(value):
-            return None
         return float(value)
     except (TypeError, ValueError):
         return None

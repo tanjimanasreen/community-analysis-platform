@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import posixpath
-from typing import Any, Iterator, Sequence
+from typing import TYPE_CHECKING, Any, Iterator, Sequence
 
-import pandas as pd
-import pyarrow as pa
-import pyarrow.fs as pafs
-import pyarrow.parquet as pq
+if TYPE_CHECKING:
+    import pandas as pd
+    import pyarrow as pa
+    import pyarrow.fs as pafs
+    import pyarrow.parquet as pq
 
 from src.api.storage.base import ArtifactStorage, FileMetadata
 
@@ -30,14 +31,23 @@ class S3ArtifactStorage(ArtifactStorage):
         self.bucket = str(bucket).strip().strip("/")
         self.prefix = str(prefix).strip().strip("/")
         self.region = region.strip() if region and str(region).strip() else None
+        self._fs: pafs.FileSystem | None = filesystem
 
-        if filesystem is not None:
-            self.fs = filesystem
-        else:
+    @property
+    def fs(self) -> pafs.FileSystem:
+        """Return the underlying PyArrow filesystem, initializing on demand."""
+        if self._fs is None:
+            import pyarrow.fs as pafs
+
             kwargs: dict[str, Any] = {}
             if self.region:
                 kwargs["region"] = self.region
-            self.fs = pafs.S3FileSystem(**kwargs)
+            self._fs = pafs.S3FileSystem(**kwargs)
+        return self._fs
+
+    @fs.setter
+    def fs(self, value: pafs.FileSystem) -> None:
+        self._fs = value
 
     @property
     def backend_type(self) -> str:
@@ -51,6 +61,8 @@ class S3ArtifactStorage(ArtifactStorage):
 
     @property
     def _is_native_s3(self) -> bool:
+        import pyarrow.fs as pafs
+
         return isinstance(self.fs, pafs.S3FileSystem)
 
     def _base_dir(self) -> str:
@@ -59,6 +71,8 @@ class S3ArtifactStorage(ArtifactStorage):
         return self.prefix.strip("/")
 
     def is_ready(self) -> bool:
+        import pyarrow.fs as pafs
+
         try:
             target = self._base_dir()
             info = self.fs.get_file_info(target)
@@ -88,6 +102,8 @@ class S3ArtifactStorage(ArtifactStorage):
         return normalized
 
     def list_run_manifest_paths(self) -> list[str]:
+        import pyarrow.fs as pafs
+
         target_dir = self._base_dir()
         try:
             selector = pafs.FileSelector(
@@ -129,6 +145,8 @@ class S3ArtifactStorage(ArtifactStorage):
     def iter_bytes(
         self, relative_path: str, chunk_size: int = 65536
     ) -> Iterator[bytes]:
+        import pyarrow.fs as pafs
+
         full_key = self._full_path(relative_path)
         info = self.fs.get_file_info(full_key)
         if info.type != pafs.FileType.File:
@@ -144,6 +162,8 @@ class S3ArtifactStorage(ArtifactStorage):
         return self.read_bytes(relative_path).decode(encoding)
 
     def get_metadata(self, relative_path: str) -> FileMetadata:
+        import pyarrow.fs as pafs
+
         full_key = self._full_path(relative_path)
         info = self.fs.get_file_info(full_key)
         if info.type != pafs.FileType.File:
@@ -155,6 +175,8 @@ class S3ArtifactStorage(ArtifactStorage):
 
     def exists(self, relative_path: str) -> bool:
         try:
+            import pyarrow.fs as pafs
+
             full_key = self._full_path(relative_path)
             info = self.fs.get_file_info(full_key)
             return info.type == pafs.FileType.File
@@ -162,6 +184,8 @@ class S3ArtifactStorage(ArtifactStorage):
             return False
 
     def open_parquet(self, relative_path: str) -> pq.ParquetFile:
+        import pyarrow.parquet as pq
+
         full_key = self._full_path(relative_path)
         return pq.ParquetFile(full_key, filesystem=self.fs)
 
@@ -172,6 +196,8 @@ class S3ArtifactStorage(ArtifactStorage):
         columns: Sequence[str] | None = None,
         filters: Sequence[tuple[str, str, Any]] | None = None,
     ) -> pd.DataFrame:
+        import pandas as pd
+
         full_key = self._full_path(relative_path)
         if columns is None and filters is None:
             return pd.read_parquet(full_key, filesystem=self.fs)
@@ -192,6 +218,10 @@ class S3ArtifactStorage(ArtifactStorage):
     ) -> pd.DataFrame:
         if offset < 0 or limit < 0:
             raise ValueError("offset and limit must be non-negative")
+
+        import pandas as pd
+        import pyarrow as pa
+        import pyarrow.parquet as pq
 
         full_key = self._full_path(relative_path)
         parquet = pq.ParquetFile(full_key, filesystem=self.fs)

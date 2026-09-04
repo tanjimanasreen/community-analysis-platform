@@ -8,7 +8,6 @@ from typing import Any
 
 from src.api.storage.base import ArtifactStorage, FileMetadata
 from src.api.storage.local import LocalArtifactStorage
-from src.api.storage.s3 import S3ArtifactStorage
 
 
 def parse_s3_uri(uri: str) -> tuple[str, str]:
@@ -37,6 +36,8 @@ def create_artifact_storage(
     raw_root = str(artifact_root).strip() if artifact_root is not None else ""
 
     if raw_root.startswith("s3://"):
+        from src.api.storage.s3 import S3ArtifactStorage
+
         parsed_bucket, parsed_prefix = parse_s3_uri(raw_root)
         resolved_bucket = s3_bucket or parsed_bucket
         resolved_prefix = s3_prefix or parsed_prefix
@@ -54,6 +55,8 @@ def create_artifact_storage(
             raise ValueError(
                 "S3 storage backend requires 's3_bucket' (or an 's3://' artifact_root URI) to be configured"
             )
+        from src.api.storage.s3 import S3ArtifactStorage
+
         return S3ArtifactStorage(
             bucket=s3_bucket,
             prefix=s3_prefix,

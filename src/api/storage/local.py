@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any, Iterator, Sequence
+from typing import TYPE_CHECKING, Any, Iterator, Sequence
 
-import pandas as pd
-import pyarrow as pa
-import pyarrow.parquet as pq
+if TYPE_CHECKING:
+    import pandas as pd
+    import pyarrow as pa
+    import pyarrow.parquet as pq
 
 from src.api.storage.base import ArtifactStorage, FileMetadata
 
@@ -108,6 +109,8 @@ class LocalArtifactStorage(ArtifactStorage):
             return False
 
     def open_parquet(self, relative_path: str) -> pq.ParquetFile:
+        import pyarrow.parquet as pq
+
         path = self._resolve(relative_path)
         return pq.ParquetFile(path)
 
@@ -118,6 +121,8 @@ class LocalArtifactStorage(ArtifactStorage):
         columns: Sequence[str] | None = None,
         filters: Sequence[tuple[str, str, Any]] | None = None,
     ) -> pd.DataFrame:
+        import pandas as pd
+
         path = self._resolve(relative_path)
         if columns is None and filters is None:
             return pd.read_parquet(path)
@@ -137,6 +142,10 @@ class LocalArtifactStorage(ArtifactStorage):
     ) -> pd.DataFrame:
         if offset < 0 or limit < 0:
             raise ValueError("offset and limit must be non-negative")
+
+        import pandas as pd
+        import pyarrow as pa
+        import pyarrow.parquet as pq
 
         path = self._resolve(relative_path)
         parquet = pq.ParquetFile(path)

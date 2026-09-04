@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -616,3 +618,137 @@ def test_api_requests_do_not_import_analytical_modules(tmp_path):
     assert "src.themes.theme_similarity" not in sys.modules
     assert "src.themes.theme_clustering" not in sys.modules
     assert "networkx" not in sys.modules
+
+
+def test_api_startup_does_not_import_heavy_data_libraries(tmp_path):
+    """Verify that importing src.api.app, initializing app, and calling /health do not import pandas, pyarrow, or numpy."""
+    _build_run(tmp_path)
+    worker_code = (
+        "import sys\n"
+        "assert 'pandas' not in sys.modules\n"
+        "assert 'pyarrow' not in sys.modules\n"
+        "assert 'numpy' not in sys.modules\n"
+        "from fastapi.testclient import TestClient\n"
+        "from src.api.app import create_app\n"
+        f"app = create_app(artifact_root='{tmp_path}')\n"
+        "assert 'pandas' not in sys.modules\n"
+        "assert 'pyarrow' not in sys.modules\n"
+        "assert 'numpy' not in sys.modules\n"
+        "client = TestClient(app)\n"
+        "assert 'pandas' not in sys.modules\n"
+        "assert 'pyarrow' not in sys.modules\n"
+        "assert 'numpy' not in sys.modules\n"
+        "resp_health = client.get('/api/v1/health')\n"
+        "assert resp_health.status_code == 200\n"
+        "assert resp_health.json()['status'] == 'ok'\n"
+        "assert 'pandas' not in sys.modules\n"
+        "assert 'pyarrow' not in sys.modules\n"
+        "assert 'numpy' not in sys.modules\n"
+        "resp_ready = client.get('/api/v1/ready')\n"
+        "assert resp_ready.status_code == 200\n"
+        "assert resp_ready.json()['status'] == 'ready'\n"
+        "assert 'pandas' not in sys.modules\n"
+        "assert 'pyarrow' not in sys.modules\n"
+        "assert 'numpy' not in sys.modules\n"
+        "resp_overview = client.get('/api/v1/runs/run-03/overview')\n"
+        "assert resp_overview.status_code == 200\n"
+        "assert 'pandas' in sys.modules\n"
+        "assert 'pyarrow' in sys.modules\n"
+        "assert 'numpy' in sys.modules\n"
+        "print('STARTUP_AND_HEALTH_CLEAN')\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", worker_code],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, f"Subprocess failed:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    assert "STARTUP_AND_HEALTH_CLEAN" in result.stdout
+
+
+def test_api_startup_s3_backend_does_not_import_heavy_data_libraries():
+    """Verify that importing src.api.app, initializing S3 app, and calling /health do not import pandas, pyarrow, or numpy."""
+    worker_code = (
+        "import sys\n"
+        "assert 'pandas' not in sys.modules\n"
+        "assert 'pyarrow' not in sys.modules\n"
+        "assert 'numpy' not in sys.modules\n"
+        "from fastapi.testclient import TestClient\n"
+        "from src.api.app import create_app\n"
+        "from src.api.storage import S3ArtifactStorage\n"
+        "from src.api.storage.factory import create_artifact_storage\n"
+        "direct_storage = create_artifact_storage(backend_type='s3', s3_bucket='test-direct-bucket', s3_region='us-east-1')\n"
+        "assert isinstance(direct_storage, S3ArtifactStorage)\n"
+        "assert 'pandas' not in sys.modules\n"
+        "assert 'pyarrow' not in sys.modules\n"
+        "assert 'numpy' not in sys.modules\n"
+        "app = create_app()\n"
+        "assert 'pandas' not in sys.modules\n"
+        "assert 'pyarrow' not in sys.modules\n"
+        "assert 'numpy' not in sys.modules\n"
+        "client = TestClient(app)\n"
+        "assert 'pandas' not in sys.modules\n"
+        "assert 'pyarrow' not in sys.modules\n"
+        "assert 'numpy' not in sys.modules\n"
+        "resp_health = client.get('/api/v1/health')\n"
+        "assert resp_health.status_code == 200\n"
+        "assert resp_health.json()['status'] == 'ok'\n"
+        "assert 'pandas' not in sys.modules\n"
+        "assert 'pyarrow' not in sys.modules\n"
+        "assert 'numpy' not in sys.modules\n"
+        "print('S3_STARTUP_AND_HEALTH_CLEAN')\n"
+    )
+    env = dict(os.environ)
+    env["AWS_EC2_METADATA_DISABLED"] = "true"
+    env["COMMUNITY_ANALYSIS_STORAGE_BACKEND"] = "s3"
+    env["COMMUNITY_ANALYSIS_S3_BUCKET"] = "test-startup-bucket"
+    env["COMMUNITY_ANALYSIS_S3_REGION"] = "us-east-1"
+    result = subprocess.run(
+        [sys.executable, "-c", worker_code],
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
+    assert result.returncode == 0, f"Subprocess failed:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    assert "S3_STARTUP_AND_HEALTH_CLEAN" in result.stdout
+
+
+def test_api_parquet_endpoints_work_with_lazy_imports(tmp_path):
+    """Verify that endpoints requiring Parquet data load and return valid payloads with lazy imports."""
+    _build_run(tmp_path)
+    client = _client(tmp_path)
+
+    # Health and readiness endpoints succeed without requiring analytical or heavy processing
+    health_resp = client.get("/api/v1/health")
+    assert health_resp.status_code == 200
+    assert health_resp.json()["status"] == "ok"
+
+    ready_resp = client.get("/api/v1/ready")
+    assert ready_resp.status_code == 200
+    assert ready_resp.json()["status"] == "ready"
+
+    # Parquet-backed data endpoints resolve correctly with lazy loading
+    overview_resp = client.get("/api/v1/runs/run-03/overview")
+    assert overview_resp.status_code == 200
+    overview_data = overview_resp.json()
+    assert overview_data["run_id"] == "run-03"
+    assert overview_data["total_users"] == 5
+
+    network_resp = client.get("/api/v1/runs/run-03/network")
+    assert network_resp.status_code == 200
+    network_data = network_resp.json()
+    assert network_data["view"] == "users"
+    assert len(network_data["nodes"]) > 0
+
+    topics_resp = client.get("/api/v1/runs/run-03/topics?topic_type=matched")
+    assert topics_resp.status_code == 200
+    topics_data = topics_resp.json()
+    assert topics_data["topic_type"] == "matched"
+    assert len(topics_data["records"]) > 0
+
+    themes_resp = client.get("/api/v1/runs/run-03/themes")
+    assert themes_resp.status_code == 200
+    themes_data = themes_resp.json()
+    assert len(themes_data["records"]) > 0
