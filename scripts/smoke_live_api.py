@@ -2,11 +2,12 @@
 """Live API smoke testing script against deployed API Gateway and Cognito.
 
 Verifies:
-- Public endpoints (/api/v1/health, /api/v1/ready)
+- Public process health endpoint (/api/v1/health)
 - 401 Unauthorized rejection for protected endpoints without authentication
 - Temporary Cognito user lifecycle (AdminCreateUser -> AdminSetUserPassword -> AdminInitiateAuth -> AdminDeleteUser)
 - Clean credential redaction in all log messages
-- Authenticated retrieval of run-scoped analytical endpoints (/runs, /overview, /communities, /networks, /topics, /themes, /evolution)
+- Authenticated readiness check (/api/v1/ready)
+- Authenticated retrieval of run-scoped analytical endpoints (/runs, /overview, /communities, /network, /centrality, /topics, /themes, /transitions, /evolution/paths)
 """
 
 from __future__ import annotations
@@ -181,15 +182,8 @@ def smoke_test_api(
     )
     logger.info("Health check passed: status=%s, schema_version=%s", status, payload.get("schema_version"))
 
-    # 2. Public / Ready Check
-    ready_url = f"{api_root}/ready"
-    logger.info("Checking readiness endpoint: %s", ready_url)
-    status, payload, _ = _http_request(ready_url, timeout=timeout)
-    assert status in (200, 503), f"Readiness endpoint returned {status} (expected 200 or 503)"
-    logger.info("Readiness check returned status=%s", status)
-
     if id_token:
-        # 3. Unauthenticated Rejection on Protected Endpoint
+        # 2. Unauthenticated Rejection on Protected Endpoint
         runs_url = f"{api_root}/runs"
         logger.info("Verifying unauthenticated access is rejected on: %s", runs_url)
         status, _, _ = _http_request(runs_url, timeout=timeout)
@@ -197,6 +191,13 @@ def smoke_test_api(
         logger.info("Protected endpoint correctly rejected unauthenticated request with 401.")
 
         auth_headers = {"Authorization": f"Bearer {id_token}"}
+
+        # 3. Authenticated Readiness Check
+        ready_url = f"{api_root}/ready"
+        logger.info("Checking authenticated readiness endpoint: %s", ready_url)
+        status, payload, _ = _http_request(ready_url, headers=auth_headers, timeout=timeout)
+        assert status == 200, f"Readiness endpoint returned {status} (expected 200)"
+        logger.info("Authenticated readiness check returned status=%s", status)
 
         # 4. Authenticated Runs Catalog
         logger.info("Checking authenticated runs list: %s", runs_url)
@@ -220,8 +221,8 @@ def smoke_test_api(
         endpoints_to_check = [
             f"{api_root}/runs/{run_id}/overview",
             f"{api_root}/runs/{run_id}/communities",
-            f"{api_root}/runs/{run_id}/networks/graph",
-            f"{api_root}/runs/{run_id}/networks/centrality",
+            f"{api_root}/runs/{run_id}/network",
+            f"{api_root}/runs/{run_id}/centrality",
             f"{api_root}/runs/{run_id}/topics",
             f"{api_root}/runs/{run_id}/themes",
             f"{api_root}/runs/{run_id}/transitions",
@@ -249,14 +250,47 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
 
-    id_token = args.id_token
+    id_token = (args.id_token or "").strip() or None
+    user_pool_id = (args.user_pool_id or "").strip() or None
+    client_id = (args.client_id or "").strip() or None
 
-    if not args.skip_auth and not id_token and args.user_pool_id and args.client_id:
+    # Case A: Explicitly requested public health-only smoke
+    if args.skip_auth:
+        try:
+            smoke_test_api(
+                api_url=args.api_url,
+                run_id=args.run_id,
+                id_token=None,
+                timeout=args.timeout,
+            )
+        except Exception as e:
+            logger.error("API smoke test failed: %s", e)
+            return 1
+        logger.info("Live API smoke test completed successfully.")
+        return 0
+
+    # Case B: Explicit pre-acquired ID token
+    if id_token:
+        try:
+            smoke_test_api(
+                api_url=args.api_url,
+                run_id=args.run_id,
+                id_token=id_token,
+                timeout=args.timeout,
+            )
+        except Exception as e:
+            logger.error("API smoke test failed: %s", e)
+            return 1
+        logger.info("Live API smoke test completed successfully.")
+        return 0
+
+    # Case C: Cognito User Pool and App Client for temporary user lifecycle
+    if user_pool_id and client_id:
         import boto3
 
         cognito_client = boto3.client("cognito-idp", region_name=args.region)
         try:
-            with CognitoAuthContext(cognito_client, args.user_pool_id, args.client_id) as token:
+            with CognitoAuthContext(cognito_client, user_pool_id, client_id) as token:
                 smoke_test_api(
                     api_url=args.api_url,
                     run_id=args.run_id,
@@ -266,20 +300,15 @@ def main(argv: list[str] | None = None) -> int:
         except Exception as e:
             logger.error("API smoke test failed: %s", e)
             return 1
-    else:
-        try:
-            smoke_test_api(
-                api_url=args.api_url,
-                run_id=args.run_id,
-                id_token=id_token if not args.skip_auth else None,
-                timeout=args.timeout,
-            )
-        except Exception as e:
-            logger.error("API smoke test failed: %s", e)
-            return 1
+        logger.info("Live API smoke test completed successfully.")
+        return 0
 
-    logger.info("Live API smoke test completed successfully.")
-    return 0
+    # Case D: Fail closed when authenticated smoke was expected but auth material is missing
+    logger.error(
+        "Authenticated API smoke requires either --id-token or both --user-pool-id and --client-id. "
+        "Use --skip-auth only when intentionally requesting public health-only smoke."
+    )
+    return 1
 
 
 if __name__ == "__main__":

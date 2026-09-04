@@ -13,10 +13,13 @@ import pytest
 from scripts.aws_cd import (
     APPROVED_DEV_APPLICATION_STACKS,
     build_and_deploy_frontend,
+    build_frontend_environment,
     check_ecr_image_exists,
     cleanup_github_runner_docker_state,
     compute_tei_fingerprint,
     deploy_cdk_application_stacks,
+    format_cognito_domain,
+    require_stack_output,
     smoke_test_frontend,
     validate_environment,
     validate_source_sha,
@@ -175,6 +178,8 @@ def test_cd_main_exact_run_id_correlation_and_no_docker_login(
                         {"OutputKey": "FrontendBucketName", "OutputValue": "fe-bucket"},
                         {"OutputKey": "CloudFrontDistributionId", "OutputValue": "dist-123"},
                         {"OutputKey": "CloudFrontDomainName", "OutputValue": "d123.cloudfront.net"},
+                        {"OutputKey": "FrontendCognitoClientId", "OutputValue": "fe-client-123"},
+                        {"OutputKey": "CognitoDomain", "OutputValue": "community-analysis-dev-123456789012"},
                     ]
                 }
             ]
@@ -208,7 +213,7 @@ def test_cd_main_exact_run_id_correlation_and_no_docker_login(
         )
 
         assert exit_code == 0
-        # Verify Batch job submitted with resolved revisioned ARN
+        # Verify Batch job submitted with resolved revisioned ARN and ecsPropertiesOverride
         batch_mock.submit_job.assert_called_once()
         submit_kwargs = batch_mock.submit_job.call_args[1]
         assert (
@@ -216,6 +221,20 @@ def test_cd_main_exact_run_id_correlation_and_no_docker_login(
             == "arn:aws:batch:us-east-1:123456789012:job-definition/community-analysis-dev-analytics-tei-job:3"
         )
         assert submit_kwargs["jobDefinition"] != "community-analysis-dev-analytics-tei-job"
+        assert "containerOverrides" not in submit_kwargs, "CD acceptance must not pass containerOverrides"
+        assert "ecsPropertiesOverride" in submit_kwargs, "CD acceptance must pass ecsPropertiesOverride"
+        ecs_override = submit_kwargs["ecsPropertiesOverride"]
+        assert "taskProperties" in ecs_override
+        assert len(ecs_override["taskProperties"]) == 1
+        containers = ecs_override["taskProperties"][0]["containers"]
+        assert len(containers) == 1
+        assert containers[0]["name"] == "analytics"
+        env_map = {e["name"]: e["value"] for e in containers[0]["environment"]}
+        assert env_map["CONFIG_PATH"] == "tests/configs/test_evolution.yml"
+        assert env_map["PIPELINE_COMMAND"] == "run-evolution-pipeline"
+        assert env_map["THEME_PROVIDER"] == "mock"
+        assert env_map["SKIP_S3_DOWNLOAD"] == "true"
+
         # Verify wait called on exact job ID
         mock_wait.assert_called_once_with(batch_mock, "batch-accept-job-999", timeout_seconds=7200.0)
         # Verify exact run_id discovery from Batch job logs
@@ -314,6 +333,8 @@ def _setup_mock_cd_environment(
                     {"OutputKey": "FrontendBucketName", "OutputValue": "fe-bucket"},
                     {"OutputKey": "CloudFrontDistributionId", "OutputValue": "dist-123"},
                     {"OutputKey": "CloudFrontDomainName", "OutputValue": "d123.cloudfront.net"},
+                    {"OutputKey": "FrontendCognitoClientId", "OutputValue": "fe-client-123"},
+                    {"OutputKey": "CognitoDomain", "OutputValue": "community-analysis-dev-123456789012"},
                 ]
             }
         ]
@@ -617,3 +638,456 @@ def test_cd_acceptance_submit_job_receives_revisioned_arn(
         )
         assert call_kwargs["jobDefinition"] != "community-analysis-dev-analytics-tei-job"
         assert ":3" in call_kwargs["jobDefinition"]
+        assert "containerOverrides" not in call_kwargs
+        assert "ecsPropertiesOverride" in call_kwargs
+
+
+@patch("scripts.aws_cd.smoke_test_frontend")
+@patch("scripts.aws_cd.deploy_cdk_application_stacks")
+@patch("scripts.aws_cd.build_and_deploy_frontend")
+@patch("scripts.aws_cd.run_command")
+def test_cd_acceptance_submit_job_ecs_properties_override(
+    mock_run_cmd: MagicMock,
+    mock_build_fe: MagicMock,
+    mock_deploy_cdk: MagicMock,
+    mock_smoke_fe: MagicMock,
+) -> None:
+    """Verify CD acceptance SubmitJob specifically uses ecsPropertiesOverride targeting analytics with SKIP_S3_DOWNLOAD=true."""
+    from scripts.aws_cd import main
+
+    with (
+        patch("boto3.client") as mock_boto,
+        patch("scripts.aws_run_evolution.wait_for_batch_job"),
+        patch("scripts.aws_run_evolution.discover_run_id_from_batch_job", return_value="run-accept-override"),
+        patch("scripts.aws_run_evolution.verify_completed_manifest"),
+        patch("scripts.smoke_live_api.main", return_value=0),
+    ):
+        _setup_mock_cd_environment(mock_boto, tei_exists=False)
+        batch_mock = mock_boto("batch")
+
+        exit_code = main(
+            [
+                "--environment",
+                "dev",
+                "--source-sha",
+                "6d4dcbbcd5f67ff89850d4b52c333b0804965b77",
+                "--acceptance-config",
+                "tests/configs/test_evolution.yml",
+                "--acceptance-theme-provider",
+                "mock",
+            ]
+        )
+        assert exit_code == 0
+        batch_mock.submit_job.assert_called_once()
+        call_kwargs = batch_mock.submit_job.call_args[1]
+
+        # 1. No containerOverrides
+        assert "containerOverrides" not in call_kwargs, "Acceptance submit must NOT have containerOverrides"
+
+        # 2. Contains ecsPropertiesOverride
+        assert "ecsPropertiesOverride" in call_kwargs, "Acceptance submit MUST have ecsPropertiesOverride"
+
+        # 3. Targets ONLY the analytics container
+        ecs_override = call_kwargs["ecsPropertiesOverride"]
+        assert "taskProperties" in ecs_override
+        assert len(ecs_override["taskProperties"]) == 1
+        containers = ecs_override["taskProperties"][0]["containers"]
+        assert len(containers) == 1
+        analytics_container = containers[0]
+        assert analytics_container["name"] == "analytics"
+
+        # 4. Verified environment overrides
+        env_map = {e["name"]: e["value"] for e in analytics_container["environment"]}
+        assert env_map["CONFIG_PATH"] == "tests/configs/test_evolution.yml"
+        assert env_map["PIPELINE_COMMAND"] == "run-evolution-pipeline"
+        assert env_map["THEME_PROVIDER"] == "mock"
+        assert env_map["SKIP_S3_DOWNLOAD"] == "true"
+
+        # 5. Approved queue and revisioned ARN
+        assert call_kwargs["jobQueue"] == "community-analysis-dev-queue"
+        assert call_kwargs["jobDefinition"].endswith(":3")
+
+
+def test_require_stack_output() -> None:
+    outputs = {"Key1": "val1", "Key2": "  val2  ", "Empty": "", "Whitespace": "   "}
+    assert require_stack_output(outputs, "Key1", "test-stack") == "val1"
+    assert require_stack_output(outputs, "Key2", "test-stack") == "val2"
+
+    with pytest.raises(RuntimeError, match="Missing required CloudFormation output 'Missing' in stack 'test-stack'"):
+        require_stack_output(outputs, "Missing", "test-stack")
+
+    with pytest.raises(RuntimeError, match="Missing required CloudFormation output 'Empty' in stack 'test-stack'"):
+        require_stack_output(outputs, "Empty", "test-stack")
+
+    with pytest.raises(RuntimeError, match="Missing required CloudFormation output 'Whitespace' in stack 'test-stack'"):
+        require_stack_output(outputs, "Whitespace", "test-stack")
+
+
+def test_format_cognito_domain() -> None:
+    # Prefix only
+    assert (
+        format_cognito_domain("community-analysis-dev-123456789012", "us-east-1")
+        == "community-analysis-dev-123456789012.auth.us-east-1.amazoncognito.com"
+    )
+    # Prefix with scheme and trailing slash
+    assert (
+        format_cognito_domain("https://my-prefix/", "us-west-2")
+        == "my-prefix.auth.us-west-2.amazoncognito.com"
+    )
+    # Already contains .auth.
+    assert (
+        format_cognito_domain("my-domain.auth.us-east-1.amazoncognito.com", "us-east-1")
+        == "my-domain.auth.us-east-1.amazoncognito.com"
+    )
+    # Ends with .amazoncognito.com
+    assert (
+        format_cognito_domain("my-custom.amazoncognito.com", "us-east-1")
+        == "my-custom.amazoncognito.com"
+    )
+    # Error cases
+    with pytest.raises(ValueError, match="Cognito domain cannot be empty"):
+        format_cognito_domain("", "us-east-1")
+    with pytest.raises(ValueError, match="AWS region cannot be empty"):
+        format_cognito_domain("my-prefix", "")
+
+
+def test_build_frontend_environment() -> None:
+    env = build_frontend_environment(
+        user_pool_id="us-east-1_xyz123",
+        client_id="appclient999",
+        cognito_domain="my-domain.auth.us-east-1.amazoncognito.com",
+        redirect_uri="https://d123456789.cloudfront.net",
+        api_base_url="/api/v1",
+    )
+    assert env == {
+        "VITE_AUTH_MODE": "cognito",
+        "VITE_COGNITO_USER_POOL_ID": "us-east-1_xyz123",
+        "VITE_COGNITO_CLIENT_ID": "appclient999",
+        "VITE_COGNITO_DOMAIN": "my-domain.auth.us-east-1.amazoncognito.com",
+        "VITE_COGNITO_REDIRECT_URI": "https://d123456789.cloudfront.net",
+        "VITE_API_BASE_URL": "/api/v1",
+    }
+
+    # Error cases on empty values
+    with pytest.raises(ValueError, match="user_pool_id cannot be empty"):
+        build_frontend_environment(
+            user_pool_id="",
+            client_id="client",
+            cognito_domain="dom",
+            redirect_uri="https://d.net",
+        )
+    with pytest.raises(ValueError, match="client_id cannot be empty"):
+        build_frontend_environment(
+            user_pool_id="pool",
+            client_id="   ",
+            cognito_domain="dom",
+            redirect_uri="https://d.net",
+        )
+    with pytest.raises(ValueError, match="cognito_domain cannot be empty"):
+        build_frontend_environment(
+            user_pool_id="pool",
+            client_id="client",
+            cognito_domain="",
+            redirect_uri="https://d.net",
+        )
+    with pytest.raises(ValueError, match="redirect_uri cannot be empty"):
+        build_frontend_environment(
+            user_pool_id="pool",
+            client_id="client",
+            cognito_domain="dom",
+            redirect_uri="   ",
+        )
+    with pytest.raises(ValueError, match="api_base_url cannot be empty"):
+        build_frontend_environment(
+            user_pool_id="pool",
+            client_id="client",
+            cognito_domain="dom",
+            redirect_uri="https://d.net",
+            api_base_url="",
+        )
+
+
+@patch("scripts.aws_cd.run_command")
+def test_build_and_deploy_frontend_passes_env(mock_run: MagicMock, tmp_path: Path) -> None:
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "index.html").write_text("<div id='root'></div>")
+
+    custom_env = {"VITE_AUTH_MODE": "cognito", "VITE_COGNITO_CLIENT_ID": "cid123"}
+    build_and_deploy_frontend(
+        frontend_dir=tmp_path,
+        bucket_name="test-frontend-bucket",
+        distribution_id="E123456789",
+        env=custom_env,
+    )
+    # The first run_command is `npm run build` with env=custom_env
+    assert mock_run.call_args_list[0].kwargs.get("env") == custom_env
+
+
+@patch("scripts.aws_cd.smoke_test_frontend")
+@patch("scripts.aws_cd.deploy_cdk_application_stacks")
+@patch("scripts.aws_cd.build_and_deploy_frontend")
+@patch("scripts.aws_cd.run_command")
+def test_cd_main_frontend_build_receives_injected_cognito_env(
+    mock_run_cmd: MagicMock,
+    mock_build_fe: MagicMock,
+    mock_deploy_cdk: MagicMock,
+    mock_smoke_fe: MagicMock,
+) -> None:
+    """Verify CD main supplies exact production Cognito Vite configuration to frontend build."""
+    from scripts.aws_cd import main
+
+    with (
+        patch("boto3.client") as mock_boto,
+        patch("scripts.aws_run_evolution.wait_for_batch_job"),
+        patch("scripts.aws_run_evolution.discover_run_id_from_batch_job", return_value="run-accept-fe"),
+        patch("scripts.aws_run_evolution.verify_completed_manifest"),
+        patch("scripts.smoke_live_api.main", return_value=0),
+    ):
+        _setup_mock_cd_environment(mock_boto, tei_exists=False)
+
+        exit_code = main(
+            [
+                "--environment",
+                "dev",
+                "--source-sha",
+                "6d4dcbbcd5f67ff89850d4b52c333b0804965b77",
+            ]
+        )
+        assert exit_code == 0
+        mock_build_fe.assert_called_once()
+        fe_kwargs = mock_build_fe.call_args[1]
+        assert fe_kwargs["bucket_name"] == "fe-bucket"
+        assert fe_kwargs["distribution_id"] == "dist-123"
+        injected_env = fe_kwargs["env"]
+        assert injected_env["VITE_AUTH_MODE"] == "cognito"
+        assert injected_env["VITE_COGNITO_USER_POOL_ID"] == "pool-123"
+        assert injected_env["VITE_COGNITO_CLIENT_ID"] == "fe-client-123"
+        assert injected_env["VITE_COGNITO_DOMAIN"] == "community-analysis-dev-123456789012.auth.us-east-1.amazoncognito.com"
+        assert injected_env["VITE_COGNITO_REDIRECT_URI"] == "https://d123.cloudfront.net"
+        assert injected_env["VITE_API_BASE_URL"] == "/api/v1"
+
+
+@pytest.mark.parametrize(
+    "missing_key,stack_type",
+    [
+        ("FrontendBucketName", "frontend"),
+        ("CloudFrontDistributionId", "frontend"),
+        ("CloudFrontDomainName", "frontend"),
+        ("FrontendCognitoClientId", "frontend"),
+        ("CognitoDomain", "frontend"),
+        ("CognitoUserPoolId", "api"),
+    ],
+)
+@patch("scripts.aws_cd.smoke_test_frontend")
+@patch("scripts.aws_cd.deploy_cdk_application_stacks")
+@patch("scripts.aws_cd.build_and_deploy_frontend")
+@patch("scripts.aws_cd.run_command")
+def test_cd_main_fails_closed_on_missing_frontend_output(
+    mock_run_cmd: MagicMock,
+    mock_build_fe: MagicMock,
+    mock_deploy_cdk: MagicMock,
+    mock_smoke_fe: MagicMock,
+    missing_key: str,
+    stack_type: str,
+) -> None:
+    """Verify CD fails closed before build/deploy when any required frontend output is missing."""
+    from scripts.aws_cd import main
+
+    with patch("boto3.client") as mock_boto:
+        _setup_mock_cd_environment(mock_boto, tei_exists=False)
+        cfn_mock = mock_boto("cloudformation")
+
+        def describe_stacks_side_effect(StackName: str) -> dict[str, Any]:
+            if "frontend" in StackName:
+                base_outputs = [
+                    {"OutputKey": "FrontendBucketName", "OutputValue": "fe-bucket"},
+                    {"OutputKey": "CloudFrontDistributionId", "OutputValue": "dist-123"},
+                    {"OutputKey": "CloudFrontDomainName", "OutputValue": "d123.cloudfront.net"},
+                    {"OutputKey": "FrontendCognitoClientId", "OutputValue": "fe-client-123"},
+                    {"OutputKey": "CognitoDomain", "OutputValue": "community-analysis-dev-123456789012"},
+                ]
+                if stack_type == "frontend":
+                    base_outputs = [o for o in base_outputs if o["OutputKey"] != missing_key]
+                return {"Stacks": [{"Outputs": base_outputs}]}
+            elif "api" in StackName:
+                base_outputs = [
+                    {"OutputKey": "ApiEndpoint", "OutputValue": "https://api.test/api/v1"},
+                    {"OutputKey": "CognitoUserPoolId", "OutputValue": "pool-123"},
+                    {"OutputKey": "CognitoAppClientId", "OutputValue": "client-123"},
+                ]
+                if stack_type == "api":
+                    base_outputs = [o for o in base_outputs if o["OutputKey"] != missing_key]
+                return {"Stacks": [{"Outputs": base_outputs}]}
+            return {"Stacks": [{"Outputs": []}]}
+
+        cfn_mock.describe_stacks.side_effect = describe_stacks_side_effect
+
+        with pytest.raises(RuntimeError, match=f"Missing required CloudFormation output '{missing_key}'"):
+            main(
+                [
+                    "--environment",
+                    "dev",
+                    "--source-sha",
+                    "6d4dcbbcd5f67ff89850d4b52c333b0804965b77",
+                ]
+            )
+        mock_build_fe.assert_not_called()
+
+
+@pytest.mark.parametrize("missing_key", ["ApiEndpoint", "CognitoAppClientId"])
+@patch("scripts.aws_cd.smoke_test_frontend")
+@patch("scripts.aws_cd.deploy_cdk_application_stacks")
+@patch("scripts.aws_cd.build_and_deploy_frontend")
+@patch("scripts.aws_cd.run_command")
+def test_cd_main_fails_closed_on_missing_api_smoke_output(
+    mock_run_cmd: MagicMock,
+    mock_build_fe: MagicMock,
+    mock_deploy_cdk: MagicMock,
+    mock_smoke_fe: MagicMock,
+    missing_key: str,
+) -> None:
+    """Verify CD fails closed before acceptance/smoke when API smoke outputs are missing."""
+    from scripts.aws_cd import main
+
+    with patch("boto3.client") as mock_boto:
+        _setup_mock_cd_environment(mock_boto, tei_exists=False)
+        cfn_mock = mock_boto("cloudformation")
+
+        def describe_stacks_side_effect(StackName: str) -> dict[str, Any]:
+            if "frontend" in StackName:
+                return {
+                    "Stacks": [
+                        {
+                            "Outputs": [
+                                {"OutputKey": "FrontendBucketName", "OutputValue": "fe-bucket"},
+                                {"OutputKey": "CloudFrontDistributionId", "OutputValue": "dist-123"},
+                                {"OutputKey": "CloudFrontDomainName", "OutputValue": "d123.cloudfront.net"},
+                                {"OutputKey": "FrontendCognitoClientId", "OutputValue": "fe-client-123"},
+                                {"OutputKey": "CognitoDomain", "OutputValue": "community-analysis-dev-123456789012"},
+                            ]
+                        }
+                    ]
+                }
+            elif "api" in StackName:
+                base_outputs = [
+                    {"OutputKey": "ApiEndpoint", "OutputValue": "https://api.test/api/v1"},
+                    {"OutputKey": "CognitoUserPoolId", "OutputValue": "pool-123"},
+                    {"OutputKey": "CognitoAppClientId", "OutputValue": "client-123"},
+                ]
+                filtered = [o for o in base_outputs if o["OutputKey"] != missing_key]
+                return {"Stacks": [{"Outputs": filtered}]}
+            return {"Stacks": [{"Outputs": []}]}
+
+        cfn_mock.describe_stacks.side_effect = describe_stacks_side_effect
+
+        with pytest.raises(RuntimeError, match=f"Missing required CloudFormation output '{missing_key}'"):
+            main(
+                [
+                    "--environment",
+                    "dev",
+                    "--source-sha",
+                    "6d4dcbbcd5f67ff89850d4b52c333b0804965b77",
+                ]
+            )
+
+
+@patch("scripts.aws_cd.smoke_test_frontend")
+@patch("scripts.aws_cd.deploy_cdk_application_stacks")
+@patch("scripts.aws_cd.build_and_deploy_frontend")
+@patch("scripts.aws_cd.run_command")
+def test_cd_main_skip_flags_bypass_validations(
+    mock_run_cmd: MagicMock,
+    mock_build_fe: MagicMock,
+    mock_deploy_cdk: MagicMock,
+    mock_smoke_fe: MagicMock,
+) -> None:
+    """Verify skip flags bypass corresponding output requirements and step executions."""
+    from scripts.aws_cd import main
+
+    with (
+        patch("boto3.client") as mock_boto,
+        patch("scripts.aws_run_evolution.wait_for_batch_job"),
+        patch("scripts.aws_run_evolution.discover_run_id_from_batch_job", return_value="run-skip-test"),
+        patch("scripts.aws_run_evolution.verify_completed_manifest"),
+        patch("scripts.smoke_live_api.main", return_value=0) as mock_smoke_api,
+    ):
+        _setup_mock_cd_environment(mock_boto, tei_exists=False)
+        cfn_mock = mock_boto("cloudformation")
+
+        # 1. With --skip-frontend: Frontend outputs can be empty; frontend build and smoke are skipped
+        cfn_mock.describe_stacks.return_value = {
+            "Stacks": [
+                {
+                    "Outputs": [
+                        {"OutputKey": "ApiEndpoint", "OutputValue": "https://api.test/api/v1"},
+                        {"OutputKey": "CognitoUserPoolId", "OutputValue": "pool-123"},
+                        {"OutputKey": "CognitoAppClientId", "OutputValue": "client-123"},
+                    ]
+                }
+            ]
+        }
+        exit_code = main(
+            [
+                "--environment",
+                "dev",
+                "--source-sha",
+                "6d4dcbbcd5f67ff89850d4b52c333b0804965b77",
+                "--skip-frontend",
+            ]
+        )
+        assert exit_code == 0
+        mock_build_fe.assert_not_called()
+        mock_smoke_fe.assert_not_called()
+        mock_smoke_api.assert_called_once()
+
+        # 2. With --skip-smoke: Smoke outputs can be empty; smoke tests are skipped
+        mock_build_fe.reset_mock()
+        mock_smoke_fe.reset_mock()
+        mock_smoke_api.reset_mock()
+        cfn_mock.describe_stacks.return_value = {
+            "Stacks": [
+                {
+                    "Outputs": [
+                        {"OutputKey": "FrontendBucketName", "OutputValue": "fe-bucket"},
+                        {"OutputKey": "CloudFrontDistributionId", "OutputValue": "dist-123"},
+                        {"OutputKey": "CloudFrontDomainName", "OutputValue": "d123.cloudfront.net"},
+                        {"OutputKey": "FrontendCognitoClientId", "OutputValue": "fe-client-123"},
+                        {"OutputKey": "CognitoDomain", "OutputValue": "community-analysis-dev-123456789012"},
+                        {"OutputKey": "CognitoUserPoolId", "OutputValue": "pool-123"},
+                    ]
+                }
+            ]
+        }
+        exit_code = main(
+            [
+                "--environment",
+                "dev",
+                "--source-sha",
+                "6d4dcbbcd5f67ff89850d4b52c333b0804965b77",
+                "--skip-smoke",
+            ]
+        )
+        assert exit_code == 0
+        mock_build_fe.assert_called_once()
+        mock_smoke_fe.assert_not_called()
+        mock_smoke_api.assert_not_called()
+
+        # 3. With --skip-acceptance: ApiEndpoint and CognitoAppClientId are not needed for API smoke;
+        # frontend build and frontend smoke still execute normally.
+        mock_build_fe.reset_mock()
+        mock_smoke_fe.reset_mock()
+        mock_smoke_api.reset_mock()
+        exit_code = main(
+            [
+                "--environment",
+                "dev",
+                "--source-sha",
+                "6d4dcbbcd5f67ff89850d4b52c333b0804965b77",
+                "--skip-acceptance",
+            ]
+        )
+        assert exit_code == 0
+        mock_build_fe.assert_called_once()
+        mock_smoke_fe.assert_called_once()
+        mock_smoke_api.assert_not_called()

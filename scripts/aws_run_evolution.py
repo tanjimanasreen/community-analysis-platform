@@ -161,6 +161,29 @@ def resolve_job_definition_identifier(
     return resolve_latest_active_job_definition(batch_client, cleaned)
 
 
+def build_analytics_ecs_properties_override(
+    environment: list[dict[str, str]],
+) -> dict[str, Any]:
+    """Build an ecsPropertiesOverride structure targeting the analytics container.
+
+    AWS Batch multi-container jobs defined with ecsProperties reject containerOverrides
+    with ClientException: "Container overrides should not be set for ecsProperties jobs."
+    They require ecsPropertiesOverride with taskProperties containing container overrides.
+    """
+    return {
+        "taskProperties": [
+            {
+                "containers": [
+                    {
+                        "name": "analytics",
+                        "environment": environment,
+                    }
+                ]
+            }
+        ]
+    }
+
+
 def submit_evolution_batch_job(
     batch_client: Any,
     *,
@@ -182,12 +205,12 @@ def submit_evolution_batch_job(
     timestamp = time.strftime("%Y%m%d%H%M%S")
     job_name = f"{job_name_prefix}-{environment}-{sanitized_config}-{timestamp}"
 
-    container_overrides = {
-        "environment": [
+    ecs_properties_override = build_analytics_ecs_properties_override(
+        [
             {"name": "CONFIG_PATH", "value": config_path},
             {"name": "PIPELINE_COMMAND", "value": "run-evolution-pipeline"},
         ]
-    }
+    )
 
     logger.info(
         "Submitting Batch job '%s' to queue '%s' using job definition '%s'...",
@@ -199,7 +222,7 @@ def submit_evolution_batch_job(
         jobName=job_name,
         jobQueue=queue,
         jobDefinition=job_def_arn,
-        containerOverrides=container_overrides,
+        ecsPropertiesOverride=ecs_properties_override,
     )
     job_id = response["jobId"]
     logger.info("Batch job submitted successfully: jobId=%s", job_id)
@@ -270,6 +293,11 @@ def get_batch_job_log_stream_name(
     attempts = job_info.get("attempts", [])
     if attempts:
         latest_attempt = attempts[-1]
+        # Documented AWS DescribeJobs attempt shape: attempts[] -> taskProperties[] -> containers[]
+        for task_prop in latest_attempt.get("taskProperties", []):
+            for c in task_prop.get("containers", []):
+                if c.get("name") == container_name and c.get("logStreamName"):
+                    return c["logStreamName"]
         for task_prop in latest_attempt.get("ecsProperties", {}).get("taskProperties", []):
             for c in task_prop.get("containers", []):
                 if c.get("name") == container_name and c.get("logStreamName"):

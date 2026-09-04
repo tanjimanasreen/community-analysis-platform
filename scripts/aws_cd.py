@@ -174,15 +174,81 @@ def deploy_cdk_application_stacks(
     run_command(cmd, cwd=infra_dir)
 
 
+def require_stack_output(
+    outputs: dict[str, str],
+    key: str,
+    stack_name: str,
+) -> str:
+    """Validate and return a required CloudFormation stack output value, failing closed if missing or empty."""
+    val = outputs.get(key)
+    if val is None or not str(val).strip():
+        raise RuntimeError(
+            f"Missing required CloudFormation output '{key}' in stack '{stack_name}'"
+        )
+    return str(val).strip()
+
+
+def format_cognito_domain(domain_prefix_or_domain: str, region: str) -> str:
+    """Format Cognito domain prefix or full domain into canonical hosted domain name."""
+    clean = domain_prefix_or_domain.strip().lower()
+    clean = re.sub(r"^https?://", "", clean)
+    clean = clean.rstrip("/")
+    if not clean:
+        raise ValueError("Cognito domain cannot be empty")
+    if ".auth." in clean or clean.endswith(".amazoncognito.com"):
+        return clean
+    clean_region = region.strip().lower()
+    if not clean_region:
+        raise ValueError("AWS region cannot be empty for Cognito domain formatting")
+    return f"{clean}.auth.{clean_region}.amazoncognito.com"
+
+
+def build_frontend_environment(
+    *,
+    user_pool_id: str,
+    client_id: str,
+    cognito_domain: str,
+    redirect_uri: str,
+    api_base_url: str = "/api/v1",
+) -> dict[str, str]:
+    """Construct production Vite environment variables for frontend build."""
+    clean_user_pool_id = user_pool_id.strip()
+    clean_client_id = client_id.strip()
+    clean_cognito_domain = cognito_domain.strip()
+    clean_redirect_uri = redirect_uri.strip()
+    clean_api_base_url = api_base_url.strip()
+
+    if not clean_user_pool_id:
+        raise ValueError("user_pool_id cannot be empty")
+    if not clean_client_id:
+        raise ValueError("client_id cannot be empty")
+    if not clean_cognito_domain:
+        raise ValueError("cognito_domain cannot be empty")
+    if not clean_redirect_uri:
+        raise ValueError("redirect_uri cannot be empty")
+    if not clean_api_base_url:
+        raise ValueError("api_base_url cannot be empty")
+
+    return {
+        "VITE_AUTH_MODE": "cognito",
+        "VITE_COGNITO_USER_POOL_ID": clean_user_pool_id,
+        "VITE_COGNITO_CLIENT_ID": clean_client_id,
+        "VITE_COGNITO_DOMAIN": clean_cognito_domain,
+        "VITE_COGNITO_REDIRECT_URI": clean_redirect_uri,
+        "VITE_API_BASE_URL": clean_api_base_url,
+    }
+
+
 def build_and_deploy_frontend(
     *,
     frontend_dir: Path | str = "frontend",
     bucket_name: str,
     distribution_id: str,
+    env: dict[str, str] | None = None,
 ) -> None:
     """Build Vite frontend assets, sync to S3, and invalidate CloudFront distribution."""
     logger.info("Building frontend distribution in %s...", frontend_dir)
-    run_command(["npm", "run", "build"], cwd=frontend_dir)
+    run_command(["npm", "run", "build"], cwd=frontend_dir, env=env)
 
     dist_dir = Path(frontend_dir) / "dist"
     if not dist_dir.is_dir():
@@ -349,26 +415,52 @@ def main(argv: list[str] | None = None) -> int:
     api_outputs = get_cloudformation_stack_outputs(cfn_client, api_stack_name)
     frontend_outputs = get_cloudformation_stack_outputs(cfn_client, frontend_stack_name)
 
-    api_endpoint = api_outputs.get("ApiEndpoint", "")
-    user_pool_id = api_outputs.get("CognitoUserPoolId", "")
-    app_client_id = api_outputs.get("CognitoAppClientId", "")
-
-    frontend_bucket = frontend_outputs.get("FrontendBucketName", "")
-    distribution_id = frontend_outputs.get("CloudFrontDistributionId", "")
-    cloudfront_domain = frontend_outputs.get("CloudFrontDomainName", "")
     data_bucket = f"community-analysis-{args.environment}-{account_id}-{args.region}-data"
 
+    # Validate required outputs fail-closed for enabled operations
+    frontend_bucket = ""
+    distribution_id = ""
+    cloudfront_domain = ""
+    frontend_env: dict[str, str] | None = None
+    if not args.skip_frontend:
+        frontend_bucket = require_stack_output(frontend_outputs, "FrontendBucketName", frontend_stack_name)
+        distribution_id = require_stack_output(frontend_outputs, "CloudFrontDistributionId", frontend_stack_name)
+        cloudfront_domain = require_stack_output(frontend_outputs, "CloudFrontDomainName", frontend_stack_name)
+        frontend_client_id = require_stack_output(frontend_outputs, "FrontendCognitoClientId", frontend_stack_name)
+        raw_cognito_domain = require_stack_output(frontend_outputs, "CognitoDomain", frontend_stack_name)
+        user_pool_id = require_stack_output(api_outputs, "CognitoUserPoolId", api_stack_name)
+
+        formatted_cognito_domain = format_cognito_domain(raw_cognito_domain, args.region)
+        redirect_uri = f"https://{cloudfront_domain}"
+        frontend_env = build_frontend_environment(
+            user_pool_id=user_pool_id,
+            client_id=frontend_client_id,
+            cognito_domain=formatted_cognito_domain,
+            redirect_uri=redirect_uri,
+            api_base_url="/api/v1",
+        )
+
+    api_endpoint = ""
+    smoke_user_pool_id = ""
+    app_client_id = ""
+    if not args.skip_smoke and not args.skip_acceptance:
+        api_endpoint = require_stack_output(api_outputs, "ApiEndpoint", api_stack_name)
+        smoke_user_pool_id = require_stack_output(api_outputs, "CognitoUserPoolId", api_stack_name)
+        app_client_id = require_stack_output(api_outputs, "CognitoAppClientId", api_stack_name)
+
     # 3. Frontend Build & Deploy
-    if not args.skip_frontend and frontend_bucket and distribution_id:
+    if not args.skip_frontend:
         build_and_deploy_frontend(
             bucket_name=frontend_bucket,
             distribution_id=distribution_id,
+            env=frontend_env,
         )
 
     # 4. CD Acceptance Batch Run
     accepted_run_id = None
     if not args.skip_acceptance:
         from scripts.aws_run_evolution import (
+            build_analytics_ecs_properties_override,
             discover_run_id_from_batch_job,
             resolve_latest_active_job_definition,
             verify_completed_manifest,
@@ -385,18 +477,19 @@ def main(argv: list[str] | None = None) -> int:
         job_def_arn = resolve_latest_active_job_definition(batch_client, job_def_name)
         job_name = f"community-analysis-{args.environment}-acceptance-{time.strftime('%Y%m%d%H%M%S')}"
 
-        container_overrides = {
-            "environment": [
+        ecs_properties_override = build_analytics_ecs_properties_override(
+            [
                 {"name": "CONFIG_PATH", "value": args.acceptance_config},
                 {"name": "PIPELINE_COMMAND", "value": "run-evolution-pipeline"},
                 {"name": "THEME_PROVIDER", "value": args.acceptance_theme_provider},
+                {"name": "SKIP_S3_DOWNLOAD", "value": "true"},
             ]
-        }
+        )
         res = batch_client.submit_job(
             jobName=job_name,
             jobQueue=queue,
             jobDefinition=job_def_arn,
-            containerOverrides=container_overrides,
+            ecsPropertiesOverride=ecs_properties_override,
         )
         job_id = res["jobId"]
         wait_for_batch_job(batch_client, job_id, timeout_seconds=7200.0)
@@ -413,7 +506,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # 5. Live Smoke Tests
     if not args.skip_smoke:
-        if accepted_run_id and api_endpoint:
+        if accepted_run_id:
             from scripts.smoke_live_api import main as smoke_main
 
             logger.info("Executing live API smoke tests against %s (run_id: %s)...", api_endpoint, accepted_run_id)
@@ -423,7 +516,7 @@ def main(argv: list[str] | None = None) -> int:
                 "--run-id",
                 accepted_run_id,
                 "--user-pool-id",
-                user_pool_id,
+                smoke_user_pool_id,
                 "--client-id",
                 app_client_id,
                 "--region",
@@ -433,7 +526,7 @@ def main(argv: list[str] | None = None) -> int:
             if smoke_exit != 0:
                 raise RuntimeError(f"Live API smoke testing failed with exit code {smoke_exit}")
 
-        if cloudfront_domain:
+        if not args.skip_frontend:
             smoke_test_frontend(cloudfront_domain)
 
     logger.info("CD deployment and acceptance passed successfully.")

@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import io
 import json
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 
 from scripts.aws_run_evolution import (
     APPROVED_CANONICAL_CONFIGS,
+    build_analytics_ecs_properties_override,
     discover_run_id_from_batch_job,
     extract_run_id_from_log_events,
     get_batch_job_log_stream_name,
@@ -154,6 +156,27 @@ def test_resolve_latest_active_job_definition_fail_closed() -> None:
         resolve_latest_active_job_definition(batch_mock, "missing-job")
 
 
+def test_build_analytics_ecs_properties_override() -> None:
+    env = [
+        {"name": "CONFIG_PATH", "value": "test.yml"},
+        {"name": "PIPELINE_COMMAND", "value": "run-evolution-pipeline"},
+    ]
+    override = build_analytics_ecs_properties_override(env)
+    assert override == {
+        "taskProperties": [
+            {
+                "containers": [
+                    {
+                        "name": "analytics",
+                        "environment": env,
+                    }
+                ]
+            }
+        ]
+    }
+    assert override["taskProperties"][0]["containers"][0]["name"] == "analytics"
+
+
 def test_submit_evolution_batch_job() -> None:
     batch_mock = MagicMock()
     batch_mock.describe_job_definitions.return_value = {
@@ -182,10 +205,20 @@ def test_submit_evolution_batch_job() -> None:
         kwargs["jobDefinition"]
         == "arn:aws:batch:us-east-1:123456789012:job-definition/community-analysis-dev-analytics-tei-job:3"
     )
-    env_vars = kwargs["containerOverrides"]["environment"]
+    assert "containerOverrides" not in kwargs, "TEI multi-container submission must not use containerOverrides"
+    assert "ecsPropertiesOverride" in kwargs, "TEI multi-container submission must use ecsPropertiesOverride"
+    ecs_override = kwargs["ecsPropertiesOverride"]
+    assert "taskProperties" in ecs_override
+    assert len(ecs_override["taskProperties"]) == 1
+    containers = ecs_override["taskProperties"][0]["containers"]
+    assert len(containers) == 1
+    assert containers[0]["name"] == "analytics"
+    env_vars = containers[0]["environment"]
     env_map = {e["name"]: e["value"] for e in env_vars}
     assert env_map["CONFIG_PATH"] == "configs/telegram/forwarded_message_evolution.yml"
     assert env_map["PIPELINE_COMMAND"] == "run-evolution-pipeline"
+    assert "SKIP_S3_DOWNLOAD" not in env_map
+    assert "THEME_PROVIDER" not in env_map
 
 
 def test_submit_evolution_batch_job_override_revisioned_arn() -> None:
@@ -533,3 +566,84 @@ def test_verify_completed_manifest_size_mismatch_raises() -> None:
 
     with pytest.raises(ValueError, match="Size mismatch for canonical artifact"):
         verify_completed_manifest(s3_mock, "test-bucket", "test-run-001")
+
+
+def test_get_batch_job_log_stream_name_attempts_task_properties() -> None:
+    """Documented AWS DescribeJobs attempt shape: attempts[] -> taskProperties[] -> containers[]."""
+    job_info = {
+        "attempts": [
+            {
+                "taskProperties": [
+                    {
+                        "containers": [
+                            {
+                                "name": "analytics",
+                                "logStreamName": "analytics/job-123/stream-attempt-1",
+                            },
+                            {
+                                "name": "tei-similarity",
+                                "logStreamName": "tei-similarity/job-123/stream-attempt-1",
+                            },
+                            {
+                                "name": "tei-clustering",
+                                "logStreamName": "tei-clustering/job-123/stream-attempt-1",
+                            },
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+    assert (
+        get_batch_job_log_stream_name(job_info, "analytics")
+        == "analytics/job-123/stream-attempt-1"
+    )
+    assert (
+        get_batch_job_log_stream_name(job_info, "tei-similarity")
+        == "tei-similarity/job-123/stream-attempt-1"
+    )
+    assert (
+        get_batch_job_log_stream_name(job_info, "tei-clustering")
+        == "tei-clustering/job-123/stream-attempt-1"
+    )
+    assert get_batch_job_log_stream_name(job_info, "non-existent") is None
+
+
+def test_cross_layer_tei_batch_architecture_and_submission_contract() -> None:
+    """Cross-layer regression contract:
+
+    1. BatchStack TEI job definition uses ecs_properties multi-container (analytics, tei-similarity, tei-clustering).
+    2. Operational evolution SubmitJob uses ecsPropertiesOverride targeting 'analytics' (no containerOverrides).
+    3. build_analytics_ecs_properties_override produces an ecsPropertiesOverride targeting exactly 'analytics'.
+    """
+    # 1. BatchStack architecture defines multi-container ecs_properties
+    batch_stack_path = Path("infra/community_analysis_infra/batch_stack.py")
+    assert batch_stack_path.is_file()
+    stack_content = batch_stack_path.read_text(encoding="utf-8")
+    assert "ecs_properties=batch.CfnJobDefinition.EcsPropertiesProperty" in stack_content
+    assert 'name="analytics"' in stack_content
+    assert 'name="tei-similarity"' in stack_content
+    assert 'name="tei-clustering"' in stack_content
+
+    # 2. Operational evolution submission uses ecsPropertiesOverride and no containerOverrides
+    batch_mock = MagicMock()
+    batch_mock.submit_job.return_value = {"jobId": "job-contract-1"}
+    submit_evolution_batch_job(
+        batch_mock,
+        environment="dev",
+        config_path="configs/telegram/forwarded_message_evolution.yml",
+        job_definition="arn:aws:batch:us-east-1:123456789012:job-definition/community-analysis-dev-analytics-tei-job:3",
+    )
+    op_kwargs = batch_mock.submit_job.call_args[1]
+    assert "containerOverrides" not in op_kwargs, "Operational TEI submit must not use containerOverrides"
+    assert "ecsPropertiesOverride" in op_kwargs, "Operational TEI submit must use ecsPropertiesOverride"
+    op_containers = op_kwargs["ecsPropertiesOverride"]["taskProperties"][0]["containers"]
+    assert len(op_containers) == 1
+    assert op_containers[0]["name"] == "analytics"
+
+    # 3. Helper always targets exactly 'analytics'
+    helper_override = build_analytics_ecs_properties_override([{"name": "CONFIG_PATH", "value": "test.yml"}])
+    assert "taskProperties" in helper_override
+    helper_containers = helper_override["taskProperties"][0]["containers"]
+    assert len(helper_containers) == 1
+    assert helper_containers[0]["name"] == "analytics"
