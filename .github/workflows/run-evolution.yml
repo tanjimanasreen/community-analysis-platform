@@ -19,6 +19,14 @@ on:
           - telegram-forwarded
           - twitter-reply
           - twitter-retweet-quote
+      theme_mode:
+        description: Theme generation mode
+        required: true
+        type: choice
+        default: canonical
+        options:
+          - canonical
+          - mock
 
 permissions:
   contents: read
@@ -127,5 +135,6 @@ jobs:
             uv run --frozen python scripts/aws_run_evolution.py \
               --environment dev \
               --config-path "${{ steps.config.outputs.config_path }}" \
+              --theme-mode "${{ inputs.theme_mode }}" \
               --wait \
               --verify-manifest

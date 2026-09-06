@@ -1015,7 +1015,7 @@ Each dispatch creates a new analytical execution/run, not a new deployment.
 
 # 24. Operational Provider Behavior
 
-Normal `run-evolution.yml` executions should use the provider policy from the canonical repository configuration.
+Normal `run-evolution.yml` executions should use the provider policy from the canonical repository configuration (`theme_mode: canonical`).
 
 For current canonical configuration, real provider behavior is controlled through:
 
@@ -1023,7 +1023,12 @@ For current canonical configuration, real provider behavior is controlled throug
 configs/providers.yml
 ```
 
-The workflow should not expose ordinary users to low-level provider/model/algorithm overrides.
+The workflow does not expose arbitrary provider, model, or algorithm overrides.
+
+Arbitrary provider and model overrides remain strictly forbidden. However, to support safe live dev canary validation without external LLM API cost on real S3 input data without requiring OpenAI credits or quota, `run-evolution.yml` and `scripts/aws_run_evolution.py` expose a tightly constrained high-level execution mode:
+
+- `canonical` (default): uses canonical repository provider configuration (`configs/providers.yml`, where `theme_provider.primary` is OpenAI) without injecting `THEME_PROVIDER`.
+- `mock`: injects `THEME_PROVIDER=mock` into the analytics container's environment override, using mock theme generation downstream of real LDA keywords while preserving real S3 raw data staging (no `SKIP_S3_DOWNLOAD`) and deployed real TEI sidecars (`THEME_SIMILARITY_PROVIDER=tei`, `THEME_CLUSTERING_PROVIDER=tei` provided by the deployed Batch job definition).
 
 Do not expose workflow inputs for:
 
@@ -1658,7 +1663,7 @@ CD acceptance uses:
 THEME_PROVIDER=mock
 ```
 
-Normal human-triggered `run-evolution.yml` may use the real configured OpenAI provider because that is the actual research operation, not an automated test.
+Normal human-triggered `run-evolution.yml` may use the real configured OpenAI provider (`theme_mode: canonical`) because that is the actual research operation, not an automated test. In addition, `run-evolution.yml` provides a human-selectable `theme_mode` (`canonical` | `mock`), allowing dev canary runs on real S3 data to use `mock` themes without spending OpenAI credits or depending on external provider quotas.
 
 GPT themes remain downstream of LDA keywords.
 
@@ -2582,3 +2587,9 @@ Then:
   - Unified local and GitHub validation (`make ci-validate`): Created a coherent `make ci-validate` target in `Makefile` combining lockfile check (`uv lock --check`), dependency synchronization (`uv sync --frozen --extra orchestration --extra tracking`), pre-commit hooks (`make lint`), complete test suite (`make test`, executing all 771 unit and 14 integration tests without duplicate execution), CD preflight (`make cd-preflight`), and git diff whitespace check (`git diff --check`). Updated `.github/workflows/ci.yml` validate job to invoke `make ci-validate`, eliminating command drift between local pre-push validation and remote CI. Updated `tests/unit/test_workflow_contracts.py` to assert the unified `make ci-validate` gate.
   - Stress testing: Ran a 10-iteration loop of `pytest tests/unit/test_topic_reproducibility.py` with 10/10 iterations passing (0 failures). On local architecture, maximum observed numerical drift across runs was 0.0, comfortably within the tightened 1e-3 / 1e-3 tolerance.
   - Full suite verification: `make ci-validate` passed with 0 errors across all gates (785 passed, 1 skipped in `make test`, CD preflight passed 37 items, pre-commit and git diff clean). Plan 097 remains in progress pending human review and live CI verification; no git add/commit/push or AWS mutations were performed.
+- 2026-09-06: Added constrained theme generation execution mode (`theme_mode`: `canonical` | `mock`) to `run-evolution.yml` and `scripts/aws_run_evolution.py` for safe real-data dev canary testing:
+  - Preserved default `canonical` mode: passes canonical configuration to AWS Batch without injecting `THEME_PROVIDER`, preserving the production provider policy (`configs/providers.yml` -> OpenAI) downstream of LDA.
+  - Implemented `mock` mode: injects `THEME_PROVIDER=mock` into the analytics container's `ecsPropertiesOverride` environment, replacing GPT theme generation with mock themes while preserving real S3 data staging (no `SKIP_S3_DOWNLOAD`) and deployed TEI sidecars (`THEME_SIMILARITY_PROVIDER=tei`, `THEME_CLUSTERING_PROVIDER=tei` provided by the deployed Batch job definition).
+  - Workflow contract & CLI validation: added `theme_mode` choice input (`canonical`, `mock`; default `canonical`) in `.github/workflows/run-evolution.yml`; added `--theme-mode` CLI argument and fail-closed `validate_theme_mode` in `scripts/aws_run_evolution.py`. Arbitrary provider names or model IDs remain strictly rejected.
+  - Preserved analytical integrity: zero changes to `configs/algorithms.yml`, `configs/providers.yml`, `configs/twitter/*.yml`, `configs/telegram/*.yml`, analytical code, metric definitions (`shared_post`, `weighted_post`), clustering contracts, or output schemas.
+  - Verification: targeted unit tests in `tests/unit/test_aws_run_evolution.py` and `tests/unit/test_workflow_contracts.py` passed cleanly (36 passed); Plan 097 remains in progress awaiting human review; no git add/commit/push or AWS mutations performed.

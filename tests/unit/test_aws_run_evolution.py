@@ -11,6 +11,7 @@ import pytest
 
 from scripts.aws_run_evolution import (
     APPROVED_CANONICAL_CONFIGS,
+    APPROVED_THEME_MODES,
     build_analytics_ecs_properties_override,
     discover_run_id_from_batch_job,
     extract_run_id_from_log_events,
@@ -20,6 +21,7 @@ from scripts.aws_run_evolution import (
     submit_evolution_batch_job,
     validate_canonical_config,
     validate_environment,
+    validate_theme_mode,
     verify_completed_manifest,
     wait_for_batch_job,
 )
@@ -39,6 +41,23 @@ def test_validate_canonical_config() -> None:
         validate_canonical_config("configs/arbitrary.yml")
     with pytest.raises(ValueError, match="not an approved canonical evolution config"):
         validate_canonical_config("/etc/passwd")
+
+
+def test_validate_theme_mode() -> None:
+    assert APPROVED_THEME_MODES == {"canonical", "mock"}
+    assert validate_theme_mode("canonical") == "canonical"
+    assert validate_theme_mode("mock") == "mock"
+    assert validate_theme_mode(" CANONICAL ") == "canonical"
+    assert validate_theme_mode("Mock") == "mock"
+
+    with pytest.raises(ValueError, match="is invalid"):
+        validate_theme_mode("openai")
+    with pytest.raises(ValueError, match="is invalid"):
+        validate_theme_mode("gpt-5-nano")
+    with pytest.raises(ValueError, match="is invalid"):
+        validate_theme_mode("custom")
+    with pytest.raises(ValueError, match="is invalid"):
+        validate_theme_mode("")
 
 
 def test_resolve_latest_active_job_definition_single_active() -> None:
@@ -219,6 +238,142 @@ def test_submit_evolution_batch_job() -> None:
     assert env_map["PIPELINE_COMMAND"] == "run-evolution-pipeline"
     assert "SKIP_S3_DOWNLOAD" not in env_map
     assert "THEME_PROVIDER" not in env_map
+    assert "THEME_SIMILARITY_PROVIDER" not in env_map
+    assert "THEME_CLUSTERING_PROVIDER" not in env_map
+
+
+def test_submit_evolution_batch_job_canonical_mode_explicit() -> None:
+    batch_mock = MagicMock()
+    batch_mock.describe_job_definitions.return_value = {
+        "jobDefinitions": [
+            {
+                "jobDefinitionName": "community-analysis-dev-analytics-tei-job",
+                "jobDefinitionArn": "arn:aws:batch:us-east-1:123456789012:job-definition/community-analysis-dev-analytics-tei-job:3",
+                "revision": 3,
+                "status": "ACTIVE",
+            }
+        ]
+    }
+    batch_mock.submit_job.return_value = {"jobId": "job-canonical"}
+
+    job_name, job_id = submit_evolution_batch_job(
+        batch_mock,
+        environment="dev",
+        config_path="configs/telegram/forwarded_message_evolution.yml",
+        theme_mode="canonical",
+    )
+    assert job_id == "job-canonical"
+    assert job_name.startswith("community-analysis-dev-")
+    batch_mock.submit_job.assert_called_once()
+    kwargs = batch_mock.submit_job.call_args[1]
+    assert "containerOverrides" not in kwargs, "TEI multi-container submission must not use containerOverrides"
+    assert "ecsPropertiesOverride" in kwargs, "TEI multi-container submission must use ecsPropertiesOverride"
+    ecs_override = kwargs["ecsPropertiesOverride"]
+    containers = ecs_override["taskProperties"][0]["containers"]
+    assert len(containers) == 1
+    assert containers[0]["name"] == "analytics"
+    env_vars = containers[0]["environment"]
+    env_map = {e["name"]: e["value"] for e in env_vars}
+    assert env_map["CONFIG_PATH"] == "configs/telegram/forwarded_message_evolution.yml"
+    assert env_map["PIPELINE_COMMAND"] == "run-evolution-pipeline"
+    assert "THEME_PROVIDER" not in env_map
+    assert "SKIP_S3_DOWNLOAD" not in env_map
+    assert "THEME_SIMILARITY_PROVIDER" not in env_map
+    assert "THEME_CLUSTERING_PROVIDER" not in env_map
+
+
+def test_submit_evolution_batch_job_mock_mode() -> None:
+    batch_mock = MagicMock()
+    batch_mock.describe_job_definitions.return_value = {
+        "jobDefinitions": [
+            {
+                "jobDefinitionName": "community-analysis-dev-analytics-tei-job",
+                "jobDefinitionArn": "arn:aws:batch:us-east-1:123456789012:job-definition/community-analysis-dev-analytics-tei-job:3",
+                "revision": 3,
+                "status": "ACTIVE",
+            }
+        ]
+    }
+    batch_mock.submit_job.return_value = {"jobId": "job-mock"}
+
+    job_name, job_id = submit_evolution_batch_job(
+        batch_mock,
+        environment="dev",
+        config_path="configs/twitter/reply_evolution.yml",
+        theme_mode="mock",
+    )
+    assert job_id == "job-mock"
+    assert job_name.startswith("community-analysis-dev-")
+    batch_mock.submit_job.assert_called_once()
+    kwargs = batch_mock.submit_job.call_args[1]
+    assert "containerOverrides" not in kwargs, "TEI multi-container submission must not use containerOverrides"
+    assert "ecsPropertiesOverride" in kwargs, "TEI multi-container submission must use ecsPropertiesOverride"
+    ecs_override = kwargs["ecsPropertiesOverride"]
+    containers = ecs_override["taskProperties"][0]["containers"]
+    assert len(containers) == 1
+    assert containers[0]["name"] == "analytics"
+    env_vars = containers[0]["environment"]
+    env_map = {e["name"]: e["value"] for e in env_vars}
+    assert env_map["CONFIG_PATH"] == "configs/twitter/reply_evolution.yml"
+    assert env_map["PIPELINE_COMMAND"] == "run-evolution-pipeline"
+    assert env_map["THEME_PROVIDER"] == "mock"
+    assert "SKIP_S3_DOWNLOAD" not in env_map
+    assert "THEME_SIMILARITY_PROVIDER" not in env_map
+    assert "THEME_CLUSTERING_PROVIDER" not in env_map
+
+
+def test_submit_evolution_batch_job_invalid_theme_mode_fails_closed() -> None:
+    batch_mock = MagicMock()
+    with pytest.raises(ValueError, match="is invalid"):
+        submit_evolution_batch_job(
+            batch_mock,
+            environment="dev",
+            config_path="configs/telegram/forwarded_message_evolution.yml",
+            theme_mode="openai",
+        )
+    batch_mock.submit_job.assert_not_called()
+
+    with pytest.raises(ValueError, match="is invalid"):
+        submit_evolution_batch_job(
+            batch_mock,
+            environment="dev",
+            config_path="configs/telegram/forwarded_message_evolution.yml",
+            theme_mode="arbitrary-model",
+        )
+    batch_mock.submit_job.assert_not_called()
+
+
+def test_main_cli_theme_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    from scripts.aws_run_evolution import main
+
+    boto_mock = MagicMock()
+    boto_mock.get_caller_identity.return_value = {"Account": "123456789012"}
+    monkeypatch.setattr("boto3.client", MagicMock(return_value=boto_mock))
+
+    submit_mock = MagicMock(return_value=("community-analysis-dev-test", "job-123"))
+    wait_mock = MagicMock(return_value="SUCCEEDED")
+    discover_mock = MagicMock(return_value="run-20260906-test")
+    verify_mock = MagicMock(return_value={"status": "completed", "artifacts": [{"path": "a.parquet"}]})
+
+    monkeypatch.setattr("scripts.aws_run_evolution.submit_evolution_batch_job", submit_mock)
+    monkeypatch.setattr("scripts.aws_run_evolution.wait_for_batch_job", wait_mock)
+    monkeypatch.setattr("scripts.aws_run_evolution.discover_run_id_from_batch_job", discover_mock)
+    monkeypatch.setattr("scripts.aws_run_evolution.verify_completed_manifest", verify_mock)
+
+    # 1. Default invocation uses theme_mode="canonical"
+    exit_code = main(["--config-path", "configs/telegram/forwarded_message_evolution.yml"])
+    assert exit_code == 0
+    assert submit_mock.call_args[1]["theme_mode"] == "canonical"
+
+    # 2. Explicit mock invocation uses theme_mode="mock"
+    exit_code = main([
+        "--config-path",
+        "configs/twitter/reply_evolution.yml",
+        "--theme-mode",
+        "mock",
+    ])
+    assert exit_code == 0
+    assert submit_mock.call_args[1]["theme_mode"] == "mock"
 
 
 def test_submit_evolution_batch_job_override_revisioned_arn() -> None:

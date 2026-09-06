@@ -122,6 +122,29 @@ def test_run_evolution_workflow_contract() -> None:
     # 7. No operational API verification (CD responsibility only)
     assert "--verify-api" not in raw_text
 
+    # 8. Theme mode input contract (constrained to canonical and mock only)
+    assert "theme_mode" in inputs
+    theme_mode_input = inputs["theme_mode"]
+    assert theme_mode_input.get("type") == "choice"
+    assert theme_mode_input.get("required") is True
+    assert theme_mode_input.get("default") == "canonical"
+    assert theme_mode_input.get("options") == ["canonical", "mock"]
+    assert set(inputs.keys()) == {"environment", "dataset", "theme_mode"}
+
+    # 9. Passes theme mode to scripts/aws_run_evolution.py
+    assert '--theme-mode "${{ inputs.theme_mode }}"' in raw_text
+
+    # 10. No arbitrary provider/model or TEI overrides exposed in workflow
+    assert "openai" not in raw_text
+    assert "gemini" not in raw_text
+    assert "mistral" not in raw_text
+    assert "llm7" not in raw_text
+    assert "nvidia" not in raw_text
+    assert "THEME_SIMILARITY_PROVIDER" not in raw_text
+    assert "THEME_CLUSTERING_PROVIDER" not in raw_text
+    assert "TEI_SIMILARITY_BASE_URL" not in raw_text
+    assert "TEI_CLUSTERING_BASE_URL" not in raw_text
+
 
 def test_makefile_cd_preflight_contract() -> None:
     """Verify Makefile defines cd-preflight and runs all required local CD checks."""

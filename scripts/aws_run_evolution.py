@@ -32,6 +32,11 @@ APPROVED_CANONICAL_CONFIGS = {
     "configs/twitter/retweet_quote_evolution.yml",
 }
 
+APPROVED_THEME_MODES = {
+    "canonical",
+    "mock",
+}
+
 
 def validate_environment(environment: str) -> None:
     """Ensure runtime environment is strictly dev."""
@@ -54,6 +59,17 @@ def validate_canonical_config(config_path: str | Path) -> str:
             f"Approved configs are: {sorted(APPROVED_CANONICAL_CONFIGS)}"
         )
     return normalized
+
+
+def validate_theme_mode(theme_mode: str) -> str:
+    """Ensure requested theme mode is strictly one of the approved execution modes ('canonical', 'mock')."""
+    cleaned = str(theme_mode).strip().lower()
+    if cleaned not in APPROVED_THEME_MODES:
+        raise ValueError(
+            f"Theme mode '{theme_mode}' is invalid. "
+            f"Approved theme modes are: {sorted(APPROVED_THEME_MODES)}"
+        )
+    return cleaned
 
 
 def resolve_latest_active_job_definition(
@@ -189,11 +205,13 @@ def submit_evolution_batch_job(
     *,
     environment: str,
     config_path: str,
+    theme_mode: str = "canonical",
     job_name_prefix: str = "community-analysis",
     job_queue: str | None = None,
     job_definition: str | None = None,
 ) -> tuple[str, str]:
     """Submit the evolution pipeline Batch job."""
+    validated_theme_mode = validate_theme_mode(theme_mode)
     queue = job_queue or f"{job_name_prefix}-{environment}-queue"
     if job_definition is not None:
         job_def_arn = resolve_job_definition_identifier(batch_client, job_definition)
@@ -205,16 +223,19 @@ def submit_evolution_batch_job(
     timestamp = time.strftime("%Y%m%d%H%M%S")
     job_name = f"{job_name_prefix}-{environment}-{sanitized_config}-{timestamp}"
 
-    ecs_properties_override = build_analytics_ecs_properties_override(
-        [
-            {"name": "CONFIG_PATH", "value": config_path},
-            {"name": "PIPELINE_COMMAND", "value": "run-evolution-pipeline"},
-        ]
-    )
+    env_overrides = [
+        {"name": "CONFIG_PATH", "value": config_path},
+        {"name": "PIPELINE_COMMAND", "value": "run-evolution-pipeline"},
+    ]
+    if validated_theme_mode == "mock":
+        env_overrides.append({"name": "THEME_PROVIDER", "value": "mock"})
+
+    ecs_properties_override = build_analytics_ecs_properties_override(env_overrides)
 
     logger.info(
-        "Submitting Batch job '%s' to queue '%s' using job definition '%s'...",
+        "Submitting Batch job '%s' (theme_mode=%s) to queue '%s' using job definition '%s'...",
         job_name,
+        validated_theme_mode,
         queue,
         job_def_arn,
     )
@@ -466,6 +487,12 @@ def main(argv: list[str] | None = None) -> int:
         required=True,
         help="Path to approved canonical evolution config",
     )
+    parser.add_argument(
+        "--theme-mode",
+        choices=["canonical", "mock"],
+        default="canonical",
+        help="Theme generation mode: 'canonical' (normal provider policy) or 'mock' (dev canary).",
+    )
     parser.add_argument("--wait", action="store_true", default=True, help="Wait for job completion")
     parser.add_argument("--verify-manifest", action="store_true", default=True, help="Verify run manifest and artifacts in S3")
     parser.add_argument("--s3-bucket", help="S3 bucket name (auto-discovered from account/region if omitted)")
@@ -477,6 +504,7 @@ def main(argv: list[str] | None = None) -> int:
 
     validate_environment(args.environment)
     canonical_config = validate_canonical_config(args.config_path)
+    validated_theme_mode = validate_theme_mode(args.theme_mode)
 
     import boto3
 
@@ -493,6 +521,7 @@ def main(argv: list[str] | None = None) -> int:
         batch_client,
         environment=args.environment,
         config_path=canonical_config,
+        theme_mode=validated_theme_mode,
     )
 
     if args.wait:
