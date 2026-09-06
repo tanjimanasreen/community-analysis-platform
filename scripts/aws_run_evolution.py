@@ -37,6 +37,8 @@ APPROVED_THEME_MODES = {
     "mock",
 }
 
+DEFAULT_MAX_LOG_PAGES = 100
+
 
 def validate_environment(environment: str) -> None:
     """Ensure runtime environment is strictly dev."""
@@ -374,6 +376,8 @@ def discover_run_id_from_batch_job(
     logs_client: Any,
     job_id: str,
     log_group_name: str,
+    *,
+    max_pages: int = DEFAULT_MAX_LOG_PAGES,
 ) -> str:
     """Deterministically discover the exact analytical run_id from a Batch job's CloudWatch log stream."""
     logger.info("Describing Batch job %s to locate analytics container log stream...", job_id)
@@ -392,8 +396,17 @@ def discover_run_id_from_batch_job(
     logger.info("Reading log events from group '%s', stream '%s'...", log_group_name, log_stream)
     events: list[dict[str, Any]] = []
     next_token = None
+    pages_read = 0
 
     while True:
+        pages_read += 1
+        if pages_read > max_pages:
+            raise RuntimeError(
+                f"Exceeded maximum log pages safety limit ({max_pages}) reading stream '{log_stream}' "
+                f"in log group '{log_group_name}' (accumulated {len(events)} events across {max_pages} pages). "
+                "Refusing to continue pagination."
+            )
+
         kwargs: dict[str, Any] = {
             "logGroupName": log_group_name,
             "logStreamName": log_stream,
@@ -410,10 +423,13 @@ def discover_run_id_from_batch_job(
         if not token or token == next_token:
             break
         next_token = token
-        # Prevent runaway log fetch in massive streams
-        if len(events) >= 5000:
-            break
 
+    logger.info(
+        "Finished reading %d log events across %d pages from stream '%s'.",
+        len(events),
+        pages_read,
+        log_stream,
+    )
     return extract_run_id_from_log_events(events)
 
 

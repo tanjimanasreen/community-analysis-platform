@@ -1611,6 +1611,8 @@ canonical artifact count = len(manifest.artifacts)
 
 Verification evaluates only canonical artifacts explicitly enumerated in the manifest. Do NOT use total S3 prefix object count. Extra S3 objects (intermediate logs, unlisted debug artifacts) do not affect canonical verification.
 
+Exact `run_id` correlation reads the analytics container's CloudWatch log stream and paginates through all pages following `nextForwardToken` until token stabilization. The pagination helper does not truncate at an arbitrary event count (e.g. 5,000 events), ensuring that completion markers in large real-data runs (e.g. 13,000+ events) are captured, while maintaining a bounded page-level safety guard (100 pages).
+
 Full authenticated API smoke testing is a CD responsibility (`cd.yml`).
 
 Normal operational evolution does NOT require:
@@ -2593,3 +2595,9 @@ Then:
   - Workflow contract & CLI validation: added `theme_mode` choice input (`canonical`, `mock`; default `canonical`) in `.github/workflows/run-evolution.yml`; added `--theme-mode` CLI argument and fail-closed `validate_theme_mode` in `scripts/aws_run_evolution.py`. Arbitrary provider names or model IDs remain strictly rejected.
   - Preserved analytical integrity: zero changes to `configs/algorithms.yml`, `configs/providers.yml`, `configs/twitter/*.yml`, `configs/telegram/*.yml`, analytical code, metric definitions (`shared_post`, `weighted_post`), clustering contracts, or output schemas.
   - Verification: targeted unit tests in `tests/unit/test_aws_run_evolution.py` and `tests/unit/test_workflow_contracts.py` passed cleanly (36 passed); Plan 097 remains in progress awaiting human review; no git add/commit/push or AWS mutations performed.
+- 2026-09-06: Resolved CloudWatch log stream pagination truncation in `scripts/aws_run_evolution.py` (`discover_run_id_from_batch_job`):
+  - Proven failure: A real-data dev evolution canary (`twitter-reply`, `theme_mode=mock`) completed successfully in AWS Batch (job SUCCEEDED, run_id `a5d43c5b-46b4-4a75-8200-38ef0afa8646`, 110 canonical artifacts in completed manifest), but workflow run_id discovery failed because the first completion marker occurred at event 13,216 across 4 CloudWatch pages (13,668 events total), whereas the helper stopped reading after 5,000 accumulated events (`len(events) >= 5000`).
+  - Remediation: Removed the arbitrary 5,000-event accumulation break. Natural pagination follows `nextForwardToken` until token stabilization (`not token or token == next_token`).
+  - Safety guard: Added a bounded maximum page guard (`max_pages: int = DEFAULT_MAX_LOG_PAGES`, default 100 pages) that fails closed with `RuntimeError` and diagnostic context if exceeded, preventing unbounded loops without truncating real analytical runs.
+  - Test coverage: Added multi-page regression test matching the measured 4-page 13,668-event diagnostic structure with completion marker at event 13,216, proving extraction beyond 5,000 and 10,000 events; added max_pages safety-guard failure test (`tests/unit/test_aws_run_evolution.py`, 38 passed in 0.25s).
+  - Safety invariants preserved: No "latest S3 run" discovery fallback, no analytical algorithms or configs touched, zero infrastructure changes, all unit/CD tests pass.

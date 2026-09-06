@@ -12,6 +12,7 @@ import pytest
 from scripts.aws_run_evolution import (
     APPROVED_CANONICAL_CONFIGS,
     APPROVED_THEME_MODES,
+    DEFAULT_MAX_LOG_PAGES,
     build_analytics_ecs_properties_override,
     discover_run_id_from_batch_job,
     extract_run_id_from_log_events,
@@ -652,6 +653,121 @@ def test_discover_run_id_from_batch_job() -> None:
         logStreamName="analytics/job-123/stream",
         startFromHead=True,
     )
+
+
+def test_discover_run_id_from_batch_job_multi_page_pagination_real_data_shape() -> None:
+    """Reproduction and regression test for CloudWatch pagination beyond 5,000 and 10,000 events.
+
+    Reproduces the proven dev failure where a real run generated 13,668 events across 4 pages,
+    with the first valid completion marker at event 13,216. Under the old cutoff (>= 5,000 events),
+    discovery stopped prematurely on page 2.
+    """
+    batch_mock = MagicMock()
+    batch_mock.describe_jobs.return_value = {
+        "jobs": [
+            {
+                "jobId": "job-twitter-reply-real",
+                "container": {"logStreamName": "analytics/job-twitter-reply/stream"},
+            }
+        ]
+    }
+
+    # Construct pages matching the measured diagnostic counts:
+    # Page 1: 3,789 dummy events
+    # Page 2: 3,970 dummy events (cumulative: 7,759)
+    # Page 3: 3,921 dummy events (cumulative: 11,680)
+    # Page 4: 1,988 events:
+    #   - 1,535 dummy events (cumulative: 13,215)
+    #   - Event 13,216: completion marker with run_id
+    #   - 452 trailing dummy events (cumulative: 13,668)
+    # Page 5: 0 events, stabilized forward token
+    page1_events = [{"message": f"step info 1.{i}"} for i in range(3789)]
+    page2_events = [{"message": f"step info 2.{i}"} for i in range(3970)]
+    page3_events = [{"message": f"step info 3.{i}"} for i in range(3921)]
+
+    expected_run_id = "a5d43c5b-46b4-4a75-8200-38ef0afa8646"
+    completion_event = {
+        "message": f"batch_job_completed_successfully run_id={expected_run_id} total_duration_seconds=1234.5"
+    }
+    page4_prefix = [{"message": f"step info 4.{i}"} for i in range(1535)]
+    page4_suffix = [{"message": f"step info 4.{i}"} for i in range(452)]
+    page4_events = page4_prefix + [completion_event] + page4_suffix
+    assert len(page4_events) == 1988
+
+    total_events = len(page1_events) + len(page2_events) + len(page3_events) + len(page4_events)
+    assert total_events == 13668
+    completion_idx = len(page1_events) + len(page2_events) + len(page3_events) + len(page4_prefix)
+    assert completion_idx == 13215  # 0-indexed, meaning the 13,216th event
+
+    logs_mock = MagicMock()
+    logs_mock.get_log_events.side_effect = [
+        {"events": page1_events, "nextForwardToken": "token-page-2"},
+        {"events": page2_events, "nextForwardToken": "token-page-3"},
+        {"events": page3_events, "nextForwardToken": "token-page-4"},
+        {"events": page4_events, "nextForwardToken": "token-page-5"},
+        {"events": [], "nextForwardToken": "token-page-5"},  # Token stabilization
+    ]
+
+    run_id = discover_run_id_from_batch_job(
+        batch_mock,
+        logs_mock,
+        job_id="job-twitter-reply-real",
+        log_group_name="/aws/batch/job/community-analysis-dev",
+    )
+
+    assert run_id == expected_run_id
+    assert logs_mock.get_log_events.call_count == 5
+
+    # Verify calls and pagination tokens
+    call_args = logs_mock.get_log_events.call_args_list
+    assert "nextToken" not in call_args[0][1]
+    assert call_args[0][1]["startFromHead"] is True
+    assert call_args[1][1]["nextToken"] == "token-page-2"
+    assert call_args[2][1]["nextToken"] == "token-page-3"
+    assert call_args[3][1]["nextToken"] == "token-page-4"
+    assert call_args[4][1]["nextToken"] == "token-page-5"
+
+
+def test_discover_run_id_from_batch_job_max_pages_guard_fails_closed() -> None:
+    """Verify that exceeding max_pages raises RuntimeError and fails closed."""
+    assert DEFAULT_MAX_LOG_PAGES == 100
+
+    batch_mock = MagicMock()
+    batch_mock.describe_jobs.return_value = {
+        "jobs": [
+            {
+                "jobId": "job-runaway",
+                "container": {"logStreamName": "analytics/job-runaway/stream"},
+            }
+        ]
+    }
+
+    logs_mock = MagicMock()
+
+    def fake_get_log_events(**kwargs):
+        current_token = kwargs.get("nextToken", "token-0")
+        token_num = int(current_token.split("-")[1]) if "-" in current_token else 0
+        return {
+            "events": [{"message": f"line {token_num}"}],
+            "nextForwardToken": f"token-{token_num + 1}",
+        }
+
+    logs_mock.get_log_events.side_effect = fake_get_log_events
+
+    with pytest.raises(
+        RuntimeError,
+        match=r"Exceeded maximum log pages safety limit \(5\)",
+    ) as exc_info:
+        discover_run_id_from_batch_job(
+            batch_mock,
+            logs_mock,
+            job_id="job-runaway",
+            log_group_name="/aws/batch/job/community-analysis-dev",
+            max_pages=5,
+        )
+
+    assert "accumulated 5 events across 5 pages" in str(exc_info.value)
+    assert logs_mock.get_log_events.call_count == 5
 
 
 def test_verify_completed_manifest_with_all_artifacts() -> None:
