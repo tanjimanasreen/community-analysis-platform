@@ -366,7 +366,7 @@ class BatchStack(cdk.Stack):
                                         type="VCPU", value="4"
                                     ),
                                     batch.CfnJobDefinition.ResourceRequirementProperty(
-                                        type="MEMORY", value="16384"
+                                        type="MEMORY", value="24576"
                                     ),
                                 ],
                                 depends_on=[

@@ -229,7 +229,7 @@ def test_fargate_tei_multi_container_job_definition(
                                         "Essential": True,
                                         "ResourceRequirements": [
                                             {"Type": "VCPU", "Value": "4"},
-                                            {"Type": "MEMORY", "Value": "16384"},
+                                            {"Type": "MEMORY", "Value": "24576"},
                                         ],
                                         "DependsOn": [
                                             {
