@@ -326,6 +326,7 @@ class CicdStack(cdk.Stack):
             "GitHubPipelineRole",
             role_name=pipeline_role_name,
             assumed_by=oidc_principal,
+            max_session_duration=cdk.Duration.hours(4),
             description="GitHub Actions operational role for submitting and verifying evolution pipeline Batch runs",
         )
 

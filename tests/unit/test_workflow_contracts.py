@@ -145,6 +145,21 @@ def test_run_evolution_workflow_contract() -> None:
     assert "TEI_SIMILARITY_BASE_URL" not in raw_text
     assert "TEI_CLUSTERING_BASE_URL" not in raw_text
 
+    # 11. Role session duration contract (4 hours / 14400s covering the 180-minute job timeout)
+    assert "role-duration-seconds: 14400" in raw_text
+    run_job = wf["jobs"]["run-evolution"]
+    timeout_minutes = run_job.get("timeout-minutes")
+    assert timeout_minutes == 180
+    assert 14400 >= timeout_minutes * 60
+
+    oidc_steps = [
+        s for s in run_job["steps"]
+        if "aws-actions/configure-aws-credentials" in s.get("uses", "")
+    ]
+    assert len(oidc_steps) == 1
+    assert oidc_steps[0]["with"]["role-duration-seconds"] == 14400
+
+
 
 def test_makefile_cd_preflight_contract() -> None:
     """Verify Makefile defines cd-preflight and runs all required local CD checks."""

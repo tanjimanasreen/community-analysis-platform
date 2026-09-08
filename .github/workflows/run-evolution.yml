@@ -121,6 +121,7 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
           allowed-account-ids: ${{ vars.AWS_DEV_ACCOUNT_ID }}
           role-session-name: gha-evolution-${{ github.run_id }}
+          role-duration-seconds: 14400
 
       - name: Verify assumed AWS identity
         shell: bash

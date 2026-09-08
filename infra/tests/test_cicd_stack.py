@@ -427,3 +427,23 @@ def test_cicd_stack_outputs(dev_cicd_template: Template) -> None:
             "Description": "ARN of the dev evolution pipeline runner role for GitHub Actions run-evolution.yml",
         },
     )
+
+
+def test_pipeline_role_max_session_duration(dev_cicd_template: Template) -> None:
+    """Verify PipelineRole has 4-hour (14400s) MaxSessionDuration while DeployRole does not."""
+    dev_cicd_template.has_resource_properties(
+        "AWS::IAM::Role",
+        {
+            "RoleName": "community-analysis-dev-github-pipeline",
+            "MaxSessionDuration": 14400,
+        },
+    )
+
+    template_dict = dev_cicd_template.to_json()
+    roles = {
+        v.get("Properties", {}).get("RoleName"): v.get("Properties", {}).get("MaxSessionDuration")
+        for v in template_dict.get("Resources", {}).values()
+        if v.get("Type") == "AWS::IAM::Role" and not v.get("Properties", {}).get("RoleName", "").startswith("Custom")
+    }
+    assert roles.get("community-analysis-dev-github-pipeline") == 14400
+    assert roles.get("community-analysis-dev-github-deploy") is None
