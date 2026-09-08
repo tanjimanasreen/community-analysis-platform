@@ -145,11 +145,11 @@ def test_run_evolution_workflow_contract() -> None:
     assert "TEI_SIMILARITY_BASE_URL" not in raw_text
     assert "TEI_CLUSTERING_BASE_URL" not in raw_text
 
-    # 11. Role session duration contract (4 hours / 14400s covering the 180-minute job timeout)
+    # 11. Role session duration contract (4 hours / 14400s covering the 235-minute job timeout)
     assert "role-duration-seconds: 14400" in raw_text
     run_job = wf["jobs"]["run-evolution"]
     timeout_minutes = run_job.get("timeout-minutes")
-    assert timeout_minutes == 180
+    assert timeout_minutes == 235
     assert 14400 >= timeout_minutes * 60
 
     oidc_steps = [
@@ -158,6 +158,47 @@ def test_run_evolution_workflow_contract() -> None:
     ]
     assert len(oidc_steps) == 1
     assert oidc_steps[0]["with"]["role-duration-seconds"] == 14400
+
+
+def test_evolution_timeout_hierarchy_contract() -> None:
+    """Verify timeout hierarchy: runner (13200s / 220m) < GitHub (235m / 14100s) < OIDC (14400s / 240m),
+    and Batch attempt timeout (7200s) with 2 retry attempts.
+    """
+    import inspect
+    from scripts.aws_run_evolution import wait_for_batch_job
+
+    # 1. Workflow timeout = 235 minutes (14100 seconds)
+    wf = _load_workflow("run-evolution.yml")
+    workflow_timeout_minutes = wf["jobs"]["run-evolution"]["timeout-minutes"]
+    assert workflow_timeout_minutes == 235
+    workflow_timeout_seconds = workflow_timeout_minutes * 60
+
+    # 2. GitHub OIDC role duration remains 14400 seconds (240 minutes)
+    oidc_steps = [
+        s for s in wf["jobs"]["run-evolution"]["steps"]
+        if "aws-actions/configure-aws-credentials" in s.get("uses", "")
+    ]
+    assert len(oidc_steps) == 1
+    oidc_duration_seconds = oidc_steps[0]["with"]["role-duration-seconds"]
+    assert oidc_duration_seconds == 14400
+
+    # 3. Runner default timeout = 13200 seconds (220 minutes)
+    runner_default_timeout = inspect.signature(wait_for_batch_job).parameters["timeout_seconds"].default
+    assert runner_default_timeout == 13200.0
+
+    # Hierarchy verification: runner 220 min < GitHub 235 min < OIDC 240 min
+    assert runner_default_timeout < workflow_timeout_seconds < oidc_duration_seconds
+    assert runner_default_timeout == 220 * 60
+    assert workflow_timeout_seconds == 235 * 60
+    assert oidc_duration_seconds == 240 * 60
+
+    # 4. Batch attempt timeout remains 7200 seconds
+    # 5. Batch retry attempts remain 2
+    batch_stack_text = Path("infra/community_analysis_infra/batch_stack.py").read_text(encoding="utf-8")
+    assert "attempt_duration_seconds=7200" in batch_stack_text
+    assert "attempts=2" in batch_stack_text
+    assert "timeout=cdk.Duration.seconds(7200)" in batch_stack_text
+    assert "retry_attempts=2" in batch_stack_text
 
 
 

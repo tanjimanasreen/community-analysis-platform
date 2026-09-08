@@ -257,7 +257,7 @@ def wait_for_batch_job(
     job_id: str,
     *,
     poll_interval_seconds: float = 15.0,
-    timeout_seconds: float = 7200.0,
+    timeout_seconds: float = 13200.0,
 ) -> str:
     """Poll AWS Batch job until terminal state (SUCCEEDED or FAILED)."""
     started_at = time.time()
@@ -514,7 +514,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--s3-bucket", help="S3 bucket name (auto-discovered from account/region if omitted)")
     parser.add_argument("--region", default="us-east-1", help="AWS Region (default: us-east-1)")
     parser.add_argument("--poll-interval", type=float, default=15.0, help="Poll interval in seconds")
-    parser.add_argument("--timeout", type=float, default=7200.0, help="Timeout in seconds")
+    parser.add_argument("--timeout", type=float, default=13200.0, help="Timeout in seconds")
 
     args = parser.parse_args(argv)
 

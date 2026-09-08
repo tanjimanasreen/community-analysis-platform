@@ -59,7 +59,7 @@ jobs:
     name: Submit and verify evolution run
     needs: guard
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 235
 
     permissions:
       contents: read

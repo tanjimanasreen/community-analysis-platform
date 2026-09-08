@@ -361,10 +361,11 @@ def test_main_cli_theme_mode(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("scripts.aws_run_evolution.discover_run_id_from_batch_job", discover_mock)
     monkeypatch.setattr("scripts.aws_run_evolution.verify_completed_manifest", verify_mock)
 
-    # 1. Default invocation uses theme_mode="canonical"
+    # 1. Default invocation uses theme_mode="canonical" and timeout=13200.0 (220 min)
     exit_code = main(["--config-path", "configs/telegram/forwarded_message_evolution.yml"])
     assert exit_code == 0
     assert submit_mock.call_args[1]["theme_mode"] == "canonical"
+    assert wait_mock.call_args[1]["timeout_seconds"] == 13200.0
 
     # 2. Explicit mock invocation uses theme_mode="mock"
     exit_code = main([
@@ -375,6 +376,7 @@ def test_main_cli_theme_mode(monkeypatch: pytest.MonkeyPatch) -> None:
     ])
     assert exit_code == 0
     assert submit_mock.call_args[1]["theme_mode"] == "mock"
+    assert wait_mock.call_args[1]["timeout_seconds"] == 13200.0
 
 
 def test_submit_evolution_batch_job_override_revisioned_arn() -> None:
@@ -557,6 +559,14 @@ def test_wait_for_batch_job_failure() -> None:
     }
     with pytest.raises(RuntimeError, match="Batch job job-12345 failed: OutOfMemory"):
         wait_for_batch_job(batch_mock, "job-12345", poll_interval_seconds=0.01)
+
+
+def test_wait_for_batch_job_default_timeout() -> None:
+    """Verify default timeout is 13200.0 seconds (220 minutes)."""
+    import inspect
+    sig = inspect.signature(wait_for_batch_job)
+    assert sig.parameters["timeout_seconds"].default == 13200.0
+
 
 
 def test_get_batch_job_log_stream_name() -> None:
