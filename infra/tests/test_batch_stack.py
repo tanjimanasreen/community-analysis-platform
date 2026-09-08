@@ -31,6 +31,7 @@ def dev_batch_template() -> Template:
         batch_image_tag="test-batch-sha",
         tei_analytics_image_tag="test-tei-analytics-sha",
         tei_image_tag="test-tei-sha",
+        openai_base_url="https://example.openai.azure.com/openai/v1/",
         env=env,
     )
     for key, value in stage_config.tags.items():
@@ -573,7 +574,7 @@ def test_batch_stack_secrets_and_data_root(dev_batch_template: Template) -> None
         assert sec.get("DeletionPolicy") == "Retain"
         assert sec.get("UpdateReplacePolicy") == "Retain"
 
-    # Verify single-container job def has DATA_ROOT and Secrets
+    # Verify single-container job def has DATA_ROOT, OPENAI_BASE_URL, and Secrets
     dev_batch_template.has_resource_properties(
         "AWS::Batch::JobDefinition",
         {
@@ -581,7 +582,13 @@ def test_batch_stack_secrets_and_data_root(dev_batch_template: Template) -> None
             "ContainerProperties": Match.object_like(
                 {
                     "Environment": Match.array_with(
-                        [{"Name": "DATA_ROOT", "Value": "/app/workspace/data/raw"}]
+                        [
+                            {"Name": "DATA_ROOT", "Value": "/app/workspace/data/raw"},
+                            {
+                                "Name": "OPENAI_BASE_URL",
+                                "Value": "https://example.openai.azure.com/openai/v1/",
+                            },
+                        ]
                     ),
                     "Secrets": Match.array_with(
                         [
@@ -594,7 +601,7 @@ def test_batch_stack_secrets_and_data_root(dev_batch_template: Template) -> None
         },
     )
 
-    # Verify multi-container TEI job def analytics container has DATA_ROOT and Secrets
+    # Verify multi-container TEI job def analytics container has DATA_ROOT, OPENAI_BASE_URL, and Secrets
     template_dict = dev_batch_template.to_json()
     job_defs = [
         res
@@ -613,12 +620,20 @@ def test_batch_stack_secrets_and_data_root(dev_batch_template: Template) -> None
     )
     analytics_container = [c for c in containers if c.get("Name") == "analytics"][0]
 
-    env_names = [e.get("Name") for e in analytics_container.get("Environment", [])]
-    assert "DATA_ROOT" in env_names
+    env_map = {e.get("Name"): e.get("Value") for e in analytics_container.get("Environment", [])}
+    assert env_map.get("DATA_ROOT") == "/app/workspace/data/raw"
+    assert env_map.get("OPENAI_BASE_URL") == "https://example.openai.azure.com/openai/v1/"
 
     secret_names = [s.get("Name") for s in analytics_container.get("Secrets", [])]
     assert "OPENAI_API_KEY" in secret_names
     assert "AZURE_TRANSLATOR_KEY" in secret_names
+
+    # Verify TEI sidecars do NOT contain OPENAI_BASE_URL
+    tei_sim_container = [c for c in containers if c.get("Name") == "tei-similarity"][0]
+    tei_clust_container = [c for c in containers if c.get("Name") == "tei-clustering"][0]
+    for tei_c in (tei_sim_container, tei_clust_container):
+        tei_env_names = [e.get("Name") for e in tei_c.get("Environment", [])]
+        assert "OPENAI_BASE_URL" not in tei_env_names
 
 
 def test_prod_batch_stack_retention() -> None:
@@ -640,6 +655,7 @@ def test_prod_batch_stack_retention() -> None:
         batch_image_tag="prod-batch-sha",
         tei_analytics_image_tag="prod-tei-analytics-sha",
         tei_image_tag="prod-tei-sha",
+        openai_base_url="https://example.openai.azure.com/openai/v1/",
         env=env,
     )
     prod_template = Template.from_stack(batch_stack)
@@ -756,6 +772,7 @@ def test_distinct_image_tag_wiring_in_batch_stack() -> None:
         batch_image_tag="plan094-3adeb1fd",
         tei_analytics_image_tag="plan095-analytics-sha",
         tei_image_tag="plan095-tei-sha",
+        openai_base_url="https://example.openai.azure.com/openai/v1/",
         env=env,
     )
     template = Template.from_stack(batch_stack)
@@ -824,6 +841,7 @@ def test_batch_stack_fails_when_plan095_tags_missing() -> None:
             batch_image_tag="batch-sha",
             tei_analytics_image_tag="",
             tei_image_tag="tei-sha",
+            openai_base_url="https://example.openai.azure.com/openai/v1/",
             env=env,
         )
 
@@ -836,5 +854,19 @@ def test_batch_stack_fails_when_plan095_tags_missing() -> None:
             batch_image_tag="batch-sha",
             tei_analytics_image_tag="analytics-sha",
             tei_image_tag="",
+            openai_base_url="https://example.openai.azure.com/openai/v1/",
+            env=env,
+        )
+
+    with pytest.raises(ValueError, match="openai_base_url is required"):
+        BatchStack(
+            app,
+            "BatchMissingOpenAiBaseUrl",
+            stage_config=stage_config,
+            bucket=storage.bucket,
+            batch_image_tag="batch-sha",
+            tei_analytics_image_tag="analytics-sha",
+            tei_image_tag="tei-sha",
+            openai_base_url="",
             env=env,
         )

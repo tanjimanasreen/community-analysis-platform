@@ -225,3 +225,46 @@ def test_app_py_prod_does_not_instantiate_cicd() -> None:
         text=True,
     )
     assert res.returncode == 0, f"app.py failed for prod: {res.stderr}"
+
+
+def test_app_py_batch_requires_openai_base_url() -> None:
+    """Verify that BatchStack requires openai_base_url when batch_image_tag is passed."""
+    infra_dir = Path(__file__).resolve().parent.parent
+    env = os.environ.copy()
+    env["STAGE"] = "dev"
+    env["IMAGE_TAG"] = "test-api-sha"
+    env["BATCH_IMAGE_TAG"] = "test-batch-sha"
+    env["TEI_ANALYTICS_IMAGE_TAG"] = "test-analytics-sha"
+    env["TEI_IMAGE_TAG"] = "test-tei-sha"
+    env.pop("OPENAI_BASE_URL", None)
+
+    res = subprocess.run(
+        [sys.executable, "app.py"],
+        cwd=infra_dir,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert res.returncode != 0
+    assert "openai_base_url" in res.stderr
+
+
+def test_app_py_batch_synthesis_with_openai_base_url() -> None:
+    """Verify that BatchStack synthesizes successfully when openai_base_url is supplied."""
+    infra_dir = Path(__file__).resolve().parent.parent
+    env = os.environ.copy()
+    env["STAGE"] = "dev"
+    env["IMAGE_TAG"] = "test-api-sha"
+    env["BATCH_IMAGE_TAG"] = "test-batch-sha"
+    env["TEI_ANALYTICS_IMAGE_TAG"] = "test-analytics-sha"
+    env["TEI_IMAGE_TAG"] = "test-tei-sha"
+    env["OPENAI_BASE_URL"] = "https://example.openai.azure.com/openai/v1/"
+
+    res = subprocess.run(
+        [sys.executable, "app.py"],
+        cwd=infra_dir,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert res.returncode == 0, f"app.py failed: {res.stderr}"

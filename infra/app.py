@@ -133,6 +133,17 @@ if not cicd_only:
             )
         tei_image_tag = str(raw_tei_image_tag).strip()
 
+        raw_openai_base_url = (
+            app.node.try_get_context("openai_base_url")
+            or os.environ.get("OPENAI_BASE_URL")
+        )
+        if not raw_openai_base_url or not str(raw_openai_base_url).strip():
+            raise ValueError(
+                "openai_base_url (-c openai_base_url=... or env OPENAI_BASE_URL) "
+                "is required when synthesizing BatchStack."
+            )
+        openai_base_url = str(raw_openai_base_url).strip()
+
         batch_stack_name = stage_config.format_stack_name("batch")
         BatchStack(
             app,
@@ -142,6 +153,7 @@ if not cicd_only:
             batch_image_tag=batch_image_tag,
             tei_analytics_image_tag=tei_analytics_image_tag,
             tei_image_tag=tei_image_tag,
+            openai_base_url=openai_base_url,
             env=cdk.Environment(
                 account=stage_config.account,
                 region=stage_config.region,

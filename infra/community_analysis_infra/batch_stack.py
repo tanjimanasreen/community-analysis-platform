@@ -39,6 +39,7 @@ class BatchStack(cdk.Stack):
         batch_image_tag: str,
         tei_analytics_image_tag: str,
         tei_image_tag: str,
+        openai_base_url: str,
         **kwargs,
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
@@ -49,10 +50,13 @@ class BatchStack(cdk.Stack):
             raise ValueError("tei_analytics_image_tag is required for BatchStack")
         if not tei_image_tag or not str(tei_image_tag).strip():
             raise ValueError("tei_image_tag is required for BatchStack")
+        if not openai_base_url or not str(openai_base_url).strip():
+            raise ValueError("openai_base_url is required for BatchStack")
 
         resolved_batch_image_tag = str(batch_image_tag).strip()
         resolved_tei_analytics_image_tag = str(tei_analytics_image_tag).strip()
         resolved_tei_image_tag = str(tei_image_tag).strip()
+        resolved_openai_base_url = str(openai_base_url).strip()
 
         self.stage_config = stage_config
         is_dev = stage_config.stage_name == "dev"
@@ -302,6 +306,7 @@ class BatchStack(cdk.Stack):
                 "LOG_FORMAT": "json",
                 "LOG_LEVEL": "INFO",
                 "DATA_ROOT": "/app/workspace/data/raw",
+                "OPENAI_BASE_URL": resolved_openai_base_url,
             },
             secrets={
                 "OPENAI_API_KEY": batch.Secret.from_secrets_manager(self.openai_secret),
@@ -405,6 +410,10 @@ class BatchStack(cdk.Stack):
                                     batch.CfnJobDefinition.EnvironmentProperty(
                                         name="DATA_ROOT",
                                         value="/app/workspace/data/raw",
+                                    ),
+                                    batch.CfnJobDefinition.EnvironmentProperty(
+                                        name="OPENAI_BASE_URL",
+                                        value=resolved_openai_base_url,
                                     ),
                                     batch.CfnJobDefinition.EnvironmentProperty(
                                         name="THEME_SIMILARITY_PROVIDER", value="tei"
