@@ -255,13 +255,22 @@ class OverviewService:
         record = self._period_record(run_id, key, period, config=config)
         if record is None:
             return None
+        if record.rows is not None:
+            return int(record.rows)
         return self.reader.parquet_row_count(run_id, record)
 
     def _row_count(self, run_id: str, key: str) -> int | None:
         records = _records_for_key(self.reader, run_id, key)
         if not records:
             return None
-        return sum(self.reader.parquet_row_count(run_id, record) for record in records)
+        return sum(
+            (
+                int(record.rows)
+                if record.rows is not None
+                else self.reader.parquet_row_count(run_id, record)
+            )
+            for record in records
+        )
 
     def _top_themes(self, run_id: str) -> list[dict[str, Any]]:
         records = self.reader.find_records(run_id, key_prefix="themes_")

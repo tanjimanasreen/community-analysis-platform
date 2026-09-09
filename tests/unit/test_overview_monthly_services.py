@@ -18,7 +18,9 @@ from src.artifacts.models import (
 )
 
 
-def _record(key: str, *, rows: int, path: str | None = None) -> ArtifactRecord:
+def _record(
+    key: str, *, rows: int | None = None, path: str | None = None
+) -> ArtifactRecord:
     return ArtifactRecord(
         key=key,
         path=path or f"data/{key}.parquet",
@@ -63,6 +65,7 @@ class _Reader:
         self.frames = frames
         self.record_reads: list[ArtifactRecord] = []
         self.slice_reads: list[tuple[ArtifactRecord, int, int]] = []
+        self.row_count_reads: list[ArtifactRecord] = []
 
     def read_safe_config(self, run_id: str) -> dict:
         assert run_id == self.catalog.manifest.run_id
@@ -124,6 +127,7 @@ class _Reader:
 
     def parquet_row_count(self, run_id: str, record: ArtifactRecord) -> int:
         assert run_id == self.catalog.manifest.run_id
+        self.row_count_reads.append(record)
         return int(record.rows or 0)
 
 
@@ -425,6 +429,10 @@ def test_overview_service_separates_monthly_and_run_level_values() -> None:
     full_read_keys = [record.key for record in reader.record_reads]
     assert not any(key.startswith(summary_prefixes) for key in full_read_keys)
 
+    # Interaction record counts are resolved from manifest rows without parquet_row_count calls
+    row_count_keys = [record.key for record in reader.row_count_reads]
+    assert not any(key.startswith("network_data_") for key in row_count_keys)
+
 
 def test_overview_summary_paths_use_parquet_slices_not_full_reads() -> None:
     reader = _monthly_reader()
@@ -548,6 +556,67 @@ def test_overview_final_row_helper_contract() -> None:
     empty_rec = _record("empty_frame_artifact", rows=1)
     reader.frames["empty_frame_artifact"] = pd.DataFrame(columns=["month"])
     assert service._final_row("monthly-run", empty_rec) is None
+
+
+def test_overview_row_counts_use_manifest_metadata_without_parquet_row_count() -> None:
+    reader = _monthly_reader()
+    service = OverviewService(reader, SimpleNamespace(), _Evolution())
+
+    # 1. Populated rows returns metadata directly without calling parquet_row_count
+    reader.row_count_reads.clear()
+    march_count = service._period_row_count(
+        "monthly-run", "network_data", "2017-03", config=reader.config
+    )
+    assert march_count == 4
+    assert len(reader.row_count_reads) == 0
+
+    # 2. Populated rows=0 returns 0 directly without calling parquet_row_count
+    zero_rec = _record("network_data_03", rows=0)
+    reader.catalog.manifest = replace(
+        reader.catalog.manifest,
+        artifacts=tuple(
+            zero_rec if rec.key == "network_data_03" else rec
+            for rec in reader.catalog.manifest.artifacts
+        ),
+    )
+    zero_count = service._period_row_count(
+        "monthly-run", "network_data", "2017-03", config=reader.config
+    )
+    assert zero_count == 0
+    assert len(reader.row_count_reads) == 0
+
+    # 3. Legacy records with rows=None fall back to parquet_row_count
+    legacy_rec = _record("network_data_03", rows=None)
+    reader.catalog.manifest = replace(
+        reader.catalog.manifest,
+        artifacts=tuple(
+            legacy_rec if rec.key == "network_data_03" else rec
+            for rec in reader.catalog.manifest.artifacts
+        ),
+    )
+    legacy_count = service._period_row_count(
+        "monthly-run", "network_data", "2017-03", config=reader.config
+    )
+    assert legacy_count == 0
+    assert [rec.key for rec in reader.row_count_reads] == ["network_data_03"]
+
+    # 4. None is preserved when period record is missing
+    assert (
+        service._period_row_count(
+            "monthly-run", "nonexistent_artifact", "2017-03", config=reader.config
+        )
+        is None
+    )
+
+    # 5. _row_count uses manifest rows when available and falls back only when rows=None
+    reader.row_count_reads.clear()
+    total = service._row_count("monthly-run", "network_data")
+    # network_data_03 has rows=None, network_data_04 has rows=2
+    assert total == 2
+    assert [rec.key for rec in reader.row_count_reads] == ["network_data_03"]
+
+    # 6. _row_count returns None when no records exist
+    assert service._row_count("monthly-run", "nonexistent_artifact") is None
 
 
 def test_network_service_selects_only_the_requested_month() -> None:
