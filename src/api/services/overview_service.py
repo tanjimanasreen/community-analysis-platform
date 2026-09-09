@@ -148,10 +148,10 @@ class OverviewService:
         )
         if record is None:
             return {}
-        frame = self.reader.read_parquet_record(run_id, record)
-        if frame.empty:
+        final_row = self._final_row(run_id, record)
+        if final_row is None:
             return {}
-        row = {key: normalize_value(value) for key, value in frame.iloc[-1].items()}
+        row = {key: normalize_value(value) for key, value in final_row.items()}
         users = row.get("user") if isinstance(row.get("user"), Mapping) else {}
         messages = (
             row.get("messages") if isinstance(row.get("messages"), Mapping) else {}
@@ -175,15 +175,35 @@ class OverviewService:
         )
         if record is None:
             return {}
-        frame = self.reader.read_parquet_record(run_id, record)
-        if frame.empty:
+        final_row = self._final_row(run_id, record)
+        if final_row is None:
             return {}
-        row = {key: normalize_value(value) for key, value in frame.iloc[-1].items()}
+        row = {key: normalize_value(value) for key, value in final_row.items()}
         return {
             "matched": _as_int(row.get("total_matched")),
             "if": _as_int(row.get("total_absolute")),
             "wif": _as_int(row.get("total_weighted")),
         }
+
+    def _final_row(
+        self,
+        run_id: str,
+        record: ArtifactRecord,
+    ) -> Any | None:
+        rows = self.reader.parquet_row_count(run_id, record) or 0
+        if rows <= 0:
+            return None
+        frame = self.reader.read_parquet_record_slice(
+            run_id,
+            record,
+            offset=rows - 1,
+            limit=1,
+        )
+        if frame.empty:
+            return None
+        return frame.iloc[-1]
+
+    _final_record_row = _final_row
 
     def _period_record(
         self,

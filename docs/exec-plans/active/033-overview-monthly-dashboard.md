@@ -110,6 +110,7 @@ artifact categories.
 | 2026-07-28 | `python -m pytest -q tests/unit/test_network_dashboard_sample.py tests/unit/test_network_guard.py` | Passed: 7 existing network regression tests. |
 | 2026-07-28 | Reproduction manifest period/artifact mapping and network-row total check | Passed: January–April mappings and 5,165,736 run interaction records verified. |
 | 2026-07-28 | `git diff --check` | Passed. |
+| 2026-09-09 | `python -m pytest tests/unit/test_overview_monthly_services.py` | Passed: 11 tests (including slice usage and empty artifact regressions). |
 
 ## Progress log
 
@@ -119,6 +120,7 @@ artifact categories.
 | 2026-07-28 | Confirmed the mixed-scope defect and the January–April artifact mapping in the supplied completed run. |
 | 2026-07-28 | Added period-aware Overview/network read models, responsive monthly controls/cards/trends, month-specific graph queries, grouped configuration/provenance, and focused regression tests. |
 | 2026-07-28 | Kept legacy Overview scalar fields for existing comparison/evolution routes while making the new monthly/run-level contract explicit. |
+| 2026-09-09 | Replaced full Parquet reads (`read_parquet_record`) in `_period_counts` and `_period_community_counts` with single-row slice reads (`read_parquet_record_slice` with `offset=rows - 1, limit=1`) via private helper `_final_row`, eliminating full S3 Parquet scans per month while preserving exact values, normalization, and empty artifact handling. |
 
 ## Rollback
 

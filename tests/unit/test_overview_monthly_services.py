@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from types import SimpleNamespace
 
 import pandas as pd
@@ -60,6 +61,8 @@ class _Reader:
         self.catalog = _Catalog(manifest)
         self.config = config
         self.frames = frames
+        self.record_reads: list[ArtifactRecord] = []
+        self.slice_reads: list[tuple[ArtifactRecord, int, int]] = []
 
     def read_safe_config(self, run_id: str) -> dict:
         assert run_id == self.catalog.manifest.run_id
@@ -89,6 +92,7 @@ class _Reader:
         filters: list[tuple[str, str, object]] | None = None,
     ) -> pd.DataFrame:
         assert run_id == self.catalog.manifest.run_id
+        self.record_reads.append(record)
         frame = self.frames[record.key].copy()
         if filters:
             for column, operator, value in filters:
@@ -98,6 +102,22 @@ class _Reader:
                     frame = frame.loc[frame[column] == value]
                 else:  # pragma: no cover - test fake protects the supported contract
                     raise AssertionError(operator)
+        if columns is not None:
+            frame = frame.loc[:, columns]
+        return frame
+
+    def read_parquet_record_slice(
+        self,
+        run_id: str,
+        record: ArtifactRecord,
+        *,
+        offset: int,
+        limit: int,
+        columns: list[str] | None = None,
+    ) -> pd.DataFrame:
+        assert run_id == self.catalog.manifest.run_id
+        self.slice_reads.append((record, offset, limit))
+        frame = self.frames[record.key].iloc[offset : offset + limit].copy()
         if columns is not None:
             frame = frame.loc[:, columns]
         return frame
@@ -394,6 +414,140 @@ def test_overview_service_separates_monthly_and_run_level_values() -> None:
     assert result["total_messages"] == 40
     assert result["total_interactions"] == 6
     assert "cache_path" not in str(result["config_metadata"])
+
+    # Summary paths use slice reads and do not perform full reads
+    summary_prefixes = ("count_user_messages_", "communities_matched_")
+    sliced_keys = [record.key for record, _, _ in reader.slice_reads]
+    assert "count_user_messages_03" in sliced_keys
+    assert "communities_matched_03" in sliced_keys
+    assert "count_user_messages_04" in sliced_keys
+    assert "communities_matched_04" in sliced_keys
+    full_read_keys = [record.key for record in reader.record_reads]
+    assert not any(key.startswith(summary_prefixes) for key in full_read_keys)
+
+
+def test_overview_summary_paths_use_parquet_slices_not_full_reads() -> None:
+    reader = _monthly_reader()
+    reader.frames["count_user_messages_03"] = pd.DataFrame(
+        [
+            {
+                "month": "03",
+                "user": "{'absolute': 1, 'weighted': 1}",
+                "messages": "{'absolute': 2, 'weighted': 2}",
+            },
+            {
+                "month": "03",
+                "user": "{'absolute': 5, 'weighted': 4}",
+                "messages": "{'absolute': 20, 'weighted': 18}",
+            },
+        ]
+    )
+    reader.frames["communities_matched_03"] = pd.DataFrame(
+        [
+            {
+                "month": "03",
+                "total_matched": 99,
+                "total_absolute": 99,
+                "total_weighted": 99,
+            },
+            {
+                "month": "03",
+                "total_matched": 2,
+                "total_absolute": 3,
+                "total_weighted": 4,
+            },
+        ]
+    )
+    updated_artifacts = []
+    for rec in reader.catalog.manifest.artifacts:
+        if rec.key in ("count_user_messages_03", "communities_matched_03"):
+            updated_artifacts.append(_record(rec.key, rows=2))
+        else:
+            updated_artifacts.append(rec)
+    reader.catalog.manifest = replace(
+        reader.catalog.manifest, artifacts=tuple(updated_artifacts)
+    )
+
+    service = OverviewService(reader, SimpleNamespace(), _Evolution())
+    counts = service._period_counts("monthly-run", "2017-03", config=reader.config)
+    communities = service._period_community_counts(
+        "monthly-run", "2017-03", config=reader.config
+    )
+
+    assert counts == {
+        "if_users": 5,
+        "wif_users": 4,
+        "if_messages": 20,
+        "wif_messages": 18,
+    }
+    assert communities == {"matched": 2, "if": 3, "wif": 4}
+
+    slice_calls = [
+        (rec.key, offset, limit) for rec, offset, limit in reader.slice_reads
+    ]
+    assert ("count_user_messages_03", 1, 1) in slice_calls
+    assert ("communities_matched_03", 1, 1) in slice_calls
+
+    full_read_keys = [rec.key for rec in reader.record_reads]
+    assert "count_user_messages_03" not in full_read_keys
+    assert "communities_matched_03" not in full_read_keys
+
+
+def test_overview_handles_empty_and_zero_row_artifacts() -> None:
+    reader = _monthly_reader()
+    updated_artifacts = []
+    for rec in reader.catalog.manifest.artifacts:
+        if rec.key == "count_user_messages_03":
+            updated_artifacts.append(_record("count_user_messages_03", rows=0))
+        elif rec.key == "communities_matched_03":
+            updated_artifacts.append(_record("communities_matched_03", rows=1))
+        else:
+            updated_artifacts.append(rec)
+    reader.catalog.manifest = replace(
+        reader.catalog.manifest, artifacts=tuple(updated_artifacts)
+    )
+    reader.frames["communities_matched_03"] = pd.DataFrame(
+        columns=["month", "total_matched", "total_absolute", "total_weighted"]
+    )
+
+    service = OverviewService(reader, SimpleNamespace(), _Evolution())
+    counts = service._period_counts("monthly-run", "2017-03", config=reader.config)
+    community_counts = service._period_community_counts(
+        "monthly-run", "2017-03", config=reader.config
+    )
+
+    assert counts == {}
+    assert community_counts == {}
+
+    result = service.overview("monthly-run")
+    assert result["periods"][0]["if_users"] is None
+    assert result["periods"][0]["wif_users"] is None
+    assert result["periods"][0]["if_messages"] is None
+    assert result["periods"][0]["wif_messages"] is None
+    assert result["periods"][0]["if_community_count"] is None
+    assert result["periods"][0]["wif_community_count"] is None
+    assert result["periods"][0]["matched_community_count"] is None
+    assert result["periods"][0]["matched_percentage"] is None
+
+
+def test_overview_final_row_helper_contract() -> None:
+    reader = _monthly_reader()
+    service = OverviewService(reader, SimpleNamespace(), _Evolution())
+
+    rec = reader.get_record("monthly-run", "count_user_messages_03")
+    row = service._final_row("monthly-run", rec)
+    assert row is not None
+    assert row["month"] == "03"
+    assert service._final_record_row("monthly-run", rec)["month"] == "03"
+
+    slice_count_before = len(reader.slice_reads)
+    zero_rec = _record("zero_row_artifact", rows=0)
+    assert service._final_row("monthly-run", zero_rec) is None
+    assert len(reader.slice_reads) == slice_count_before
+
+    empty_rec = _record("empty_frame_artifact", rows=1)
+    reader.frames["empty_frame_artifact"] = pd.DataFrame(columns=["month"])
+    assert service._final_row("monthly-run", empty_rec) is None
 
 
 def test_network_service_selects_only_the_requested_month() -> None:
