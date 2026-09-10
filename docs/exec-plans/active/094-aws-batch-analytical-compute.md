@@ -270,3 +270,4 @@ Stage B, manifest schema, or artifact schema were changed by Plan 094.
 - 2026-08-31: Verified nested 03_2017/manifest.json and 04_2017/manifest.json canonical artifacts directly in the final S3 run bundle.
 - 2026-08-31: Verified the final run end-to-end through the deployed Lambda API and CloudFront frontend; the UI displayed Run verified and rendered the Community Evolution analysis successfully.
 - 2026-08-31: Marked Plan 094 complete.
+- 2026-09-10: Extended src/cloud/batch_runner.py with translation cache staging: downloads S3 translation cache to /app/.cache/translation_cache.sqlite3 before execution, excludes translation/ from stage cache sync to prevent collision, and persists updated cache to S3 prior to final manifest.json publication. Verified with 25 unit tests in tests/unit/test_batch_runner.py.

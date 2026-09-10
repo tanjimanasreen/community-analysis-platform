@@ -31,6 +31,8 @@ from src.themes.tei_health import wait_for_tei_services
 
 logger = logging.getLogger("community_analysis.batch_runner")
 
+DEFAULT_TRANSLATION_CACHE_S3_KEY = "cache/translation/translation_cache.sqlite3"
+
 
 @dataclass(frozen=True)
 class BatchRunnerConfig:
@@ -184,7 +186,11 @@ def _safe_s3_dest_path(target_dir: Path, rel_path: str, raw_key: str) -> Path:
 
 
 def download_s3_prefix(
-    s3_client: Any, bucket: str, prefix: str, target_dir: Path
+    s3_client: Any,
+    bucket: str,
+    prefix: str,
+    target_dir: Path,
+    exclude_prefixes: Sequence[str] | None = None,
 ) -> int:
     """Download all objects under S3 prefix to local target directory."""
     target_dir.mkdir(parents=True, exist_ok=True)
@@ -201,6 +207,10 @@ def download_s3_prefix(
             rel_path = key[len(clean_prefix) :].lstrip("/")
             if not rel_path or rel_path.endswith("/"):
                 continue
+            if exclude_prefixes and any(
+                rel_path.startswith(ex.lstrip("/")) for ex in exclude_prefixes
+            ):
+                continue
             dest_file = _safe_s3_dest_path(target_dir, rel_path, key)
             dest_file.parent.mkdir(parents=True, exist_ok=True)
             logger.info(
@@ -210,6 +220,78 @@ def download_s3_prefix(
             count += 1
 
     return count
+
+
+def download_translation_cache(
+    s3_client: Any,
+    bucket: str,
+    s3_key: str,
+    target_path: Path,
+) -> bool:
+    """Download persistent translation cache SQLite database from S3 if present.
+
+    Returns True if downloaded, False if object does not exist in S3.
+    """
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        head = s3_client.head_object(Bucket=bucket, Key=s3_key)
+        byte_size = head.get("ContentLength", 0)
+        logger.info(
+            "downloading_translation_cache bucket=%s key=%s dest=%s byte_size=%d",
+            bucket,
+            s3_key,
+            target_path,
+            byte_size,
+        )
+        s3_client.download_file(bucket, s3_key, str(target_path))
+        return True
+    except Exception as exc:
+        error_code = ""
+        if hasattr(exc, "response") and isinstance(exc.response, dict):
+            error_code = exc.response.get("Error", {}).get("Code", "")
+        if error_code in ("404", "NoSuchKey", "NotFound"):
+            logger.info(
+                "translation_cache_not_found_in_s3 bucket=%s key=%s dest=%s (proceeding with cold cache)",
+                bucket,
+                s3_key,
+                target_path,
+            )
+            return False
+        logger.warning(
+            "translation_cache_download_failed bucket=%s key=%s error=%s (proceeding with cold cache)",
+            bucket,
+            s3_key,
+            exc,
+        )
+        return False
+
+
+def upload_translation_cache(
+    s3_client: Any,
+    bucket: str,
+    s3_key: str,
+    source_path: Path,
+) -> bool:
+    """Upload persistent translation cache SQLite database to S3."""
+    if not source_path.exists() or not source_path.is_file():
+        logger.warning(
+            "translation_cache_upload_skipped_not_found src=%s bucket=%s key=%s",
+            source_path,
+            bucket,
+            s3_key,
+        )
+        return False
+
+    byte_size = source_path.stat().st_size
+    logger.info(
+        "uploading_translation_cache src=%s bucket=%s key=%s byte_size=%d",
+        source_path,
+        bucket,
+        s3_key,
+        byte_size,
+    )
+    s3_client.upload_file(str(source_path), bucket, s3_key)
+    return True
 
 
 def upload_local_tree_to_s3(
@@ -243,6 +325,8 @@ def publish_completed_run_to_s3(
     run_dir: Path,
     run_id: str,
     output_root: Path,
+    translation_cache_path: Path | None = None,
+    translation_s3_key: str = DEFAULT_TRANSLATION_CACHE_S3_KEY,
 ) -> None:
     """Publish verified completed run outputs to S3, uploading manifest.json LAST."""
     manifest_file = run_dir / "manifest.json"
@@ -292,6 +376,15 @@ def publish_completed_run_to_s3(
                 )
                 s3_client.upload_file(str(file_path), bucket, s3_key)
 
+    # 3b. Upload persistent translation cache if provided
+    if translation_cache_path:
+        upload_translation_cache(
+            s3_client=s3_client,
+            bucket=bucket,
+            s3_key=translation_s3_key,
+            source_path=translation_cache_path,
+        )
+
     # 4. Upload manifest.json LAST as the completion marker
     manifest_key = f"runs/{run_id}/manifest.json"
     logger.info(
@@ -322,6 +415,24 @@ def run_batch_job(config: BatchRunnerConfig, s3_client: Any = None) -> int:
     workspace_output_dir.mkdir(parents=True, exist_ok=True)
     local_cache_dir = workspace_output_dir / ".stage_cache"
 
+    # Load configuration early to resolve paths and translation settings
+    cfg = load_config(config.config_path)
+    cfg["output_base_path"] = str(workspace_output_dir)
+
+    translation_cfg = cfg.get("translation", {})
+    translation_enabled = bool(
+        isinstance(translation_cfg, dict) and translation_cfg.get("enabled", False)
+    )
+    translation_cache_local_path: Path | None = None
+    translation_s3_key = os.environ.get(
+        "TRANSLATION_CACHE_S3_KEY", DEFAULT_TRANSLATION_CACHE_S3_KEY
+    )
+    if translation_enabled:
+        raw_cache_path = translation_cfg.get(
+            "cache_path", ".cache/translation_cache.sqlite3"
+        )
+        translation_cache_local_path = Path(raw_cache_path).resolve()
+
     s3 = s3_client
     if (
         s3 is None
@@ -330,7 +441,7 @@ def run_batch_job(config: BatchRunnerConfig, s3_client: Any = None) -> int:
     ):
         s3 = boto3.client("s3")
 
-    # 1. Download raw inputs & cache from S3 if configured
+    # 1. Download raw inputs, stage cache, and translation cache from S3 if configured
     if s3 and config.s3_bucket and not config.skip_s3_download:
         logger.info("syncing_s3_inputs bucket=%s prefix=raw/", config.s3_bucket)
         downloaded_inputs = download_s3_prefix(
@@ -340,13 +451,21 @@ def run_batch_job(config: BatchRunnerConfig, s3_client: Any = None) -> int:
 
         logger.info("syncing_s3_cache bucket=%s prefix=cache/", config.s3_bucket)
         downloaded_cache = download_s3_prefix(
-            s3, config.s3_bucket, "cache/", local_cache_dir
+            s3,
+            config.s3_bucket,
+            "cache/",
+            local_cache_dir,
+            exclude_prefixes=("translation/",),
         )
         logger.info("downloaded_cache_count count=%d", downloaded_cache)
 
-    # 2. Load and validate configuration, safely redirecting output_base_path
-    cfg = load_config(config.config_path)
-    cfg["output_base_path"] = str(workspace_output_dir)
+        if translation_enabled and translation_cache_local_path:
+            download_translation_cache(
+                s3,
+                config.s3_bucket,
+                translation_s3_key,
+                translation_cache_local_path,
+            )
 
     if config.dataset_id:
         datasets = cfg.get("datasets", []) + cfg.get("longitudinal_datasets", [])
@@ -472,6 +591,10 @@ def run_batch_job(config: BatchRunnerConfig, s3_client: Any = None) -> int:
             run_dir=run_dir,
             run_id=run_id,
             output_root=output_root,
+            translation_cache_path=(
+                translation_cache_local_path if translation_enabled else None
+            ),
+            translation_s3_key=translation_s3_key,
         )
 
     total_duration = time.perf_counter() - job_start

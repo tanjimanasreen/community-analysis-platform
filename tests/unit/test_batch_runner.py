@@ -7,13 +7,16 @@ from unittest.mock import MagicMock
 import pytest
 
 from src.cloud.batch_runner import (
+    DEFAULT_TRANSLATION_CACHE_S3_KEY,
     BatchRunnerConfig,
     _safe_s3_dest_path,
     download_s3_prefix,
+    download_translation_cache,
     parse_args,
     publish_completed_run_to_s3,
     run_batch_job,
     upload_local_tree_to_s3,
+    upload_translation_cache,
 )
 
 
@@ -664,3 +667,140 @@ def test_batch_runner_config_resolves_to_tei_embedders(
 
     mock_clust_embedder = build_clustering_embedder(passed_mock_cfg)
     assert isinstance(mock_clust_embedder, DeterministicThemeEmbeddingModel)
+
+
+def test_translation_cache_download_to_canonical_config_path(tmp_path: Path) -> None:
+    mock_s3 = MagicMock()
+    mock_s3.head_object.return_value = {"ContentLength": 1024}
+
+    target_cache = tmp_path / ".cache" / "translation_cache.sqlite3"
+    downloaded = download_translation_cache(
+        mock_s3,
+        bucket="my-bucket",
+        s3_key=DEFAULT_TRANSLATION_CACHE_S3_KEY,
+        target_path=target_cache,
+    )
+    assert downloaded is True
+    mock_s3.download_file.assert_called_once_with(
+        "my-bucket",
+        DEFAULT_TRANSLATION_CACHE_S3_KEY,
+        str(target_cache),
+    )
+
+
+def test_translation_cache_missing_remote_handled_gracefully(tmp_path: Path) -> None:
+    from botocore.exceptions import ClientError
+
+    mock_s3 = MagicMock()
+    mock_s3.head_object.side_effect = ClientError(
+        {"Error": {"Code": "404", "Message": "Not Found"}}, "HeadObject"
+    )
+
+    target_cache = tmp_path / ".cache" / "translation_cache.sqlite3"
+    downloaded = download_translation_cache(
+        mock_s3,
+        bucket="my-bucket",
+        s3_key=DEFAULT_TRANSLATION_CACHE_S3_KEY,
+        target_path=target_cache,
+    )
+    assert downloaded is False
+    mock_s3.download_file.assert_not_called()
+
+
+def test_stage_cache_and_translation_cache_do_not_collide(tmp_path: Path) -> None:
+    mock_s3 = MagicMock()
+    mock_paginator = MagicMock()
+    mock_paginator.paginate.return_value = [
+        {
+            "Contents": [
+                {"Key": "cache/v1/network/hash123/meta.json"},
+                {"Key": "cache/translation/translation_cache.sqlite3"},
+                {"Key": "cache/v1/topic/hash456/scores.parquet"},
+            ]
+        }
+    ]
+    mock_s3.get_paginator.return_value = mock_paginator
+
+    target_stage_dir = tmp_path / "output" / ".stage_cache"
+    download_count = download_s3_prefix(
+        mock_s3,
+        "my-bucket",
+        "cache/",
+        target_stage_dir,
+        exclude_prefixes=("translation/",),
+    )
+
+    # Only the 2 stage cache objects must be downloaded; translation cache must be excluded
+    assert download_count == 2
+    downloaded_keys = [c[0][1] for c in mock_s3.download_file.call_args_list]
+    assert "cache/v1/network/hash123/meta.json" in downloaded_keys
+    assert "cache/v1/topic/hash456/scores.parquet" in downloaded_keys
+    assert "cache/translation/translation_cache.sqlite3" not in downloaded_keys
+
+
+def test_publish_completed_run_persists_updated_translation_cache(tmp_path: Path) -> None:
+    mock_s3 = MagicMock()
+    output_root = tmp_path / "output"
+    run_id = "run-trans-cache-123"
+    run_dir = output_root / "runs" / run_id
+    run_dir.mkdir(parents=True)
+    (run_dir / "data.parquet").write_bytes(b"PAR1")
+    (run_dir / "manifest.json").write_text('{"status": "completed"}')
+
+    local_translation_cache = tmp_path / ".cache" / "translation_cache.sqlite3"
+    local_translation_cache.parent.mkdir(parents=True)
+    local_translation_cache.write_bytes(b"SQLITE_DATA")
+
+    publish_completed_run_to_s3(
+        s3_client=mock_s3,
+        bucket="my-bucket",
+        run_dir=run_dir,
+        run_id=run_id,
+        output_root=output_root,
+        translation_cache_path=local_translation_cache,
+        translation_s3_key=DEFAULT_TRANSLATION_CACHE_S3_KEY,
+    )
+
+    uploaded_keys = [c[0][2] for c in mock_s3.upload_file.call_args_list]
+
+    # Translation cache must be uploaded to the dedicated key
+    assert DEFAULT_TRANSLATION_CACHE_S3_KEY in uploaded_keys
+
+    # manifest.json must be uploaded strictly LAST
+    assert uploaded_keys[-1] == f"runs/{run_id}/manifest.json"
+
+    # Translation cache upload must happen before manifest.json
+    trans_index = uploaded_keys.index(DEFAULT_TRANSLATION_CACHE_S3_KEY)
+    manifest_index = uploaded_keys.index(f"runs/{run_id}/manifest.json")
+    assert trans_index < manifest_index
+
+
+def test_batch_runner_logs_no_secret_values(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    import logging
+
+    mock_s3 = MagicMock()
+    mock_s3.head_object.return_value = {"ContentLength": 500}
+
+    secret_key = "super-secret-azure-api-key-12345"
+    target_cache = tmp_path / ".cache" / "translation_cache.sqlite3"
+
+    with caplog.at_level(logging.INFO):
+        download_translation_cache(
+            mock_s3,
+            bucket="my-bucket",
+            s3_key=DEFAULT_TRANSLATION_CACHE_S3_KEY,
+            target_path=target_cache,
+        )
+        upload_translation_cache(
+            mock_s3,
+            bucket="my-bucket",
+            s3_key=DEFAULT_TRANSLATION_CACHE_S3_KEY,
+            source_path=target_cache,
+        )
+
+    all_logs = " ".join(record.message for record in caplog.records)
+    assert secret_key not in all_logs
+    assert "sk-" not in all_logs
+    assert "api_key" not in all_logs.lower()
