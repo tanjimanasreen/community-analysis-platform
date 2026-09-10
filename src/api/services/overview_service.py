@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Mapping
+from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from functools import lru_cache
 from typing import Any
@@ -44,12 +45,21 @@ class OverviewService:
         manifest = self.reader.catalog.get_manifest(run_id)
         config = self.reader.read_safe_config(run_id)
         available_periods = discover_periods(manifest, config)
-        monthly = [
-            self._period_overview(run_id, period, config=config)
-            for period in available_periods
-        ]
+
+        max_workers = min(len(available_periods) + 2, 6)
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            period_futures = [
+                executor.submit(self._period_overview, run_id, period, config=config)
+                for period in available_periods
+            ]
+            persistent_future = executor.submit(self._persistent_count, run_id)
+            top_themes_future = executor.submit(self._top_themes, run_id)
+
+            monthly = [future.result() for future in period_futures]
+            persistent_count = persistent_future.result()
+            top_themes = top_themes_future.result()
+
         latest = monthly[-1] if monthly else {}
-        persistent_count = self._persistent_count(run_id)
         interaction_values = [item.get("interaction_records") for item in monthly]
         run_interactions = (
             sum(int(value) for value in interaction_values)
@@ -94,7 +104,7 @@ class OverviewService:
                 "persistent_community_count": persistent_count,
                 "month_count": len(available_periods),
             },
-            "top_themes": self._top_themes(run_id),
+            "top_themes": top_themes,
             "model_metadata": _model_metadata(config),
             "config_metadata": _config_metadata(
                 config,
@@ -190,7 +200,10 @@ class OverviewService:
         run_id: str,
         record: ArtifactRecord,
     ) -> Any | None:
-        rows = self.reader.parquet_row_count(run_id, record) or 0
+        if record.rows is not None:
+            rows = int(record.rows)
+        else:
+            rows = self.reader.parquet_row_count(run_id, record) or 0
         if rows <= 0:
             return None
         frame = self.reader.read_parquet_record_slice(
@@ -202,8 +215,6 @@ class OverviewService:
         if frame.empty:
             return None
         return frame.iloc[-1]
-
-    _final_record_row = _final_row
 
     def _period_record(
         self,

@@ -110,6 +110,7 @@ def test_lambda_function_properties(dev_api_template: Template) -> None:
                     "COMMUNITY_ANALYSIS_S3_BUCKET": Match.any_value(),
                     "COMMUNITY_ANALYSIS_S3_REGION": Match.any_value(),
                     "COMMUNITY_ANALYSIS_API_ALLOWED_HOSTS": "*",
+                    "COMMUNITY_ANALYSIS_API_CATALOG_REFRESH_SECONDS": "60.0",
                     "AWS_LWA_PORT": "8000",
                     "AWS_LWA_READINESS_CHECK_PATH": "/api/v1/health",
                     "AWS_LWA_READINESS_CHECK_HEALTHY_STATUS": "200-399",

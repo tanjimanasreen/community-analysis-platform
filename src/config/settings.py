@@ -173,7 +173,13 @@ class APISettings(BaseSettings):
     cors_origins: str = ""
     max_graph_nodes: int = 1000
     max_graph_edges: int = 5000
-    catalog_refresh_seconds: float = 1.0
+    catalog_refresh_seconds: float = Field(
+        default=1.0,
+        validation_alias=AliasChoices(
+            "COMMUNITY_ANALYSIS_API_CATALOG_REFRESH_SECONDS",
+            "COMMUNITY_ANALYSIS_CATALOG_REFRESH_SECONDS",
+        ),
+    )
     parquet_cache_max_bytes: int = 16 * 1024 * 1024
     storage_backend: str = Field(
         default="local",

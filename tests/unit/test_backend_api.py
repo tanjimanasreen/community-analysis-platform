@@ -752,3 +752,26 @@ def test_api_parquet_endpoints_work_with_lazy_imports(tmp_path):
     assert themes_resp.status_code == 200
     themes_data = themes_resp.json()
     assert len(themes_data["records"]) > 0
+
+
+def test_api_catalog_refresh_settings_wiring(monkeypatch, tmp_path):
+    # 1. Default configuration preserves local development TTL of 1.0 second
+    monkeypatch.delenv("COMMUNITY_ANALYSIS_API_CATALOG_REFRESH_SECONDS", raising=False)
+    monkeypatch.delenv("COMMUNITY_ANALYSIS_CATALOG_REFRESH_SECONDS", raising=False)
+    default_settings = ApiSettings.from_env(tmp_path)
+    assert default_settings.catalog_refresh_seconds == 1.0
+    default_app = create_app(settings=default_settings)
+    assert default_app.state.run_catalog.refresh_seconds == 1.0
+
+    # 2. Deployed environment variable sets 60.0s TTL
+    monkeypatch.setenv("COMMUNITY_ANALYSIS_API_CATALOG_REFRESH_SECONDS", "60.0")
+    deployed_settings = ApiSettings.from_env(tmp_path)
+    assert deployed_settings.catalog_refresh_seconds == 60.0
+    deployed_app = create_app(settings=deployed_settings)
+    assert deployed_app.state.run_catalog.refresh_seconds == 60.0
+
+    # 3. Non-prefixed alias also supported
+    monkeypatch.delenv("COMMUNITY_ANALYSIS_API_CATALOG_REFRESH_SECONDS", raising=False)
+    monkeypatch.setenv("COMMUNITY_ANALYSIS_CATALOG_REFRESH_SECONDS", "45.0")
+    alias_settings = ApiSettings.from_env(tmp_path)
+    assert alias_settings.catalog_refresh_seconds == 45.0

@@ -542,17 +542,40 @@ def test_overview_final_row_helper_contract() -> None:
     reader = _monthly_reader()
     service = OverviewService(reader, SimpleNamespace(), _Evolution())
 
+    # Redundant alias has been removed
+    assert not hasattr(service, "_final_record_row")
+
+    # 1. Populated record.rows is used directly without calling parquet_row_count
     rec = reader.get_record("monthly-run", "count_user_messages_03")
+    assert rec.rows is not None and rec.rows > 0
+    reader.row_count_reads.clear()
     row = service._final_row("monthly-run", rec)
     assert row is not None
     assert row["month"] == "03"
-    assert service._final_record_row("monthly-run", rec)["month"] == "03"
+    assert len(reader.row_count_reads) == 0
 
+    # 2. rows=0 returns None immediately without slice reads or parquet_row_count
     slice_count_before = len(reader.slice_reads)
     zero_rec = _record("zero_row_artifact", rows=0)
+    reader.row_count_reads.clear()
     assert service._final_row("monthly-run", zero_rec) is None
     assert len(reader.slice_reads) == slice_count_before
+    assert len(reader.row_count_reads) == 0
 
+    # 3. rows=None falls back to reader.parquet_row_count
+    fallback_rec = replace(rec, rows=None)
+    reader.row_count_reads.clear()
+    orig_prc = reader.parquet_row_count
+    reader.parquet_row_count = lambda r_id, r: (reader.row_count_reads.append(r), 1)[1]
+    try:
+        fallback_row = service._final_row("monthly-run", fallback_rec)
+        assert fallback_row is not None
+        assert fallback_row["month"] == "03"
+        assert len(reader.row_count_reads) == 1
+    finally:
+        reader.parquet_row_count = orig_prc
+
+    # 4. Empty frame returns None
     empty_rec = _record("empty_frame_artifact", rows=1)
     reader.frames["empty_frame_artifact"] = pd.DataFrame(columns=["month"])
     assert service._final_row("monthly-run", empty_rec) is None
@@ -617,6 +640,111 @@ def test_overview_row_counts_use_manifest_metadata_without_parquet_row_count() -
 
     # 6. _row_count returns None when no records exist
     assert service._row_count("monthly-run", "nonexistent_artifact") is None
+
+
+def test_overview_concurrent_execution_preserves_ordering_and_values() -> None:
+    import time
+
+    reader = _monthly_reader()
+    service = OverviewService(reader, SimpleNamespace(), _Evolution())
+    service._overview_cached.cache_clear()
+
+    # Simulate inverse completion order where earlier period takes longer to finish
+    orig_period_overview = service._period_overview
+
+    def delayed_period_overview(run_id: str, period: str, *, config: Mapping[str, Any]) -> dict[str, Any]:
+        if period == "2017-03":
+            time.sleep(0.05)
+        else:
+            time.sleep(0.005)
+        return orig_period_overview(run_id, period, config=config)
+
+    service._period_overview = delayed_period_overview  # type: ignore[assignment]
+
+    result = service.overview("monthly-run")
+
+    # Output ordering MUST strictly follow available_periods despite differing completion times
+    assert [p["period"] for p in result["periods"]] == ["2017-03", "2017-04"]
+    assert result["available_periods"] == ["2017-03", "2017-04"]
+    assert result["total_users"] == 10
+    assert result["total_messages"] == 40
+    assert result["total_interactions"] == 6
+    assert result["persistent_community_count"] == 6
+    assert result["top_themes"] == []
+
+
+def test_overview_concurrent_execution_zero_and_single_period() -> None:
+    evolution_mock = SimpleNamespace(persistent_communities=lambda run_id: {"total": 0})
+
+    # 1. Zero periods
+    reader_zero = _monthly_reader()
+    reader_zero.config = {"year": "2017"}  # no months configured
+    reader_zero.catalog.manifest = replace(
+        reader_zero.catalog.manifest,
+        run_id="zero-period-run",
+        artifacts=(),
+    )
+    service_zero = OverviewService(reader_zero, SimpleNamespace(), evolution_mock)  # type: ignore[arg-type]
+    service_zero._overview_cached.cache_clear()
+
+    result_zero = service_zero.overview("zero-period-run")
+    assert result_zero["available_periods"] == []
+    assert result_zero["periods"] == []
+    assert result_zero["total_users"] is None
+    assert result_zero["total_messages"] is None
+    assert result_zero["run_summary"]["month_count"] == 0
+
+    # 2. Single period
+    reader_single = _monthly_reader()
+    reader_single.config = {"year": "2017", "months": ["03"]}
+    reader_single.catalog.manifest = replace(
+        reader_single.catalog.manifest,
+        run_id="single-period-run",
+        artifacts=tuple(
+            rec for rec in reader_single.catalog.manifest.artifacts
+            if not rec.key.endswith("_04")
+        ),
+    )
+    service_single = OverviewService(reader_single, SimpleNamespace(), evolution_mock)  # type: ignore[arg-type]
+    service_single._overview_cached.cache_clear()
+
+    result_single = service_single.overview("single-period-run")
+    assert result_single["available_periods"] == ["2017-03"]
+    assert len(result_single["periods"]) == 1
+    assert result_single["periods"][0]["period"] == "2017-03"
+    assert result_single["run_summary"]["month_count"] == 1
+    assert result_single["total_users"] == 5
+
+
+def test_overview_concurrent_execution_failure_propagation() -> None:
+    # 1. Failure in a period overview task propagates out
+    reader_err = _monthly_reader()
+    service_err = OverviewService(reader_err, SimpleNamespace(), _Evolution())
+    service_err._overview_cached.cache_clear()
+
+    def failing_period_overview(run_id: str, period: str, *, config: Mapping[str, Any]) -> dict[str, Any]:
+        if period == "2017-04":
+            raise RuntimeError("period 2017-04 simulated failure")
+        return {"period": period}
+
+    service_err._period_overview = failing_period_overview  # type: ignore[assignment]
+    with pytest.raises(RuntimeError, match="period 2017-04 simulated failure"):
+        service_err.overview("monthly-run")
+
+    # 2. Failure in persistent_count propagates out
+    service_err2 = OverviewService(reader_err, SimpleNamespace(), _Evolution())
+    service_err2._overview_cached.cache_clear()
+    service_err2._persistent_count = lambda r_id: (_ for _ in ()).throw(ValueError("persistent failure"))  # type: ignore[assignment]
+    with pytest.raises(ValueError, match="persistent failure"):
+        service_err2.overview("monthly-run")
+
+    # 3. Failure in top_themes propagates out
+    service_err3 = OverviewService(reader_err, SimpleNamespace(), _Evolution())
+    service_err3._overview_cached.cache_clear()
+    service_err3._top_themes = lambda r_id: (_ for _ in ()).throw(KeyError("top themes failure"))  # type: ignore[assignment]
+    with pytest.raises(KeyError, match="top themes failure"):
+        service_err3.overview("monthly-run")
+
 
 
 def test_network_service_selects_only_the_requested_month() -> None:

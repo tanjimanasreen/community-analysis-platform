@@ -111,6 +111,13 @@ artifact categories.
 | 2026-07-28 | Reproduction manifest period/artifact mapping and network-row total check | Passed: January–April mappings and 5,165,736 run interaction records verified. |
 | 2026-07-28 | `git diff --check` | Passed. |
 | 2026-09-09 | `python -m pytest tests/unit/test_overview_monthly_services.py` | Passed: 12 tests (including slice usage, manifest row metadata resolution, and zero/legacy fallback regressions). |
+| 2026-09-09 | `pytest tests/unit/test_overview_monthly_services.py tests/unit/test_backend_api.py` | Passed: 59 tests (including catalog refresh settings contract and `_final_row` metadata resolution). |
+| 2026-09-09 | `PYTHONPATH=infra infra/.venv/bin/pytest infra/tests` | Passed: 93 infra unit tests (including Lambda environment `COMMUNITY_ANALYSIS_API_CATALOG_REFRESH_SECONDS: 60.0`). |
+| 2026-09-09 | Candidate S3 Profiling (`/tmp/profile_runner.py`) | Passed: Canonical cold duration reduced by 88.6% (313.7s -> 35.6s); Acceptance cold duration reduced by 87.5% (163.1s -> 20.3s, under AWS API Gateway 29s timeout); warm latency sub-second (0.26s/0.32s); bit-for-bit payload parity. |
+| 2026-09-09 | `make ci-validate` | Passed: lockfile check, sync, pre-commit lint, 799 full unit/integration tests, CD preflight, git diff check. |
+| 2026-09-09 | `pytest tests/unit/test_overview_monthly_services.py tests/unit/test_backend_api.py` | Passed: 29 tests (including bounded ThreadPoolExecutor concurrency, period ordering determinism, zero/single/multi-period compatibility, and failure propagation). |
+| 2026-09-09 | Final Candidate S3 Profiling (`/tmp/final_candidate_profiler.py`, 3 fresh processes each) | Passed all hard gates: Canonical worst cold 11.100s (gate <= 20.0s, -96.5% vs baseline); Acceptance worst cold 9.787s (gate <= 12.0s, -94.0% vs baseline); exactly 1 S3 discovery per request; 0 network_data Parquet reads; 0 redundant parquet_row_count calls; 100% bit-for-bit payload parity. |
+| 2026-09-09 | `git diff --check` | Passed. |
 
 ## Progress log
 
@@ -122,6 +129,8 @@ artifact categories.
 | 2026-07-28 | Kept legacy Overview scalar fields for existing comparison/evolution routes while making the new monthly/run-level contract explicit. |
 | 2026-09-09 | Replaced full Parquet reads (`read_parquet_record`) in `_period_counts` and `_period_community_counts` with single-row slice reads (`read_parquet_record_slice` with `offset=rows - 1, limit=1`) via private helper `_final_row`, eliminating full S3 Parquet scans per month while preserving exact values, normalization, and empty artifact handling. |
 | 2026-09-09 | Optimized `_period_row_count` and `_row_count` in `OverviewService` to resolve row counts directly from `ArtifactRecord.rows` metadata when populated, falling back to `ArtifactReader.parquet_row_count` only when `rows` is `None`, preventing expensive S3 Parquet checksum hashing and file scans during `/overview` requests. |
+| 2026-09-09 | Optimized `_final_row` in `OverviewService` to read `record.rows` metadata directly when populated (bypassing `parquet_row_count`), removed redundant `_final_record_row` alias, and wired `COMMUNITY_ANALYSIS_API_CATALOG_REFRESH_SECONDS=60.0` in Lambda environment to eliminate S3 manifest re-discovery storm during `/overview` requests while preserving local 1.0s development default. |
+| 2026-09-09 | Concurrently executed independent run-level operations in `OverviewService._overview_cached()` using a bounded `ThreadPoolExecutor` (maximum 6 workers) for monthly period overviews, `_persistent_count`, and `_top_themes`, preserving exact `available_periods` result ordering, return types, empty/single period compatibility, and exception propagation semantics. |
 
 ## Rollback
 

@@ -122,6 +122,7 @@ class ApiStack(cdk.Stack):
                 "COMMUNITY_ANALYSIS_S3_BUCKET": bucket.bucket_name,
                 "COMMUNITY_ANALYSIS_S3_REGION": self.region or cdk.Aws.REGION,
                 "COMMUNITY_ANALYSIS_API_ALLOWED_HOSTS": "*",
+                "COMMUNITY_ANALYSIS_API_CATALOG_REFRESH_SECONDS": "60.0",
                 "AWS_LWA_PORT": "8000",
                 "AWS_LWA_READINESS_CHECK_PATH": "/api/v1/health",
                 "AWS_LWA_READINESS_CHECK_HEALTHY_STATUS": "200-399",
