@@ -21,7 +21,7 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Mapping, Sequence
 
 import boto3
 
@@ -183,6 +183,174 @@ def _safe_s3_dest_path(target_dir: Path, rel_path: str, raw_key: str) -> Path:
         )
 
     return dest_path
+
+
+def resolve_raw_input_staging_targets(
+    cfg: Mapping[str, Any],
+    target_raw_dir: Path,
+    dataset_id: str | None = None,
+    command: str | None = None,
+) -> list[tuple[str, Path]]:
+    """Resolve required raw input files from configuration to (s3_key, dest_path) tuples.
+
+    Examines dataset configuration (longitudinal_datasets, datasets, or input_path)
+    and resolves the corresponding S3 keys under 'raw/' and safe local destination paths
+    under target_raw_dir. Files that already exist locally on disk are excluded from staging.
+    """
+    referenced_paths: list[str] = []
+
+    # If dataset_id is provided, resolve only that specific dataset
+    if dataset_id:
+        all_ds = list(cfg.get("datasets", [])) + list(cfg.get("longitudinal_datasets", []))
+        ds = next(
+            (
+                d
+                for d in all_ds
+                if isinstance(d, dict)
+                and (d.get("id") == dataset_id or str(d.get("month")) == str(dataset_id))
+            ),
+            None,
+        )
+        if ds and ds.get("input_path"):
+            referenced_paths.append(str(ds["input_path"]))
+        elif cfg.get("input_path"):
+            referenced_paths.append(str(cfg["input_path"]))
+    elif command == "run-evolution-pipeline" or (
+        command is None and "longitudinal_datasets" in cfg
+    ):
+        for ds in cfg.get("longitudinal_datasets", []):
+            if isinstance(ds, dict) and ds.get("input_path"):
+                referenced_paths.append(str(ds["input_path"]))
+    elif command == "run-all":
+        if cfg.get("input_path"):
+            referenced_paths.append(str(cfg["input_path"]))
+        elif cfg.get("datasets"):
+            for ds in cfg.get("datasets", []):
+                if isinstance(ds, dict) and ds.get("input_path"):
+                    referenced_paths.append(str(ds["input_path"]))
+        elif cfg.get("longitudinal_datasets"):
+            for ds in cfg.get("longitudinal_datasets", []):
+                if isinstance(ds, dict) and ds.get("input_path"):
+                    referenced_paths.append(str(ds["input_path"]))
+    else:
+        # Fallback for generic or unclassified commands
+        if cfg.get("longitudinal_datasets"):
+            for ds in cfg.get("longitudinal_datasets", []):
+                if isinstance(ds, dict) and ds.get("input_path"):
+                    referenced_paths.append(str(ds["input_path"]))
+        elif cfg.get("datasets"):
+            for ds in cfg.get("datasets", []):
+                if isinstance(ds, dict) and ds.get("input_path"):
+                    referenced_paths.append(str(ds["input_path"]))
+        elif cfg.get("input_path"):
+            referenced_paths.append(str(cfg["input_path"]))
+
+    staging_targets: list[tuple[str, Path]] = []
+    seen_destinations: set[Path] = set()
+
+    for p_str in referenced_paths:
+        if not p_str or not p_str.strip():
+            continue
+
+        clean_p_str = p_str.strip()
+        # Handle literal ${DATA_ROOT} placeholder if present prior to interpolation
+        if "${DATA_ROOT}" in clean_p_str:
+            clean_p_str = clean_p_str.replace("${DATA_ROOT}", target_raw_dir.as_posix())
+
+        p = Path(clean_p_str)
+        # If the file already exists locally on disk, skip staging
+        if p.is_file() or p.resolve().is_file():
+            continue
+
+        if p.is_absolute():
+            resolved_p = p.resolve()
+            try:
+                rel = resolved_p.relative_to(target_raw_dir)
+            except ValueError:
+                parts = resolved_p.parts
+                if "raw" in parts:
+                    idx = parts.index("raw")
+                    rel = Path(*parts[idx + 1 :])
+                else:
+                    rel = Path(resolved_p.name)
+        else:
+            norm = p.as_posix().lstrip("./")
+            if norm.startswith("data/raw/"):
+                rel = Path(norm[len("data/raw/") :])
+            elif norm.startswith("raw/"):
+                rel = Path(norm[len("raw/") :])
+            elif norm.startswith("data/"):
+                rel = Path(norm[len("data/") :])
+            else:
+                rel = Path(norm)
+
+        rel_str = rel.as_posix()
+        if not rel_str or rel_str == ".":
+            continue
+
+        s3_key = f"raw/{rel_str}"
+        dest_path = _safe_s3_dest_path(target_raw_dir, rel_str, s3_key)
+
+        if dest_path not in seen_destinations:
+            seen_destinations.add(dest_path)
+            staging_targets.append((s3_key, dest_path))
+
+    return staging_targets
+
+
+def download_config_raw_inputs(
+    s3_client: Any,
+    bucket: str,
+    staging_targets: Sequence[tuple[str, Path]],
+) -> int:
+    """Download required raw input files from S3 to local workspace.
+
+    Verifies existence of each required object in S3 via head_object.
+    Raises FileNotFoundError immediately if any required raw input is missing.
+    Skips downloading if the file already exists locally.
+    Returns the number of files downloaded.
+    """
+    downloaded_count = 0
+    for s3_key, dest_path in staging_targets:
+        if dest_path.exists() and dest_path.is_file():
+            logger.info(
+                "raw_input_already_exists_locally path=%s key=%s (skipping download)",
+                dest_path,
+                s3_key,
+            )
+            continue
+
+        try:
+            head_res = s3_client.head_object(Bucket=bucket, Key=s3_key)
+            byte_size = head_res.get("ContentLength", 0)
+        except Exception as exc:
+            error_code = ""
+            if hasattr(exc, "response") and isinstance(exc.response, dict):
+                error_code = exc.response.get("Error", {}).get("Code", "")
+            logger.error(
+                "raw_input_missing_in_s3 bucket=%s key=%s error_code=%s dest=%s error=%s",
+                bucket,
+                s3_key,
+                error_code,
+                dest_path,
+                exc,
+            )
+            raise FileNotFoundError(
+                f"Required raw input not found in S3: s3://{bucket}/{s3_key} (dest: {dest_path})"
+            ) from exc
+
+        dest_path.parent.mkdir(parents=True, exist_ok=True)
+        logger.info(
+            "downloading_raw_input bucket=%s key=%s dest=%s byte_size=%d",
+            bucket,
+            s3_key,
+            dest_path,
+            byte_size,
+        )
+        s3_client.download_file(bucket, s3_key, str(dest_path))
+        downloaded_count += 1
+
+    return downloaded_count
 
 
 def download_s3_prefix(
@@ -411,9 +579,15 @@ def run_batch_job(config: BatchRunnerConfig, s3_client: Any = None) -> int:
     config.workspace_dir.mkdir(parents=True, exist_ok=True)
     local_data_dir = config.workspace_dir / "data"
     local_data_dir.mkdir(parents=True, exist_ok=True)
+    target_raw_dir = (local_data_dir / "raw").resolve()
+    target_raw_dir.mkdir(parents=True, exist_ok=True)
     workspace_output_dir = (config.workspace_dir / "output").resolve()
     workspace_output_dir.mkdir(parents=True, exist_ok=True)
     local_cache_dir = workspace_output_dir / ".stage_cache"
+
+    # Set DATA_ROOT to local workspace raw directory so ${DATA_ROOT} interpolates
+    # to target_raw_dir in all downstream loaders and flows
+    os.environ["DATA_ROOT"] = str(target_raw_dir)
 
     # Load configuration early to resolve paths and translation settings
     cfg = load_config(config.config_path)
@@ -443,9 +617,19 @@ def run_batch_job(config: BatchRunnerConfig, s3_client: Any = None) -> int:
 
     # 1. Download raw inputs, stage cache, and translation cache from S3 if configured
     if s3 and config.s3_bucket and not config.skip_s3_download:
-        logger.info("syncing_s3_inputs bucket=%s prefix=raw/", config.s3_bucket)
-        downloaded_inputs = download_s3_prefix(
-            s3, config.s3_bucket, "raw/", local_data_dir / "raw"
+        staging_targets = resolve_raw_input_staging_targets(
+            cfg=cfg,
+            target_raw_dir=target_raw_dir,
+            dataset_id=config.dataset_id,
+            command=config.command,
+        )
+        logger.info(
+            "syncing_s3_raw_inputs bucket=%s target_count=%d",
+            config.s3_bucket,
+            len(staging_targets),
+        )
+        downloaded_inputs = download_config_raw_inputs(
+            s3, config.s3_bucket, staging_targets
         )
         logger.info("downloaded_inputs_count count=%d", downloaded_inputs)
 

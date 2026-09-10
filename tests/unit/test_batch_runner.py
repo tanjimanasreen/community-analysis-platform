@@ -10,10 +10,12 @@ from src.cloud.batch_runner import (
     DEFAULT_TRANSLATION_CACHE_S3_KEY,
     BatchRunnerConfig,
     _safe_s3_dest_path,
+    download_config_raw_inputs,
     download_s3_prefix,
     download_translation_cache,
     parse_args,
     publish_completed_run_to_s3,
+    resolve_raw_input_staging_targets,
     run_batch_job,
     upload_local_tree_to_s3,
     upload_translation_cache,
@@ -227,8 +229,8 @@ def test_stage_cache_directory_consistency(tmp_path: Path) -> None:
     )
     run_batch_job(config, s3_client=mock_s3)
 
-    # Download occurred for both raw and cache
-    assert mock_s3.download_file.call_count == 2
+    # Download occurred for stage cache (local test fixture skipped)
+    assert mock_s3.download_file.call_count == 1
     dest_paths = [Path(c[0][2]) for c in mock_s3.download_file.call_args_list]
     # Check that cache download destination was under expected_cache_dir
     assert any(expected_cache_dir in p.parents for p in dest_paths)
@@ -804,3 +806,262 @@ def test_batch_runner_logs_no_secret_values(
     assert secret_key not in all_logs
     assert "sk-" not in all_logs
     assert "api_key" not in all_logs.lower()
+
+
+def test_telegram_config_downloads_exactly_ten_files(tmp_path: Path) -> None:
+    """Telegram canonical config downloads exactly the 10 monthly CSVs."""
+    workspace_dir = tmp_path / "workspace"
+    mock_s3 = MagicMock()
+    mock_s3.head_object.return_value = {"ContentLength": 1_000_000}
+    mock_paginator = MagicMock()
+    mock_paginator.paginate.return_value = []
+    mock_s3.get_paginator.return_value = mock_paginator
+
+    config = BatchRunnerConfig(
+        config_path="configs/telegram/forwarded_message_evolution.yml",
+        command="run-evolution-pipeline",
+        s3_bucket="my-bucket",
+        theme_provider="mock",
+        dataset_id=None,
+        workspace_dir=workspace_dir,
+        skip_s3_download=False,
+        skip_s3_upload=True,
+        dry_run=True,
+    )
+    exit_code = run_batch_job(config, s3_client=mock_s3)
+    assert exit_code == 0
+
+    download_calls = mock_s3.download_file.call_args_list
+    raw_calls = [c for c in download_calls if c[0][1].startswith("raw/")]
+    trans_calls = [
+        c for c in download_calls if c[0][1] == DEFAULT_TRANSLATION_CACHE_S3_KEY
+    ]
+    # Exactly 10 raw Telegram CSV files downloaded
+    assert len(raw_calls) == 10
+    # Exactly 1 translation cache downloaded
+    assert len(trans_calls) == 1
+    assert len(download_calls) == 11
+    downloaded_keys = [c[0][1] for c in raw_calls]
+    downloaded_dests = [Path(c[0][2]) for c in raw_calls]
+
+    expected_months = [
+        "january",
+        "february",
+        "march",
+        "april",
+        "may",
+        "june",
+        "july",
+        "august",
+        "september",
+        "october",
+    ]
+    for month in expected_months:
+        expected_key = f"raw/telegram/forwarded_message/2019/{month}_2019.csv"
+        assert expected_key in downloaded_keys
+        expected_dest = (
+            workspace_dir
+            / "data"
+            / "raw"
+            / "telegram"
+            / "forwarded_message"
+            / "2019"
+            / f"{month}_2019.csv"
+        ).resolve()
+        assert expected_dest in downloaded_dests
+
+    # Verify zero Twitter files were downloaded
+    assert not any("twitter" in k for k in downloaded_keys)
+
+
+def test_twitter_reply_config_downloads_only_reply_files(tmp_path: Path) -> None:
+    """Twitter reply config downloads only its 4 reply CSVs."""
+    workspace_dir = tmp_path / "workspace"
+    mock_s3 = MagicMock()
+    mock_s3.head_object.return_value = {"ContentLength": 500_000}
+    mock_paginator = MagicMock()
+    mock_paginator.paginate.return_value = []
+    mock_s3.get_paginator.return_value = mock_paginator
+
+    config = BatchRunnerConfig(
+        config_path="configs/twitter/reply_evolution.yml",
+        command="run-evolution-pipeline",
+        s3_bucket="my-bucket",
+        theme_provider="mock",
+        dataset_id=None,
+        workspace_dir=workspace_dir,
+        skip_s3_download=False,
+        skip_s3_upload=True,
+        dry_run=True,
+    )
+    exit_code = run_batch_job(config, s3_client=mock_s3)
+    assert exit_code == 0
+
+    download_calls = mock_s3.download_file.call_args_list
+    assert len(download_calls) == 4
+    downloaded_keys = [c[0][1] for c in download_calls]
+
+    expected_keys = [
+        "raw/twitter/reply/2017/reply_january_2017.csv",
+        "raw/twitter/reply/2017/reply_february_2017.csv",
+        "raw/twitter/reply/2017/reply_march_2017.csv",
+        "raw/twitter/reply/2017/reply_april_2017.csv",
+    ]
+    assert downloaded_keys == expected_keys
+    # Zero Telegram or retweet_quote files
+    assert not any("telegram" in k for k in downloaded_keys)
+    assert not any("retweet" in k for k in downloaded_keys)
+
+
+def test_twitter_retweet_quote_config_downloads_only_retweet_files(tmp_path: Path) -> None:
+    """Twitter retweet_quote config downloads only its 4 retweet_quote CSVs."""
+    workspace_dir = tmp_path / "workspace"
+    mock_s3 = MagicMock()
+    mock_s3.head_object.return_value = {"ContentLength": 500_000}
+    mock_paginator = MagicMock()
+    mock_paginator.paginate.return_value = []
+    mock_s3.get_paginator.return_value = mock_paginator
+
+    config = BatchRunnerConfig(
+        config_path="configs/twitter/retweet_quote_evolution.yml",
+        command="run-evolution-pipeline",
+        s3_bucket="my-bucket",
+        theme_provider="mock",
+        dataset_id=None,
+        workspace_dir=workspace_dir,
+        skip_s3_download=False,
+        skip_s3_upload=True,
+        dry_run=True,
+    )
+    exit_code = run_batch_job(config, s3_client=mock_s3)
+    assert exit_code == 0
+
+    download_calls = mock_s3.download_file.call_args_list
+    assert len(download_calls) == 4
+    downloaded_keys = [c[0][1] for c in download_calls]
+
+    expected_keys = [
+        "raw/twitter/retweet_quote/2017/retweet_january_2017.csv",
+        "raw/twitter/retweet_quote/2017/retweet_february_2017.csv",
+        "raw/twitter/retweet_quote/2017/retweet_march_2017.csv",
+        "raw/twitter/retweet_quote/2017/retweet_april_2017.csv",
+    ]
+    assert downloaded_keys == expected_keys
+    # Zero Telegram or reply files
+    assert not any("telegram" in k for k in downloaded_keys)
+    assert not any("reply" in k for k in downloaded_keys)
+
+
+def test_unrelated_raw_objects_in_s3_never_downloaded(tmp_path: Path) -> None:
+    """S3 list_objects_v2 is never called for prefix raw/; unrelated objects are ignored."""
+    workspace_dir = tmp_path / "workspace"
+    mock_s3 = MagicMock()
+    mock_s3.head_object.return_value = {"ContentLength": 100}
+    mock_paginator = MagicMock()
+    mock_paginator.paginate.return_value = [
+        {"Contents": [{"Key": "cache/v1/network/hash123/meta.json"}]}
+    ]
+    mock_s3.get_paginator.return_value = mock_paginator
+
+    config = BatchRunnerConfig(
+        config_path="configs/twitter/reply_evolution.yml",
+        command="run-evolution-pipeline",
+        s3_bucket="my-bucket",
+        theme_provider="mock",
+        dataset_id=None,
+        workspace_dir=workspace_dir,
+        skip_s3_download=False,
+        skip_s3_upload=True,
+        dry_run=True,
+    )
+    exit_code = run_batch_job(config, s3_client=mock_s3)
+    assert exit_code == 0
+
+    # Paginate was called only for cache/ prefix, NEVER for raw/
+    paginate_calls = mock_paginator.paginate.call_args_list
+    prefixes_paginated = [c[1].get("Prefix") for c in paginate_calls]
+    assert "raw/" not in prefixes_paginated
+    assert "cache/" in prefixes_paginated
+
+    downloaded_keys = [c[0][1] for c in mock_s3.download_file.call_args_list]
+    assert "raw/unrelated_other_user_file.csv" not in downloaded_keys
+
+
+def test_missing_required_s3_raw_input_raises_filenotfound(tmp_path: Path) -> None:
+    """Missing required S3 raw input file raises explicit FileNotFoundError with URI."""
+    from botocore.exceptions import ClientError
+
+    mock_s3 = MagicMock()
+    mock_s3.head_object.side_effect = ClientError(
+        {"Error": {"Code": "404", "Message": "Not Found"}}, "HeadObject"
+    )
+
+    staging_targets = [
+        (
+            "raw/telegram/forwarded_message/2019/january_2019.csv",
+            tmp_path / "data" / "raw" / "telegram" / "forwarded_message" / "2019" / "january_2019.csv",
+        )
+    ]
+
+    with pytest.raises(FileNotFoundError) as exc_info:
+        download_config_raw_inputs(mock_s3, "test-bucket", staging_targets)
+
+    error_msg = str(exc_info.value)
+    assert "Required raw input not found in S3" in error_msg
+    assert "s3://test-bucket/raw/telegram/forwarded_message/2019/january_2019.csv" in error_msg
+
+
+def test_raw_input_destination_layout_matches_container_contract() -> None:
+    """Destination layout matches /app/workspace/data/raw/<relative_path>."""
+    import os
+    from src.config.loader import load_config
+
+    container_raw_dir = Path("/app/workspace/data/raw")
+    os.environ["DATA_ROOT"] = str(container_raw_dir)
+    cfg = load_config("configs/telegram/forwarded_message_evolution.yml")
+
+    targets = resolve_raw_input_staging_targets(
+        cfg, target_raw_dir=container_raw_dir, command="run-evolution-pipeline"
+    )
+
+    assert len(targets) == 10
+    for s3_key, dest_path in targets:
+        assert s3_key.startswith("raw/telegram/forwarded_message/2019/")
+        assert s3_key.endswith(".csv")
+        rel_from_raw = s3_key[len("raw/") :]
+        assert dest_path == (container_raw_dir / rel_from_raw).resolve()
+        assert str(dest_path).startswith("/app/workspace/data/raw/telegram/forwarded_message/2019/")
+
+
+def test_single_month_dataset_id_downloads_only_selected_file(tmp_path: Path) -> None:
+    """When dataset_id is passed with run-all, only that single month CSV is downloaded."""
+    workspace_dir = tmp_path / "workspace"
+    mock_s3 = MagicMock()
+    mock_s3.head_object.return_value = {"ContentLength": 1_000_000}
+    mock_paginator = MagicMock()
+    mock_paginator.paginate.return_value = []
+    mock_s3.get_paginator.return_value = mock_paginator
+
+    config = BatchRunnerConfig(
+        config_path="configs/telegram/forwarded_message_evolution.yml",
+        command="run-all",
+        s3_bucket="my-bucket",
+        theme_provider="mock",
+        dataset_id="01",
+        workspace_dir=workspace_dir,
+        skip_s3_download=False,
+        skip_s3_upload=True,
+        dry_run=True,
+    )
+    exit_code = run_batch_job(config, s3_client=mock_s3)
+    assert exit_code == 0
+
+    download_calls = mock_s3.download_file.call_args_list
+    raw_calls = [c for c in download_calls if c[0][1].startswith("raw/")]
+    trans_calls = [
+        c for c in download_calls if c[0][1] == DEFAULT_TRANSLATION_CACHE_S3_KEY
+    ]
+    assert len(raw_calls) == 1
+    assert raw_calls[0][0][1] == "raw/telegram/forwarded_message/2019/january_2019.csv"
+    assert len(trans_calls) == 1
+    assert len(download_calls) == 2
