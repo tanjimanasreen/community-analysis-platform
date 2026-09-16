@@ -1,0 +1,6 @@
+outs:
+- md5: b0576428587e15c288dd78216a5024e7
+  size: 3649533559
+  isexec: true
+  hash: md5
+  path: retweet_january_2017.csv
