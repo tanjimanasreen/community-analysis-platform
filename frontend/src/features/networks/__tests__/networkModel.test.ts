@@ -11,6 +11,7 @@ describe('network model', () => {
   const network = {
     run_id: 'run-1',
     metric: 'if' as const,
+    period: null,
     community_id: null,
     nodes: [
       { id: '001', community_ids: ['1', '2'] },

@@ -127,7 +127,7 @@ describe('Community Evolution page', () => {
     await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent('path=path-2'));
     expect(screen.getByLabelText('Inspect persistent path')).toHaveValue('path-2');
     expect(screen.getByRole('button', { name: /Select Path 2/ })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByText('C102')).toBeInTheDocument();
+    expect(screen.getByText('C102', { selector: 'p' })).toBeInTheDocument();
     expect(screen.getAllByText(/Path 2 · 02 → 03/).length).toBeGreaterThan(0);
   });
 

@@ -79,13 +79,13 @@ describe('Research Data & Reports page', () => {
     useEvidenceData.mockImplementation(resultFor);
     render(<MemoryRouter initialEntries={['/data-reports?run=run-1&metric=if&view=outputs']}><EvidencePage /></MemoryRouter>);
 
-    expect(screen.getByRole('link', { name: 'Open report' })).toHaveAttribute('href', expect.stringContaining('/runs/run-1/report'));
+    expect(screen.getByRole('button', { name: 'Open report' })).toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: /Run History/i })).toHaveLength(1);
     expect(screen.getByText('Published outputs')).toBeInTheDocument();
     expect(screen.getByText('Analytical data & metadata')).toBeInTheDocument();
     expect(screen.getByText('Advanced provenance')).toBeInTheDocument();
     expect(screen.getByText('Not downloadable')).toBeInTheDocument();
-    expect(screen.getAllByRole('link', { name: 'Download' })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Download' })).toHaveLength(2);
     expect(screen.queryByText('Create Report')).not.toBeInTheDocument();
   });
 });

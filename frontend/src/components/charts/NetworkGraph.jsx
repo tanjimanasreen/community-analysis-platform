@@ -267,7 +267,7 @@ export default function NetworkGraph({
           )}
           {graphData.droppedLinks > 0 && (
             <p className="mt-2 text-[11px] font-medium text-warning" role="status">
-              {formatCount(graphData.droppedLinks)} malformed edge{graphData.droppedLinks === 1 ? '' : 's'} were omitted because an endpoint was missing from the API node set.
+              {formatCount(graphData.droppedLinks)} malformed edge{graphData.droppedLinks === 1 ? '' : 's'} {graphData.droppedLinks === 1 ? 'was' : 'were'} omitted because an endpoint was missing from the API node set.
             </p>
           )}
         </div>

@@ -2,13 +2,14 @@ import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import App from '../../App';
 import { testServer } from '../../test/server';
 
 describe('dashboard verification gate', () => {
   it('blocks analytical panels when selected-run verification fails', async () => {
     let overviewRequests = 0;
+    vi.stubEnv('VITE_AUTH_MODE', 'local');
     window.history.pushState({}, '', '/');
     testServer.use(
       http.get('*/api/v1/health', () =>

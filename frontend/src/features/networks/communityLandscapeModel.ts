@@ -78,7 +78,7 @@ function normalizedEncoding(value: number | null, maximum: number): number {
 }
 
 function maxFinite(values: Array<number | null>): number {
-  return values.reduce((maximum, value) => (
+  return values.reduce<number>((maximum, value) => (
     value !== null && value > maximum ? value : maximum
   ), 0);
 }

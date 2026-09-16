@@ -68,7 +68,7 @@ describe('Communities page', () => {
     expect(screen.getByRole('heading', { name: 'Member Interaction Network' })).toBeInTheDocument();
     expect(screen.getByTestId('member-graph')).toHaveTextContent('5 members');
     expect(screen.getByText(/does not rerun Louvain/)).toBeInTheDocument();
-    expect(screen.getByText('C9')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'C9' }).length).toBeGreaterThan(0);
 
     const ldaHeading = screen.getByRole('heading', { name: 'LDA keywords' });
     const themeHeading = screen.getByRole('heading', { name: 'Downstream theme labels' });

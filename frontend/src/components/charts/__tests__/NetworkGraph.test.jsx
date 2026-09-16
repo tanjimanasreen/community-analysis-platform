@@ -33,7 +33,7 @@ const sampledNetwork = {
 describe('NetworkGraph', () => {
   it('renders the bounded API graph, sampled counts, and IF weight metadata', async () => {
     render(<NetworkGraph metric="if" network={sampledNetwork} />);
-    expect(screen.getByText('Sampled graph')).toBeInTheDocument();
+    expect(screen.getByText('Bounded response')).toBeInTheDocument();
     expect(screen.getByText(/2 \/ 10 users/)).toBeInTheDocument();
     expect(screen.getAllByText(/interaction frequency \(if\) edge weight/i).length).toBeGreaterThan(0);
     expect(await screen.findByTestId('force-graph')).toHaveTextContent('2 nodes / 1 links');
@@ -80,7 +80,7 @@ describe('NetworkGraph', () => {
     );
     const stage = screen.getByTestId('network-graph-stage');
     expect(stage).toHaveStyle({ height: '500px' });
-    expect(screen.getByText(/1 malformed edge were omitted/i)).toBeInTheDocument();
+    expect(screen.getByText(/1 malformed edge was omitted/i)).toBeInTheDocument();
     expect(await screen.findByTestId('force-graph')).toHaveTextContent('2 nodes / 1 links');
   });
 

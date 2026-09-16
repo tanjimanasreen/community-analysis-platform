@@ -114,7 +114,7 @@ describe('useEvidenceData', () => {
   it('defaults monthly structural evidence to the latest period and scopes communities by period + metric', async () => {
     renderProbe('communities', '/data-reports?run=run-a&metric=if&view=communities');
 
-    expect(await screen.findByTestId('period')).toHaveTextContent('2017-04');
+    await waitFor(() => expect(screen.getByTestId('period')).toHaveTextContent('2017-04'));
     await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('period=2017-04'));
     await waitFor(() => expect(getCommunities).toHaveBeenCalledWith(
       'run-a',

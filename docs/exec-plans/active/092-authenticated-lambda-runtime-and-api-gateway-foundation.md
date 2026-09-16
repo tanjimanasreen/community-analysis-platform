@@ -51,7 +51,7 @@ Deploy the read-only FastAPI serving layer (`src/api/`) to AWS Lambda (ARM64) be
 4. **S3 IAM & Storage Configuration**:
    - Consumes `StorageStack.bucket` directly.
    - `COMMUNITY_ANALYSIS_STORAGE_BACKEND=s3`
-   - `COMMUNITY_ANALYSIS_S3_BUCKET=community-analysis-dev-762738182380-us-east-1-data`
+   - `COMMUNITY_ANALYSIS_S3_BUCKET=<DEV_DATA_BUCKET>`
    - `COMMUNITY_ANALYSIS_S3_REGION=us-east-1`
    - Read-only IAM: `s3:GetObject*`, `s3:GetBucket*`, `s3:List*` on bucket and bucket objects. Zero write/delete permissions.
 
@@ -97,9 +97,9 @@ Deploy the read-only FastAPI serving layer (`src/api/`) to AWS Lambda (ARM64) be
    - Compressed size: 348,705,181 bytes (~348.7 MB)
 6. **Live AWS Deployment**:
    - Stack: `community-analysis-dev-api` (16 resources created in 75s)
-   - ApiEndpoint: `https://4gyy7676jb.execute-api.us-east-1.amazonaws.com`
-   - CognitoUserPoolId: `us-east-1_axR1Wox61`
-   - CognitoAppClientId: `6j0m0h1mqk5pbig32hho281tcf`
+   - ApiEndpoint: `<api-endpoint>`
+   - CognitoUserPoolId: `<user-pool-id>`
+   - CognitoAppClientId: `<app-client-id>`
    - LambdaFunctionName: `community-analysis-dev-api`
    - LogGroupName: `/aws/lambda/community-analysis-dev-api` (7-day retention)
 7. **Live Security & Route Verification**:
@@ -118,7 +118,7 @@ Deploy the read-only FastAPI serving layer (`src/api/`) to AWS Lambda (ARM64) be
      - Average end-to-end warm latency: 0.3032s (~303 ms)
      - Max Memory Used across warm requests: 219 MB / 1024 MB
 9. **IAM Least-Privilege Verification**:
-   - `s3:GetObject*`, `s3:GetBucket*`, `s3:List*` scoped strictly to `arn:aws:s3:::community-analysis-dev-762738182380-us-east-1-data` and its contents.
+   - `s3:GetObject*`, `s3:GetBucket*`, `s3:List*` scoped strictly to `arn:aws:s3:::<DEV_DATA_BUCKET>` and its contents.
    - Zero write/delete permissions (`0 PutObject`, `0 DeleteObject`, `0 s3:*`).
 10. **Networking Invariants**:
    - 0 VPC, 0 Subnets, 0 NAT Gateways, 0 Security Groups, 0 VPC Endpoints, 0 EC2 instances.

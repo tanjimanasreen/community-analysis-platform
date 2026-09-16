@@ -7,11 +7,11 @@
 - [x] Multi-stage configuration model (`dev`, `prod`) and standard resource tags
 - [x] Infrastructure unit tests and isolated virtual environment setup (`infra/.venv`)
 - [x] CDK synthesis verification (`cdk list`, `cdk synth`)
-- [x] CDK bootstrap development environment validation (`aws://762738182380/us-east-1`)
+- [x] CDK bootstrap development environment validation (`aws://<AWS_ACCOUNT_ID>/us-east-1`)
 - [x] Verify zero application resources and confirm isolated repository separation
 
 ## Context & Objectives
-Initialize an isolated AWS CDK v2 Python project in `infra/` without coupling to the analytical application dependencies, and bootstrap the AWS development account/region (`762738182380` in `us-east-1`). No application resources (S3, ECS, Batch, Lambda, VPC) were deployed in this milestone.
+Initialize an isolated AWS CDK v2 Python project in `infra/` without coupling to the analytical application dependencies, and bootstrap the AWS development account/region (`<AWS_ACCOUNT_ID>` in `us-east-1`). No application resources (S3, ECS, Batch, Lambda, VPC) were deployed in this milestone.
 
 ## Directory Layout
 ```text
@@ -35,6 +35,6 @@ infra/
 ## Milestone Summary
 - Implementation: complete
 - Validation: complete
-- CDK bootstrap: complete (`CDKToolkit` in `762738182380` / `us-east-1`)
+- CDK bootstrap: complete (`CDKToolkit` in `<AWS_ACCOUNT_ID>` / `us-east-1`)
 - Foundation state: committed
 - AWS application resources: not deployed (0 application resources)

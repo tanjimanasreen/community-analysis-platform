@@ -25,8 +25,8 @@ const network: NetworkResponse = {
 describe('CommunityLandscape', () => {
   it('renders every disconnected community with visible labels and independent encodings', () => {
     render(<CommunityLandscape network={network} metric="if" />);
-    expect(screen.getByText('C1')).toBeInTheDocument();
-    expect(screen.getByText('C2')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /C1\. Members: 100/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /C2\. Members: 25/ })).toBeInTheDocument();
     expect(screen.getByText('Relative area: members')).toBeInTheDocument();
     expect(screen.getByText('Fill intensity: total IF weight')).toBeInTheDocument();
     expect(screen.getByText('Border width: internal edges')).toBeInTheDocument();
@@ -45,7 +45,7 @@ describe('CommunityLandscape', () => {
         onInteraction={onInteraction}
       />,
     );
-    const community = screen.getByRole('button', { name: /C2.*25 members/i });
+    const community = screen.getByRole('button', { name: /C2\. Members: 25/i });
     fireEvent.focus(community);
     expect(screen.getByText('Selected community')).toBeInTheDocument();
     expect(screen.getByText('40')).toBeInTheDocument();

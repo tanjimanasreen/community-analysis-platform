@@ -802,7 +802,7 @@ def test_batch_runner_logs_no_secret_values(
             source_path=target_cache,
         )
 
-    all_logs = " ".join(record.message for record in caplog.records)
+    all_logs = " ".join(record.getMessage() for record in caplog.records)
     assert secret_key not in all_logs
     assert "sk-" not in all_logs
     assert "api_key" not in all_logs.lower()

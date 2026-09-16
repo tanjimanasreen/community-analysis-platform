@@ -11,7 +11,7 @@ const FORBIDDEN = [
   /\bDiscord\b/i,
   /Math\.random/,
   /\/facets\b/,
-  /community-summary/,
+  /\/community-summary\b/,
   /\/files\b/,
 ];
 

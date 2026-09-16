@@ -67,7 +67,7 @@ graph_thresholds:
 
 ```bash
 .venv/bin/python -m src.cli ingest-interactions \
-  --file <LOCAL_PROJECT_PATH>/Projects/Telegram/cleaned_code/data/twitter-neo4j/monthly_retweet/retweet_january_2017.csv \
+  --file "$DATA_DIR/twitter-neo4j/monthly_retweet/retweet_january_2017.csv" \
   --config configs/my_retweet_january_2017.yml \
   --out outputs/my-retweet-2017/interactions_01_2017.parquet \
   --no-db
@@ -87,7 +87,7 @@ MPLBACKEND=Agg MPLCONFIGDIR=/tmp \
 
 ```bash
 .venv/bin/python -m src.cli ingest-interactions \
-  --file <LOCAL_PROJECT_PATH>/Projects/Telegram/cleaned_code/data/twitter-neo4j/monthly_retweet/retweet_february_2017.csv \
+  --file "$DATA_DIR/twitter-neo4j/monthly_retweet/retweet_february_2017.csv" \
   --config configs/my_retweet_february_2017.yml \
   --out outputs/my-retweet-2017/interactions_02_2017.parquet \
   --no-db
@@ -107,7 +107,7 @@ MPLBACKEND=Agg MPLCONFIGDIR=/tmp \
 
 ```bash
 .venv/bin/python -m src.cli ingest-interactions \
-  --file <LOCAL_PROJECT_PATH>/Projects/Telegram/cleaned_code/data/twitter-neo4j/monthly_retweet/retweet_march_2017.csv \
+  --file "$DATA_DIR/twitter-neo4j/monthly_retweet/retweet_march_2017.csv" \
   --config configs/my_retweet_march_2017.yml \
   --out outputs/my-retweet-2017/interactions_03_2017.parquet \
   --no-db
@@ -127,7 +127,7 @@ MPLBACKEND=Agg MPLCONFIGDIR=/tmp \
 
 ```bash
 .venv/bin/python -m src.cli ingest-interactions \
-  --file <LOCAL_PROJECT_PATH>/Projects/Telegram/cleaned_code/data/twitter-neo4j/monthly_retweet/retweet_april_2017.csv \
+  --file "$DATA_DIR/twitter-neo4j/monthly_retweet/retweet_april_2017.csv" \
   --config configs/my_retweet_april_2017.yml \
   --out outputs/my-retweet-2017/interactions_04_2017.parquet \
   --no-db

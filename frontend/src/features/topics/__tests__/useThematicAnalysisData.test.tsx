@@ -27,7 +27,7 @@ describe('useThematicAnalysisData', () => {
       selectedRun: { status: 'completed' },
       verification: { ok: true },
     } as ReturnType<typeof useDashboardContext>);
-    vi.mocked(useQuery).mockImplementation((options: UseQueryOptions<unknown>) => {
+    vi.mocked(useQuery).mockImplementation((options: UseQueryOptions<unknown, unknown>) => {
       queries.push(options as unknown as Record<string, unknown>);
       return { data: undefined, error: null, isPending: false, refetch: vi.fn() } as never;
     });

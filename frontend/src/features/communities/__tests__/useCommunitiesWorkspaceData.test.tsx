@@ -83,7 +83,7 @@ describe('useCommunitiesWorkspaceData', () => {
     installHandlers();
     renderProbe('if');
 
-    expect(await screen.findByTestId('period')).toHaveTextContent('2017-04');
+    await waitFor(() => expect(screen.getByTestId('period')).toHaveTextContent('2017-04'));
     await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('period=2017-04'));
     await waitFor(() => expect(screen.getByTestId('detail-period')).toHaveTextContent('2017-04'));
 

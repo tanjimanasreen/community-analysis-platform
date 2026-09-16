@@ -1180,13 +1180,13 @@ Plan 097 supports exactly two approved subject forms:
 1. Legacy name-based form:
 
 ```text
-repo:tanjimanasreen/community-analysis-platform:ref:refs/heads/dev
+repo:<github-owner>/<repository>:ref:refs/heads/<branch>
 ```
 
 2. Immutable repository-ID form:
 
 ```text
-repo:tanjimanasreen@<OWNER_ID>/community-analysis-platform@<REPO_ID>:ref:refs/heads/dev
+repo:<github-owner>@<owner-id>/<repository>@<repository-id>:ref:refs/heads/<branch>
 ```
 
 The human must supply the exact verified subject through:
@@ -2502,7 +2502,7 @@ Then:
 - 2026-09-01: Baseline verification completed: git branch dev, HEAD 6d4dcbbcd5f67ff89850d4b52c333b0804965b77, working tree verified clean except expected pre-existing edits; AGENTS.md and infra/cdk.context.json preserved untouched.
 - 2026-09-01: Completed mandatory 12-document sequence review and audited workflow, config, CDK infra, settings, preflight, and batch runner implementations.
 - 2026-09-01: Resolved CI test redundancy in .github/workflows/ci.yml: removed duplicate 'make test' step since 'tests/' contains only 'unit/' and 'integration/', leaving full coverage via 'make test-unit' and 'make test-integration'.
-- 2026-09-01: Implemented infra/community_analysis_infra/cicd_stack.py defining CicdStack for dev stage: creates or imports GitHub OIDC Provider (sts.amazonaws.com audience, repo:tanjimanasreen/community-analysis-platform:ref:refs/heads/dev trust condition); creates separate DeployRole (cd.yml) with CDK bootstrap role assumption, dev-scoped ECR/S3/CloudFront/Batch/Logs/Cognito smoke permissions, and PipelineRole (run-evolution.yml) with Batch submit/observe, S3 manifest read, and CloudWatch log read permissions only (no CloudFormation/ECR/IAM/Frontend).
+- 2026-09-01: Implemented infra/community_analysis_infra/cicd_stack.py defining CicdStack for dev stage: creates or imports GitHub OIDC Provider (sts.amazonaws.com audience, `repo:<github-owner>/<repository>:ref:refs/heads/<branch>` trust condition); creates separate DeployRole (cd.yml) with CDK bootstrap role assumption, dev-scoped ECR/S3/CloudFront/Batch/Logs/Cognito smoke permissions, and PipelineRole (run-evolution.yml) with Batch submit/observe, S3 manifest read, and CloudWatch log read permissions only (no CloudFormation/ECR/IAM/Frontend).
 - 2026-09-01: Updated infra/app.py to instantiate CicdStack conditionally when stage is dev, supporting existing or newly created OIDC provider via context/env without mutating cdk.context.json.
 - 2026-09-01: Updated infra/community_analysis_infra/batch_stack.py: added explicit DATA_ROOT=/app/workspace/data/raw environment variable to both single-container and 3-container TEI job definitions; added Secrets Manager secret containers for OPENAI_API_KEY and AZURE_TRANSLATOR_KEY; injected secrets into both job definitions; granted scoped secret read permissions strictly to execution_role (retaining zero secret permissions on job_role).
 - 2026-09-01: Implemented scripts/smoke_live_api.py: provides live endpoint checks (/health, /ready, 401 unauthenticated rejection, /runs, /overview, /communities, /networks, /topics, /themes, /evolution/paths); manages temporary Cognito test user lifecycle with automatic deletion in finally block; redacts all credentials and tokens in logs.
@@ -2524,7 +2524,7 @@ Then:
   - Canonical artifact existence verification: updated `verify_completed_manifest` in `scripts/aws_run_evolution.py` to assert existence and byte size for every canonical artifact recorded in `manifest["artifacts"]` via `s3.head_object`, strictly preserving the Plan 095 rule that canonical artifact count is `len(manifest["artifacts"])` and that extra objects in S3 do not affect canonical verification.
 - 2026-09-01: Completed final surgical remediation pass:
   - OIDC subject validation hardening & fail-closed bootstrap: eliminated implicit dev subject defaulting in real CI/CD bootstrap synthesis. An explicit exact subject is mandatory (`-c github_oidc_subject=<EXACT_SUBJECT>` or `GITHUB_OIDC_SUBJECT=<EXACT_SUBJECT>`), failing closed with a clear configuration error if omitted.
-  - Legacy + immutable exact GitHub subject support: `validate_oidc_subject` strictly accepts either legacy name-based dev subject (`repo:tanjimanasreen/community-analysis-platform:ref:refs/heads/dev`) or immutable owner/repository-ID dev subject (`repo:tanjimanasreen@<owner_id>/community-analysis-platform@<repo_id>:ref:refs/heads/dev`). Strictly rejects wildcards (`*`), `main` branch, other branches, PR subjects, environment subjects, other owners, and other repositories.
+  - Legacy + immutable exact GitHub subject support: `validate_oidc_subject` strictly accepts either legacy name-based dev subject (`repo:<github-owner>/<repository>:ref:refs/heads/<branch>`) or immutable owner/repository-ID dev subject (`repo:<github-owner>@<owner-id>/<repository>@<repository-id>:ref:refs/heads/<branch>`). Strictly rejects wildcards (`*`), `main` branch, other branches, PR subjects, environment subjects, other owners, and other repositories.
   - Exact `StringEquals` trust policy: trust policy condition strictly enforces `StringEquals` on `token.actions.githubusercontent.com:sub` and `aud`; no `StringLike` is used. Normal dev application-only synthesis does not require an OIDC subject if `CicdStack` is not being synthesized.
   - DeployRole Batch `SubmitJob` scope restricted to TEI-only: removed `community-analysis-dev-analytics-job:*` from DeployRole's SubmitJob policy in `infra/community_analysis_infra/cicd_stack.py`, strictly limiting submission to `job-queue/community-analysis-dev-queue` and `job-definition/community-analysis-dev-analytics-tei-job:*`. `batch:TerminateJob` remains strictly absent.
   - Accurate broader test status documentation: clarified that full `make test-unit` returned NON-ZERO (702 passed, 9 failed) due to pre-existing optional benchmark / historical fixture failures (`test_dashboard_fixture.py`, `test_orchestration_monthly_flow.py`, `test_theme_benchmark.py`, `test_theme_benchmark_gemini.py`, `test_theme_benchmark_llm7.py`, `test_theme_benchmark_nvidia.py`, `test_topic_reproducibility.py`), which were neither suppressed nor altered by Plan 097.

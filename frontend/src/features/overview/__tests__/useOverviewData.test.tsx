@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
+import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
 import { DashboardContext, type DashboardContextValue } from '../../../app/dashboardContext';
 import { testServer } from '../../../test/server';
@@ -60,6 +61,7 @@ function contextValue(runId: string, metric: MetricName): DashboardContextValue 
       error: null,
     },
     metric,
+    selectedPlatform: 'twitter',
     facets: { platforms: ['twitter'], contentTypes: ['reply'], years: [2017], months: [3] },
     isLoading: false,
     isRunMetadataLoading: false,
@@ -68,6 +70,7 @@ function contextValue(runId: string, metric: MetricName): DashboardContextValue 
     runDetailError: null,
     verificationError: null,
     setSelectedRunId: () => undefined,
+    setSelectedPlatform: () => undefined,
     setMetric: () => undefined,
     retryInitial: () => undefined,
     retryRunMetadata: () => undefined,
@@ -77,11 +80,13 @@ function contextValue(runId: string, metric: MetricName): DashboardContextValue 
 function Wrapper({ value }: { value: DashboardContextValue }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return (
-    <QueryClientProvider client={client}>
-      <DashboardContext.Provider value={value}>
-        <Probe />
-      </DashboardContext.Provider>
-    </QueryClientProvider>
+    <MemoryRouter>
+      <QueryClientProvider client={client}>
+        <DashboardContext.Provider value={value}>
+          <Probe />
+        </DashboardContext.Provider>
+      </QueryClientProvider>
+    </MemoryRouter>
   );
 }
 
@@ -111,6 +116,9 @@ describe('useOverviewData', () => {
       http.get('*/api/v1/runs/:runId/artifacts', ({ params }) =>
         HttpResponse.json({ run_id: String(params.runId), artifacts: [], total: 0 }),
       ),
+      http.get('*/api/v1/runs/:runId/centrality-leaders', ({ params }) =>
+        HttpResponse.json({ run_id: String(params.runId), metric: 'if', periods: [], methodology_note: 'persisted' }),
+      ),
     );
 
     const { rerender } = render(<Wrapper value={contextValue('run-a', 'if')} />);
@@ -134,6 +142,9 @@ function overviewResponse(runId: string) {
     if_users: 5, wif_users: 4, if_messages: 20, wif_messages: 18,
     if_community_count: 3, wif_community_count: 4,
     matched_community_count: 2, matched_percentage: 50,
-    persistent_community_count: null, top_themes: [], model_metadata: {}, config_metadata: {},
+    persistent_community_count: null, available_periods: ['2017-03'],
+    periods: [{ period: '2017-03', if_users: 5, wif_users: 4, if_messages: 20, wif_messages: 18, interaction_records: 20, if_community_count: 3, wif_community_count: 4, matched_community_count: 2, matched_percentage: 50 }],
+    run_summary: { interaction_records: 20, persistent_community_count: null, month_count: 1 },
+    top_themes: [], model_metadata: {}, config_metadata: {},
   };
 }

@@ -16,13 +16,15 @@
   "/runs/{run_id}/communities": [
     "limit",
     "metric",
-    "offset"
+    "offset",
+    "period"
   ],
   "/runs/{run_id}/communities/{community_id}": [
     "max_edges",
     "max_nodes",
     "metric",
-    "min_weight"
+    "min_weight",
+    "period"
   ],
   "/runs/{run_id}/downloads/{artifact_key}": [],
   "/runs/{run_id}/evolution/paths": [],
@@ -36,7 +38,10 @@
     "max_edges",
     "max_nodes",
     "metric",
-    "min_weight"
+    "min_weight",
+    "period",
+    "sampling",
+    "view"
   ],
   "/runs/{run_id}/overview": [],
   "/runs/{run_id}/persistent-communities": [],

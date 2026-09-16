@@ -1,3 +1,5 @@
+const fs = require('node:fs/promises');
+const path = require('node:path');
 const { chromium } = require('playwright');
 
 (async () => {
@@ -15,7 +17,11 @@ const { chromium } = require('playwright');
   console.log("Waiting for graph to render and settle...");
   await page.waitForTimeout(4000);
 
-  const screenshotPath = '<LOCAL_PROJECT_PATH>/.gemini/antigravity/brain/7475d368-a757-40bc-bac2-0a0d44a41f7e/frontend_screenshot_latest.png';
+  const screenshotPath = path.resolve(
+    process.env.SCREENSHOT_PATH ||
+      path.join(__dirname, '..', 'local_output', 'frontend_screenshot_latest.png'),
+  );
+  await fs.mkdir(path.dirname(screenshotPath), { recursive: true });
   await page.screenshot({ path: screenshotPath, fullPage: true });
 
   console.log("Screenshot saved to", screenshotPath);

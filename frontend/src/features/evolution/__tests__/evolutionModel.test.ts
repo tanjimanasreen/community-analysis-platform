@@ -6,7 +6,7 @@ function run(id: string, date: string): RunSummary {
   return { run_id: id, status: 'completed', platform: 'twitter', content_type: 'reply', date_start: date, date_end: date, year: null, month: null, started_at: null, completed_at: null, artifact_count: 0 };
 }
 function overview(id: string, users: number | null): OverviewResponse {
-  return { run_id: id, platform: 'twitter', content_type: 'reply', date_start: null, date_end: null, total_users: users, total_messages: null, total_interactions: null, if_users: null, wif_users: null, if_messages: null, wif_messages: null, if_community_count: null, wif_community_count: null, matched_community_count: null, matched_percentage: null, persistent_community_count: null, top_themes: [], model_metadata: {}, config_metadata: {} };
+  return { run_id: id, platform: 'twitter', content_type: 'reply', date_start: null, date_end: null, total_users: users, total_messages: null, total_interactions: null, if_users: null, wif_users: null, if_messages: null, wif_messages: null, if_community_count: null, wif_community_count: null, matched_community_count: null, matched_percentage: null, persistent_community_count: null, available_periods: [], periods: [], run_summary: { interaction_records: null, persistent_community_count: null, month_count: 0 }, top_themes: [], model_metadata: {}, config_metadata: {} };
 }
 
 describe('evolution model', () => {

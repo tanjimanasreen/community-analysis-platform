@@ -25,6 +25,8 @@ const overview: OverviewResponse = {
   matched_percentage: 100,
   persistent_community_count: 6,
   available_periods: ['2017-01', '2017-02', '2017-03', '2017-04'],
+  periods: [],
+  run_summary: { interaction_records: 1273, persistent_community_count: 6, month_count: 4 },
   top_themes: [],
   model_metadata: {},
   config_metadata: {
@@ -162,8 +164,8 @@ describe('TopThemesPanel', () => {
     );
     expect(screen.getByText('Top Themes · Apr 2017')).toBeInTheDocument();
     expect(screen.getByText('Immigration policy')).toBeInTheDocument();
-    expect(screen.getByText('1 of 2 themed communities')).toBeInTheDocument();
-    expect(screen.getByText('50.0%')).toBeInTheDocument();
+    expect(screen.getAllByText('1 of 2 themed matched pairs')).toHaveLength(2);
+    expect(screen.getAllByText('50.0%')).toHaveLength(2);
     expect(screen.getByText('immigration')).toBeInTheDocument();
   });
 

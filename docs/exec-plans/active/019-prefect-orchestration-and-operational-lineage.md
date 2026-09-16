@@ -166,8 +166,8 @@ Use Prefect 3 APIs (`Asset`, `@materialize`, explicit upstream dependencies) for
 ## 22. Implementation Milestones
 - **Milestone 1**: [x] Orchestration foundation (Dependencies, Context, Cache logic, Test Harness).
 - **Milestone 2A**: [x] Foundation Flow Wrapper (Network, Community).
-- **Milestone 2B**: Topic-Model Execution and Lineage (See [Plan 020](<LOCAL_PROJECT_PATH>/Projects/Telegram/cleaned_code/community-analysis/docs/exec-plans/active/020-prefect-topic-model-orchestration.md)).
-- **Milestone 3**: Theme and provider orchestration (See [Plan 021](<LOCAL_PROJECT_PATH>/Projects/Telegram/cleaned_code/community-analysis/docs/exec-plans/active/021-prefect-theme-provider-orchestration.md)).
+- **Milestone 2B**: Topic-Model Execution and Lineage (See [Plan 020](020-prefect-topic-model-orchestration.md)).
+- **Milestone 3**: Theme and provider orchestration (See [Plan 021](021-prefect-theme-provider-orchestration.md)).
 - **Milestone 4**: Prefect Asset implementations (`@materialize` usage, graph creation).
 - **Milestone 5**: Manifests, DVC linkage, and MLflow context prep.
 - **Milestone 6**: CLI integration and local UI observability.

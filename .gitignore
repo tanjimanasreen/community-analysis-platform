@@ -32,6 +32,17 @@ outputs/
 data/generated/
 .prefect_results/
 
+# Root-level generated run reports
+/provider_run_summary.json
+/telegram-canonical-manifest.json
+/telegram-canonical-success.txt
+/telegram-spot-failure.json
+
+# Local SQLite/cache sidecars
+*.sqlite3
+*.db-shm
+*.db-wal
+
 # Local sample artifacts are written outside the repo by default, but keep
 # accidental in-repo copies ignored.
 community-analysis-sample*/
@@ -82,7 +93,10 @@ frontend/node_modules/.tmp/
 
 # New ignore rules
 local_output/
-data/raw/
+data/raw/**/*
+!data/raw/**/
+!data/raw/**/*.dvc
+!data/raw/**/.gitignore
 data/themes/
 node_modules/
 .prefect/
@@ -92,3 +106,6 @@ node_modules/
 
 # Local service process state
 .runtime/
+
+# Local archive metadata
+_archive_metadata/

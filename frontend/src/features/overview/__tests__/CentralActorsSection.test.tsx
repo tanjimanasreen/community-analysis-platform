@@ -6,6 +6,7 @@ import CentralActorsSection from '../CentralActorsSection';
 const leaders: CentralityLeadersResponse = {
   run_id: 'run-1',
   metric: 'if',
+  methodology_note: '',
   periods: [
     {
       period: '2017-01',
@@ -93,7 +94,7 @@ describe('CentralActorsSection', () => {
       />,
     );
 
-    fireEvent.click(screen.getAllByRole('button', { name: /January 2017/i })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: /Jan 2017/i })[0]);
     expect(selectPeriod).toHaveBeenCalledWith('2017-01');
   });
 });

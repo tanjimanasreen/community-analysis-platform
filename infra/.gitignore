@@ -1,6 +1,7 @@
 # CDK local assets and virtual environment
 .venv/
 cdk.out/
+cdk.context.json
 .env
 
 # Python bytecode and caches

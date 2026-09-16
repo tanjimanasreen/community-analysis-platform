@@ -23,10 +23,10 @@ export interface NetworkGraphNode {
   inboundCrossCommunityWeight?: number | null;
   outboundCrossCommunityWeight?: number | null;
   crossCommunityNeighborCount?: number | null;
-  x?: number | null;
-  y?: number | null;
-  fx?: number | null;
-  fy?: number | null;
+  x?: number;
+  y?: number;
+  fx?: number;
+  fy?: number;
 }
 
 export interface NetworkGraphLink {
@@ -52,6 +52,24 @@ export interface NetworkGraphLink {
 export interface NetworkGraphData {
   nodes: NetworkGraphNode[];
   links: NetworkGraphLink[];
+  droppedLinks: number;
+}
+
+interface PreparedEdge {
+  source: string;
+  target: string;
+  communityId: string | null;
+  direction: string | null;
+  weight: number;
+  edgeCount: number | null;
+  userPairCount: number | null;
+  interactionCount: number | null;
+  sourceUserCount: number | null;
+  targetUserCount: number | null;
+  forwardWeight: number;
+  reverseWeight: number;
+  forwardUserPairCount: number;
+  reverseUserPairCount: number;
 }
 
 export function parseMinWeight(value: string | null): number {
@@ -83,13 +101,22 @@ export function transformNetworkResponse(
   network: NetworkResponse | null | undefined,
   selectedCommunityId: string | null = null,
 ): NetworkGraphData {
-  if (!network) return { nodes: [], links: [] };
+  if (!network) return { nodes: [], links: [], droppedLinks: 0 };
+
+  const nodeIds = new Set(network.nodes.map((node) => String(node.id)));
+  const validEdges = network.edges.filter((edge) => (
+    nodeIds.has(String(edge.source)) && nodeIds.has(String(edge.target))
+  ));
+  const droppedLinks = network.edges.length - validEdges.length;
+  const preparedEdges = network.view === 'communities'
+    ? aggregateCommunityEdges(validEdges)
+    : validEdges.map(prepareEdge);
 
   const degrees = new Map<string, { inDegree: number; outDegree: number }>();
   for (const node of network.nodes) {
     degrees.set(String(node.id), { inDegree: 0, outDegree: 0 });
   }
-  for (const edge of network.edges) {
+  for (const edge of validEdges) {
     const source = String(edge.source);
     const target = String(edge.target);
     const sourceDegree = degrees.get(source) ?? { inDegree: 0, outDegree: 0 };
@@ -100,10 +127,11 @@ export function transformNetworkResponse(
     degrees.set(target, targetDegree);
   }
 
-  const weights = network.edges.map((edge) => Math.max(0, Number(edge.weight) || 0));
+  const weights = preparedEdges.map((edge) => edge.weight);
   const maxWeight = Math.max(1, ...weights);
 
   return {
+    droppedLinks,
     nodes: network.nodes.map((node) => {
       const id = String(node.id);
       const communityIds = node.community_ids.map(String);
@@ -129,41 +157,105 @@ export function transformNetworkResponse(
         inboundCrossCommunityWeight: node.inbound_cross_community_weight,
         outboundCrossCommunityWeight: node.outbound_cross_community_weight,
         crossCommunityNeighborCount: node.cross_community_neighbor_count,
-        x: node.x,
-        y: node.y,
-        fx: node.x,
-        fy: node.y,
+        x: node.x ?? undefined,
+        y: node.y ?? undefined,
+        fx: node.x ?? undefined,
+        fy: node.y ?? undefined,
       };
     }),
-    links: network.edges.map((edge, index) => {
-      const weight = Math.max(0, Number(edge.weight) || 0);
+    links: preparedEdges.map((edge, index) => {
+      const weight = edge.weight;
       const normalizedWeight = weight / maxWeight;
-
-      // Note: Backend might not return forwardWeight / reverseWeight directly in NetworkEdge,
-      // but if the UI is expecting it (NetworkGraph.jsx), we should map it if available.
-      // The API doesn't seem to return forwardWeight/reverseWeight on edge in the NetworkEdge type,
-      // but we map the properties anyway to be safe, or default them.
       return {
-        id: `${String(edge.source)}-${String(edge.target)}-${index}`,
-        source: String(edge.source),
-        target: String(edge.target),
-        communityId: normalizeCommunityId(edge.community_id),
+        id: `${edge.source}-${edge.target}-${index}`,
+        source: edge.source,
+        target: edge.target,
+        communityId: edge.communityId,
         direction: edge.direction,
         weight,
         width: 0.5 + normalizedWeight * 3,
         opacity: 0.2 + normalizedWeight * 0.65,
-        edgeCount: edge.edge_count,
-        userPairCount: edge.user_pair_count,
-        interactionCount: edge.interaction_count,
-        sourceUserCount: edge.source_user_count,
-        targetUserCount: edge.target_user_count,
-        forwardWeight: (edge as any).forward_weight ?? (edge.direction === 'forward' ? weight : 0),
-        reverseWeight: (edge as any).reverse_weight ?? (edge.direction === 'reverse' ? weight : 0),
-        forwardUserPairCount: (edge as any).forward_user_pair_count ?? 0,
-        reverseUserPairCount: (edge as any).reverse_user_pair_count ?? 0,
+        edgeCount: edge.edgeCount,
+        userPairCount: edge.userPairCount,
+        interactionCount: edge.interactionCount,
+        sourceUserCount: edge.sourceUserCount,
+        targetUserCount: edge.targetUserCount,
+        forwardWeight: edge.forwardWeight,
+        reverseWeight: edge.reverseWeight,
+        forwardUserPairCount: edge.forwardUserPairCount,
+        reverseUserPairCount: edge.reverseUserPairCount,
       };
     }),
   };
+}
+
+function prepareEdge(edge: NetworkResponse['edges'][number]): PreparedEdge {
+  const source = String(edge.source);
+  const target = String(edge.target);
+  const weight = Math.max(0, Number(edge.weight) || 0);
+  return {
+    source,
+    target,
+    communityId: normalizeCommunityId(edge.community_id),
+    direction: edge.direction,
+    weight,
+    edgeCount: edge.edge_count ?? null,
+    userPairCount: edge.user_pair_count ?? null,
+    interactionCount: edge.interaction_count ?? null,
+    sourceUserCount: edge.source_user_count ?? null,
+    targetUserCount: edge.target_user_count ?? null,
+    forwardWeight: edge.direction === 'forward' ? weight : 0,
+    reverseWeight: edge.direction === 'reverse' ? weight : 0,
+    forwardUserPairCount: edge.direction === 'forward' ? edge.user_pair_count ?? 0 : 0,
+    reverseUserPairCount: edge.direction === 'reverse' ? edge.user_pair_count ?? 0 : 0,
+  };
+}
+
+function aggregateCommunityEdges(
+  edges: NetworkResponse['edges'],
+): PreparedEdge[] {
+  const aggregated = new Map<string, PreparedEdge>();
+  for (const edge of edges) {
+    const source = String(edge.source);
+    const target = String(edge.target);
+    const [left, right] = source.localeCompare(target, undefined, { numeric: true }) <= 0
+      ? [source, target]
+      : [target, source];
+    const key = `${left}\u0000${right}`;
+    const weight = Math.max(0, Number(edge.weight) || 0);
+    const sourceIsLeft = source === left;
+    const current = aggregated.get(key) ?? {
+      source: left,
+      target: right,
+      communityId: normalizeCommunityId(edge.community_id),
+      direction: edge.direction,
+      weight: 0,
+      edgeCount: 0,
+      userPairCount: 0,
+      interactionCount: 0,
+      sourceUserCount: 0,
+      targetUserCount: 0,
+      forwardWeight: 0,
+      reverseWeight: 0,
+      forwardUserPairCount: 0,
+      reverseUserPairCount: 0,
+    };
+    current.weight += weight;
+    current.edgeCount = (current.edgeCount ?? 0) + (edge.edge_count ?? 1);
+    current.userPairCount = (current.userPairCount ?? 0) + (edge.user_pair_count ?? 0);
+    current.interactionCount = (current.interactionCount ?? 0) + (edge.interaction_count ?? 0);
+    current.sourceUserCount = (current.sourceUserCount ?? 0) + (edge.source_user_count ?? 0);
+    current.targetUserCount = (current.targetUserCount ?? 0) + (edge.target_user_count ?? 0);
+    if (sourceIsLeft) {
+      current.forwardWeight += weight;
+      current.forwardUserPairCount += edge.user_pair_count ?? 0;
+    } else {
+      current.reverseWeight += weight;
+      current.reverseUserPairCount += edge.user_pair_count ?? 0;
+    }
+    aggregated.set(key, current);
+  }
+  return [...aggregated.values()];
 }
 
 export function averageDegreeInReturnedGraph(data: NetworkGraphData): number | null {

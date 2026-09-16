@@ -16,7 +16,9 @@ const overview = (config: Record<string, unknown>): OverviewResponse => ({
   total_users: null, total_messages: null, total_interactions: null, if_users: null,
   wif_users: null, if_messages: null, wif_messages: null, if_community_count: null,
   wif_community_count: null, matched_community_count: null, matched_percentage: null,
-  persistent_community_count: null, top_themes: [], model_metadata: {}, config_metadata: config,
+  persistent_community_count: null, available_periods: [], periods: [],
+  run_summary: { interaction_records: null, persistent_community_count: null, month_count: 0 },
+  top_themes: [], model_metadata: {}, config_metadata: config,
 });
 
 describe('run compatibility', () => {

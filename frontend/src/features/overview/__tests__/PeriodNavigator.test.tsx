@@ -19,10 +19,10 @@ describe('PeriodNavigator', () => {
       />,
     );
 
-    expect(screen.getByRole('heading', { name: 'February 2017' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Feb 2017' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Show previous month' }));
     await user.click(screen.getByRole('button', { name: 'Show next month' }));
-    await user.click(screen.getByRole('tab', { name: 'March 2017' }));
+    await user.click(screen.getByRole('tab', { name: 'Mar 2017' }));
 
     expect(onChange).toHaveBeenNthCalledWith(1, '2017-01');
     expect(onChange).toHaveBeenNthCalledWith(2, '2017-03');
